@@ -59,6 +59,8 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>ATSApplicationFontsPath</key>
+	<string>.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>BrittanySignature.ttf</string>

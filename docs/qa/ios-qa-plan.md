@@ -240,6 +240,22 @@ and `xcrun simctl io <device> screenshot`, light and dark
 unlocked for screenshots; the build runs), the real printer (6.2), voice ordering
 on a device (2.3), the chime on a device (6.1), real Wi-Fi drop on the counter iPad.
 
+## Mac review, 15 Oct (screen locked)
+
+The Mac was locked, so the running app couldn't be screenshotted. Instead the
+unit tests now run on the Mac (the app skips the Keychain as a test host) and
+render screens offscreen with the Mac's own layout and fonts:
+
+| Screen | Mac result |
+|---|---|
+| Login (1100×700 and 402 wide) | ✅ brand panel beside the form when wide, stacked when narrow (text fields can't be drawn offscreen; they show as placeholders) |
+| Receipt / bill preview | ✅ after a fix: the Mac app didn't load Durigo's fonts (macOS ignores `UIAppFonts`), so the name printed in a plain font and ran into the GSTIN line. `ATSApplicationFontsPath` added |
+| Long bill, two pages | ✅ |
+| Kitchen ticket (80mm) | ✅ |
+| Every other screen | ⏳ needs your input: they load live data, so they need the app running with the Mac unlocked (steps below) |
+
+All 15 unit tests pass on the Mac as well as on the iPhone simulator.
+
 ## Mac pass (needs you, about 10 minutes)
 
 Why it's open: the Mac was locked (`IOConsoleLocked = Yes`) for the whole run,

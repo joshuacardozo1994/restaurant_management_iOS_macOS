@@ -51,6 +51,10 @@ final class Session {
                 _ = KeychainHelper.delete(key)
             }
         }
+        // As a unit-test host the app starts signed out without touching the
+        // Keychain: a locally signed test build would raise a Keychain prompt
+        // that blocks the test run (and nobody may be there to answer it)
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
         #endif
         // Restore from Keychain on launch.
         self.token = KeychainHelper.load(.authToken)

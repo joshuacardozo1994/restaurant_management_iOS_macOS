@@ -241,6 +241,24 @@ final class DurigoTests: XCTestCase {
         XCTAssertEqual(report.staffPerformance.first?.revenue, 0)
     }
 
+    /// The sign-in screen, rendered offscreen (on the Mac this is the Mac
+    /// layout: brand panel beside the form), for the screen review
+    @MainActor
+    func testRenderLoginForReview() throws {
+        for (name, size) in [("login-wide", CGSize(width: 1100, height: 700)), ("login-narrow", CGSize(width: 402, height: 874))] {
+            let view = LoginView()
+                .environment(Session())
+                .frame(width: size.width, height: size.height)
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            let image = try XCTUnwrap(renderer.platformImage, "\(name) didn't render")
+            let attachment = XCTAttachment(image: image)
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+    }
+
     /// Money reads the same as on the web: whole rupees, Indian grouping,
     /// whatever region the device is set to
     func testRupeesAreWholeWithIndianGrouping() {
