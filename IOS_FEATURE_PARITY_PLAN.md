@@ -31,6 +31,35 @@ Bringing the Durigo iOS app to parity with the restaurant-management web app. iO
 ### Adaptive layout
 - Every new screen uses `@Environment(\.horizontalSizeClass)` to adapt: compact (iPhone) → `NavigationStack`; regular (iPad) → `NavigationSplitView`. No platform-specific code paths.
 
+## Parity audit against the web app (14 Oct 2026)
+
+A feature-by-feature comparison with the web POS (see `docs/qa/functional-test-plan.md`
+in restaurant-management). ✅ = done and verified (how, in brackets), ☑️ = done, builds and
+unit-tested but not yet checked by hand on a device, ⬜ = still to do.
+
+**Money and data correctness**
+- ✅ Bill Generator receipts show GST on food (as CGST + SGST) and VAT on liquor, worked out the way the server records them (`BillMath` in `Menu/Models.swift`, a port of `bill-math.ts`). Rates come from server settings, cached for offline printing. Liquor is recognised by its menu category (`taxType` on `/api/menu/full`); custom items by whole-word name match. [unit tests with the server's own cases; receipt rendered by `testRenderReceiptForReview`]
+- ✅ Liquor keywords match whole words only: "gin" no longer matches "Ginger"/"Virgin", "port" not "portion", "rum" not "drumsticks". Same fix on the server. [unit tests both sides]
+- ✅ Line totals are rounded like the server's (half a ₹155 portion is ₹78, not ₹77). [unit test]
+- ✅ POS table payment is one server call (`POST /api/orders/:id/payment` with `expectedTotal`): the server records the bill, completes the orders and frees the table in one transaction. Previously the app also PATCHed each order and PUT the table itself, swallowing "already exists" errors. [simulator: ₹580 paid by cash → server recorded GST ₹12, VAT ₹58; table freed]
+- ✅ A bill that changed on another device is refused with the server's message and the screen reloads. [simulator: item added server-side, "The bill changed from ₹560 to ₹580…"]
+- ✅ POS tables grid updates live. The SSE handler expected a `{type, data}` wrapper the server doesn't send, so it ignored every event; it now reloads the grid (debounced) on order/table/payment events and after reconnecting. [simulator: order placed from another client appeared without touching the phone]
+- ✅ Server error messages are shown as written instead of "Server returned 409: {json}". [simulator]
+- ✅ Settings: GST and liquor VAT as percentages, prices-include-tax switch, VAT TIN. The screen previously failed to load because the low-stock threshold (0.2) was decoded as an integer. [simulator: screen loads with the new fields]
+- ☑️ POS orders send an idempotency key (reused on retry, renewed when the cart changes), so a retry after a dropped connection can't place the order twice.
+- ☑️ CA report shows GST and VAT collected, in the tiles and the copy-for-CA text.
+- ☑️ Reservations: table optional ("Assign later"); dates and times sent in IST.
+- ☑️ The unit-test target now builds against the app (`@testable import Durigo`, iOS 18 deployment target). It had never compiled against it. One existing test, `testShouldFilterMenuWithQuery` (fuzzy menu search threshold), fails and needs a decision on the intended search behaviour.
+
+**Still to do** (ranked)
+- ⬜ Role-based screens: every role currently sees every screen (the server still refuses what a role can't do).
+- ⬜ Kitchen: new-order chime and auto-printed kitchen ticket (KOT), as on the web kitchen display.
+- ⬜ POS payment: discount, discount codes and split bill (web billing screen has all three).
+- ⬜ POS: GST/VAT breakdown on the order screen and a printable receipt after a table is paid.
+- ⬜ Per-item notes ("no nuts") and the delivery address when taking an order.
+- ⬜ Add and edit tables (the Maintenance button is a stub).
+- ⬜ Receipt identity (name, GSTIN, VAT TIN, address, phone) from settings instead of hard-coded. Blocked until the production settings hold Durigo's real details (they still have the setup placeholders).
+
 ## Phase order (revised)
 
 | # | Phase | Estimate | Status |

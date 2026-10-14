@@ -25,6 +25,9 @@ struct TakeOrderView: View {
     @State private var variantPickerItem: AdminMenuItem?
     @State private var submitting = false
     @State private var errorMessage: String?
+    /// One key per order: reused if Place Order is retried after a failure, so
+    /// an order that did reach the server isn't placed twice
+    @State private var idempotencyKey = UUID().uuidString
 
     var title: String {
         switch orderType {
@@ -69,6 +72,10 @@ struct TakeOrderView: View {
                 Button("OK") { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "")
+            }
+            // A changed cart is a different order, so it gets a new key
+            .onChange(of: cart.map { "\($0.id)x\($0.quantity)" }) {
+                idempotencyKey = UUID().uuidString
             }
         }
     }
@@ -365,7 +372,8 @@ struct TakeOrderView: View {
                 cart: cart,
                 notes: notes.isEmpty ? nil : notes,
                 customerName: customerName.isEmpty ? nil : customerName,
-                customerPhone: customerPhone.isEmpty ? nil : customerPhone
+                customerPhone: customerPhone.isEmpty ? nil : customerPhone,
+                idempotencyKey: idempotencyKey
             )
             // Refresh tables so we pick up the new status from the server.
             await store.loadTables()

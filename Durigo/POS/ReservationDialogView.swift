@@ -105,9 +105,11 @@ struct ReservationDialogView: View {
         defer { submitting = false }
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyy-MM-dd"
-        dateFmt.timeZone = TimeZone(identifier: "UTC") ?? .current
+        // Restaurant (IST) calendar date and wall-clock time, as the server expects
+        dateFmt.timeZone = TimeZone(identifier: "Asia/Kolkata")
         let timeFmt = DateFormatter()
         timeFmt.dateFormat = "HH:mm"
+        timeFmt.timeZone = TimeZone(identifier: "Asia/Kolkata")
         let dateStr = dateFmt.string(from: date)
         let timeStr = timeFmt.string(from: date)
         do {

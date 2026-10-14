@@ -12,6 +12,10 @@ import SwiftUI
     private let urlSession = NetworkHelper.shared.currentSession
 
     var menu: [Category]?
+    /// Tax rates for receipts, from the server's settings. Starts from the last
+    /// copy saved on this device (or the restaurant's rates), so a bill printed
+    /// offline still shows its GST and VAT.
+    var billingConfig: BillingConfig = MenuLoader.savedBillingConfig()
     var billID = UUID()
     var tableNumber: Int?
     var waiter: String?
@@ -59,6 +63,48 @@ import SwiftUI
             self.menu = menu
         } catch {
             print("MenuLoader.loadMenu error:", error)
+        }
+        await loadBillingConfig()
+    }
+
+    private static let billingConfigKey = "billingConfig"
+
+    private static func savedBillingConfig() -> BillingConfig {
+        guard let data = UserDefaults.standard.data(forKey: billingConfigKey),
+              let saved = try? JSONDecoder().decode(BillingConfig.self, from: data) else { return .default }
+        return saved
+    }
+
+    @MainActor
+    func loadBillingConfig() async {
+        let baseString = Config.shared.serverURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(baseString)/api/admin/settings") else { return }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+        if let token = authSession?.token {
+            request.setValue("auth-token=\(token)", forHTTPHeaderField: "Cookie")
+        }
+        struct Settings: Decodable {
+            struct Billing: Decodable {
+                let taxRate: Double?
+                let liquorTaxRate: Double?
+                let taxInclusive: Bool?
+            }
+            let billing: Billing
+        }
+        do {
+            let (data, response) = try await urlSession.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+            let billing = try JSONDecoder().decode(Settings.self, from: data).billing
+            let config = BillingConfig(
+                taxRate: billing.taxRate ?? BillingConfig.default.taxRate,
+                liquorTaxRate: billing.liquorTaxRate ?? BillingConfig.default.liquorTaxRate,
+                taxInclusive: billing.taxInclusive ?? BillingConfig.default.taxInclusive
+            )
+            billingConfig = config
+            UserDefaults.standard.set(try JSONEncoder().encode(config), forKey: Self.billingConfigKey)
+        } catch {
+            print("MenuLoader.loadBillingConfig error:", error)
         }
     }
 }

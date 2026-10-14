@@ -18,7 +18,14 @@ enum APIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unauthorized: return "Session expired — please sign in again."
-        case .server(let code, let body): return "Server returned \(code)\(body.map { ": \($0)" } ?? "")"
+        case .server(let code, let body):
+            // Prefer the server's own message ({"error": "..."}), which is written for staff
+            if let data = body?.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let message = json["error"] as? String {
+                return message
+            }
+            return "Server returned \(code)\(body.map { ": \($0)" } ?? "")"
         case .network(let err): return "Network error: \(err.localizedDescription)"
         case .decoding(let err): return "Couldn't decode response: \(err.localizedDescription)"
         case .badResponse: return "Unexpected response from server."

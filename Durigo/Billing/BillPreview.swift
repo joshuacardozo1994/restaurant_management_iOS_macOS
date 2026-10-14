@@ -31,17 +31,36 @@ struct BillPreview: View {
     /// only resolves inside the view tree (not in init).
     @State private var uploader: BillUploader?
 
+    /// The last page also carries up to four tax lines, so it holds fewer items
+    private let lastPageItemCount = 15
+
     private var groupedArray: [GroupedMenu] {
-        stride(from: 0, to: billItems.count, by: maxItemCount).map { index in
+        var groups = stride(from: 0, to: billItems.count, by: maxItemCount).map { index in
             GroupedMenu(id: index, items: Array(billItems[index ..< min(index + maxItemCount, billItems.count)]))
         }
+        // Move the overflow of a full last page onto a page of its own
+        if let last = groups.last, last.items.count > lastPageItemCount {
+            groups[groups.count - 1] = GroupedMenu(id: last.id, items: Array(last.items.prefix(lastPageItemCount)))
+            groups.append(GroupedMenu(id: last.id + lastPageItemCount, items: Array(last.items.dropFirst(lastPageItemCount))))
+        }
+        return groups
+    }
+
+    /// GST on food, VAT on liquor, worked out the way the server will record it
+    private var taxes: ReceiptTaxes {
+        ReceiptTaxes(
+            amounts: BillMath.computeBill(items: billItems, menu: menuLoader.menu, config: menuLoader.billingConfig),
+            config: menuLoader.billingConfig
+        )
     }
 
     var body: some View {
         VStack {
             TabView {
                 ForEach(groupedArray) { group in
-                    Bill(currentMenuItems: group.items, tableNumber: tableNumber, first: groupedArray.first == group, finalTotal: groupedArray.last == group ? billItems.getTotal() : nil)
+                    Bill(currentMenuItems: group.items, tableNumber: tableNumber, first: groupedArray.first == group,
+                         finalTotal: groupedArray.last == group ? billItems.getTotal() : nil,
+                         taxes: groupedArray.last == group ? taxes : nil)
                             .frame(width: 420, height: 595)
                             .background(Color.white)
                 }
@@ -165,7 +184,8 @@ struct BillPreview: View {
                 currentMenuItems: group.items,
                 tableNumber: tableNumber,
                 first: groupedArray.first == group,
-                finalTotal: groupedArray.last == group ? billItems.getTotal() : nil
+                finalTotal: groupedArray.last == group ? billItems.getTotal() : nil,
+                taxes: groupedArray.last == group ? taxes : nil
             )
             .frame(width: pageWidth, height: pageHeight)
             .background(Color.white)

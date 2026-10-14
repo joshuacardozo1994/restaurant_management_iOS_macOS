@@ -73,11 +73,30 @@ extension Bill {
     }
 }
 
+/// The tax lines printed above the total on a bill's last page
+struct ReceiptTaxes {
+    let amounts: BillAmounts
+    let config: BillingConfig
+
+    private static func percent(_ rate: Double) -> String {
+        let p = rate * 100
+        return p == p.rounded() ? "\(Int(p))%" : String(format: "%.1f%%", p)
+    }
+    /// GST is split equally between the state and the centre (odd rupee to SGST)
+    var cgst: Int { amounts.gstTax / 2 }
+    var sgst: Int { amounts.gstTax - cgst }
+    var halfGstRate: String { Self.percent(config.taxRate / 2) }
+    var vatRate: String { Self.percent(config.liquorTaxRate) }
+    var inclusive: String { config.taxInclusive ? " (incl.)" : "" }
+}
+
 struct Bill: View {
     let currentMenuItems: [MenuItem]
     let tableNumber: Int?
     var first = true
     var finalTotal: Int?
+    /// GST/VAT breakdown, shown on the last page with the total
+    var taxes: ReceiptTaxes? = nil
     @State private var maxWidth: CGFloat = 0
     #if os(iOS)
     @State private var qrCodeImage: UIImage? = nil
@@ -99,6 +118,14 @@ struct Bill: View {
         return textArr.reduce(Text("")) { $0 + $1 }
     }
     
+    private func taxRow(_ label: String, _ amount: Int) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Text("₹\(amount)")
+        }
+    }
+
     var body: some View {
             VStack() {
                 if first {
@@ -188,13 +215,28 @@ struct Bill: View {
                                     .padding(.bottom, 3)
                                 
                             }
-                            Text("₹\(Int(item.price*item.quantity))")
+                            Text("₹\(item.lineTotal)")
                         }
                     }
                     .font(.system(size: 12))
                 }
                 
                 if let finalTotal {
+                    if let taxes {
+                        VStack(spacing: 1) {
+                            taxRow("Taxable value", taxes.amounts.subtotal)
+                            if taxes.amounts.gstTax > 0 {
+                                taxRow("CGST @ \(taxes.halfGstRate)\(taxes.inclusive)", taxes.cgst)
+                                taxRow("SGST @ \(taxes.halfGstRate)\(taxes.inclusive)", taxes.sgst)
+                            }
+                            if taxes.amounts.vatTax > 0 {
+                                taxRow("VAT on liquor @ \(taxes.vatRate)\(taxes.inclusive)", taxes.amounts.vatTax)
+                            }
+                        }
+                        .font(.system(size: 10))
+                        .foregroundStyle(.black.opacity(0.6))
+                        .padding(.top, 6)
+                    }
                         HStack(alignment: .center) {
                             Text("Total: ₹\(finalTotal)")
                                 .font(.system(size: 20))

@@ -1656,6 +1656,10 @@ struct CAReportData: Decodable, Equatable {
     let totalSales: Int
     let totalItems: Int
     let totalBills: Int
+    /// GST (food, soft drinks) and VAT (liquor) included in totalSales.
+    /// Optional so the screen still works against an older server.
+    let totalGst: Int?
+    let totalVat: Int?
     let categories: [CategoryRow]
 
     struct CategoryRow: Decodable, Equatable, Identifiable {
@@ -1748,7 +1752,7 @@ struct CAReportView: View {
     }
 
     private func copyCard(_ d: CAReportData) -> some View {
-        SectionCard(title: d.monthLabel, subtitle: "Pre-tax line-item totals, completed payments only") {
+        SectionCard(title: d.monthLabel, subtitle: "Completed payments only; sales include GST and VAT") {
             VStack(alignment: .leading, spacing: DesignTokens.spacingM) {
                 Text(buildCAText(d))
                     .font(.system(.subheadline, design: .monospaced))
@@ -1796,6 +1800,14 @@ struct CAReportView: View {
                         ? (Double(d.totalSales) / Double(d.totalBills)).asCurrencyString(locale: Self.inrLocale) ?? "—"
                         : "—",
                      subtitle: nil, icon: "chart.bar")
+            if let gst = d.totalGst, let vat = d.totalVat {
+                StatTile(title: "GST (food & soft drinks)",
+                         value: Double(gst).asCurrencyString(locale: Self.inrLocale) ?? "—",
+                         subtitle: nil, icon: "percent")
+                StatTile(title: "VAT (liquor)",
+                         value: Double(vat).asCurrencyString(locale: Self.inrLocale) ?? "—",
+                         subtitle: nil, icon: "wineglass")
+            }
         }
     }
 
@@ -1846,9 +1858,12 @@ struct CAReportView: View {
             "Total Sales: \(totalStr)",
             "Total Items Sold: \(d.totalItems)",
             "Total Bills: \(d.totalBills)",
-            "",
-            "Category Breakdown:",
         ]
+        if let gst = d.totalGst, let vat = d.totalVat {
+            lines.append("GST collected (food & soft drinks): \(Double(gst).asCurrencyString(locale: Self.inrLocale) ?? "₹\(gst)")")
+            lines.append("VAT collected (liquor): \(Double(vat).asCurrencyString(locale: Self.inrLocale) ?? "₹\(vat)")")
+        }
+        lines += ["", "Category Breakdown:"]
         for row in d.categories {
             let revStr = Double(row.revenue).asCurrencyString(locale: Self.inrLocale) ?? "₹\(row.revenue)"
             let pctStr = String(format: "%.1f%%", row.percentage)

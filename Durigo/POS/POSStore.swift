@@ -215,7 +215,8 @@ final class POSStore {
                     cart: [CartLine],
                     notes: String? = nil,
                     customerName: String? = nil,
-                    customerPhone: String? = nil) async throws -> POSOrder {
+                    customerPhone: String? = nil,
+                    idempotencyKey: String) async throws -> POSOrder {
         let payload = CreateOrderRequest(
             tableId: tableId,
             type: type.rawValue,
@@ -232,7 +233,8 @@ final class POSStore {
             customerName: customerName,
             customerPhone: customerPhone,
             customerAddress: nil,
-            waiterId: selectedWaiterId
+            waiterId: selectedWaiterId,
+            idempotencyKey: idempotencyKey
         )
         let data = try await api.postJSON("/api/pos/orders", payload: payload)
         let order = try JSONDecoder().decode(POSOrder.self, from: data)
@@ -270,61 +272,23 @@ final class POSStore {
         }
     }
 
-    /// Process payment for an entire table — mirrors web's `processPayment`:
-    /// 1) POST a payment record against one of the orders (the table's
-    ///    "anchor"; the server only accepts one payment per order)
-    /// 2) PATCH all live orders for the table to COMPLETED
-    /// 3) PUT the table back to AVAILABLE
-    /// Steps 2–3 are best-effort — even if the SSE/websocket lag means
-    /// our local state is briefly stale, the next /api/tables fetch
-    /// reconciles.
-    func processPayment(table: POSTable, total: Double, method: String) async throws {
-        let liveOrders = table.liveOrders
-        guard let anchor = liveOrders.first else { return }
-
+    /// Settle every unpaid order on the table. The server works out the bill
+    /// (GST on food, VAT on liquor), records the payments, completes the orders
+    /// and frees the table in one transaction; it refuses with 409 if the bill
+    /// changed since `expectedTotal` was shown, and never records a payment twice.
+    @discardableResult
+    func processPayment(table: POSTable, expectedTotal: Int, method: String) async throws -> SettledBill {
+        guard let anchor = table.liveOrders.first else { throw APIError.badResponse }
         struct PaymentBody: Encodable {
-            let subtotal: Double
-            let tax: Double
-            let total: Double
             let method: String
+            let expectedTotal: Int
         }
-        // Web treats price as tax-inclusive (page.tsx:168-169) so we send
-        // tax: 0 and subtotal == total. The TAX_RATE config is purely for
-        // receipt display, not for adjusting payment math.
-        let body = PaymentBody(subtotal: total, tax: 0, total: total, method: method)
-        do {
-            _ = try await api.postJSON("/api/orders/\(anchor.id)/payment", payload: body)
-        } catch let APIError.server(code: _, body: errBody) {
-            // "Payment already exists" is non-fatal — fall through and
-            // still complete the orders. Mirrors web's catch in page.tsx.
-            if errBody?.lowercased().contains("already exists") != true { throw APIError.server(code: 0, body: errBody) }
-        }
-
-        // Complete every live order on the table in parallel.
-        struct StatusBody: Encodable { let status: String }
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for o in liveOrders {
-                group.addTask { [api] in
-                    _ = try await api.patch(
-                        "/api/orders/\(o.id)/status",
-                        body: try JSONEncoder().encode(StatusBody(status: "COMPLETED"))
-                    )
-                }
-            }
-            try await group.waitForAll()
-        }
-
-        // Free the table.
-        struct TableStatusBody: Encodable { let status: String }
-        _ = try await api.putJSON("/api/admin/tables/\(table.id)", payload: TableStatusBody(status: "AVAILABLE"))
-
-        // Optimistic local: drop completed orders and flip table to AVAILABLE.
-        if let idx = tables.firstIndex(where: { $0.id == table.id }) {
-            let t = tables[idx]
-            let remaining = (t.orders ?? []).filter { o in !liveOrders.contains(where: { $0.id == o.id }) }
-            tables[idx] = POSTable(id: t.id, number: t.number, capacity: t.capacity,
-                                    status: "AVAILABLE", orders: remaining)
-        }
+        let data = try await api.postJSON("/api/orders/\(anchor.id)/payment",
+                                          payload: PaymentBody(method: method, expectedTotal: expectedTotal))
+        struct Response: Decodable { let bill: SettledBill }
+        let bill = try JSONDecoder().decode(Response.self, from: data).bill
+        await loadTables()
+        return bill
     }
 
     // MARK: SSE
@@ -338,6 +302,8 @@ final class POSStore {
                 do {
                     let stream = await self.api.eventStream("/api/events")
                     await MainActor.run { self.sseConnected = true }
+                    // Catch up on anything that changed while disconnected
+                    await self.loadTables()
                     for try await event in stream {
                         await self.handleSSEEvent(event)
                     }
@@ -358,70 +324,27 @@ final class POSStore {
         sseConnected = false
     }
 
-    private func handleSSEEvent(_ event: APIClient.SSEEvent) async {
-        guard let raw = event.data.data(using: .utf8) else { return }
-        struct Envelope: Decodable { let type: String }
-        guard let env = try? JSONDecoder().decode(Envelope.self, from: raw) else { return }
+    private var reloadTask: Task<Void, Never>?
 
-        switch env.type {
-        case "table_status_changed":
-            handleTableStatusChanged(raw: raw)
-        case "order_created", "order_updated", "order_status_changed":
-            handleOrderEvent(raw: raw, type: env.type)
+    /// Events carry the changed order or table as their data (the event name
+    /// says which). Rather than patch local state and guess each table's status,
+    /// reload the grid from the server, coalescing a burst of events into one fetch.
+    private func handleSSEEvent(_ event: APIClient.SSEEvent) async {
+        switch event.event {
+        case "table_status_changed", "order_created", "order_updated", "order_status_changed",
+             "payment_completed", "kitchen_update":
+            scheduleReload()
         default:
             break
         }
     }
 
-    private func handleTableStatusChanged(raw: Data) {
-        struct Wrapper: Decodable { let data: POSTable }
-        guard let w = try? JSONDecoder().decode(Wrapper.self, from: raw) else { return }
-        if let idx = tables.firstIndex(where: { $0.id == w.data.id }) {
-            let existing = tables[idx]
-            tables[idx] = POSTable(
-                id: existing.id,
-                number: existing.number,
-                capacity: existing.capacity,
-                status: w.data.status,
-                orders: existing.orders
-            )
+    private func scheduleReload() {
+        reloadTask?.cancel()
+        reloadTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.loadTables()
         }
-    }
-
-    private func handleOrderEvent(raw: Data, type: String) {
-        struct Wrapper: Decodable { let data: POSOrder }
-        guard let w = try? JSONDecoder().decode(Wrapper.self, from: raw) else { return }
-        let order = w.data
-        guard let tableId = order.tableId,
-              let idx = tables.firstIndex(where: { $0.id == tableId }) else { return }
-
-        let table = tables[idx]
-        var orders = table.orders ?? []
-        if let oi = orders.firstIndex(where: { $0.id == order.id }) {
-            orders[oi] = order
-        } else if type == "order_created" {
-            orders.append(order)
-        }
-
-        let hasActive = orders.contains { o in
-            !["COMPLETED", "CANCELLED"].contains(o.status) &&
-            (o.items?.contains(where: { $0.status != "CANCELLED" }) ?? false)
-        }
-        let newStatus: String
-        if hasActive && table.status == "AVAILABLE" {
-            newStatus = "OCCUPIED"
-        } else if !hasActive && table.status == "OCCUPIED" {
-            newStatus = "AVAILABLE"
-        } else {
-            newStatus = table.status
-        }
-
-        tables[idx] = POSTable(
-            id: table.id,
-            number: table.number,
-            capacity: table.capacity,
-            status: newStatus,
-            orders: orders
-        )
     }
 }

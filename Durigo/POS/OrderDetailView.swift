@@ -308,9 +308,15 @@ struct OrderDetailView: View {
         submitting = true
         defer { submitting = false }
         do {
-            try await store.processPayment(table: table, total: table.unpaidTotal, method: method)
-            await store.loadTables()  // reconcile from server
+            // The total shown on screen: the server refuses if the bill has
+            // changed since (items added or cancelled on another device)
+            try await store.processPayment(table: table,
+                                           expectedTotal: Int(table.unpaidTotal.rounded()),
+                                           method: method)
             dismiss()
+        } catch let APIError.server(code, body) where code == 409 {
+            await store.loadTables()  // show the current bill
+            errorMessage = APIError.server(code: code, body: body).localizedDescription
         } catch {
             errorMessage = error.localizedDescription
         }

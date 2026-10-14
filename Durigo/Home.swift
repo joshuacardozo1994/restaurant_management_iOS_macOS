@@ -1644,6 +1644,7 @@ struct AppSettings: Codable, Equatable {
         var phone: String
         var email: String
         var gstin: String
+        var vatTin: String?
         var socialHandle: String
     }
     struct BusinessHours: Codable, Equatable {
@@ -1652,7 +1653,11 @@ struct AppSettings: Codable, Equatable {
         var orderPrefix: String
     }
     struct BillingSettings: Codable, Equatable {
+        /// GST on food and soft drinks, as a fraction (0.05 = 5%)
         var taxRate: Double
+        /// VAT on liquor, as a fraction (0.22 = 22%)
+        var liquorTaxRate: Double?
+        var taxInclusive: Bool?
         var taxLabel: String
         var currency: String
         var locale: String
@@ -1663,7 +1668,8 @@ struct AppSettings: Codable, Equatable {
         var printReceipt: Bool
     }
     struct InventorySettings: Codable, Equatable {
-        var lowStockThreshold: Int
+        /// A fraction (0.2 = 20% above minimum stock)
+        var lowStockThreshold: Double
         var autoReorder: Bool
         var trackExpiry: Bool
     }
@@ -1696,6 +1702,20 @@ struct AppSettings: Codable, Equatable {
     }
 }
 
+private extension Binding where Value == String? {
+    /// Edit an optional string with a TextField; empty stays empty
+    var orEmpty: Binding<String> {
+        Binding<String>(get: { wrappedValue ?? "" }, set: { wrappedValue = $0 })
+    }
+}
+
+private extension Binding {
+    /// Edit an optional value, showing `fallback` until it's set
+    func or<T>(_ fallback: T) -> Binding<T> where Value == T? {
+        Binding<T>(get: { wrappedValue ?? fallback }, set: { wrappedValue = $0 })
+    }
+}
+
 struct AppSettingsForm: View {
     @Environment(Session.self) private var session
     @State private var store: AppSettingsStore?
@@ -1713,6 +1733,7 @@ struct AppSettingsForm: View {
                         TextField("Phone", text: draft.restaurant.phone).keyboardType(.phonePad)
                         TextField("Email", text: draft.restaurant.email).keyboardType(.emailAddress).textInputAutocapitalization(.never)
                         TextField("GSTIN", text: draft.restaurant.gstin).textInputAutocapitalization(.characters)
+                        TextField("VAT TIN", text: draft.restaurant.vatTin.orEmpty)
                         TextField("Social handle", text: draft.restaurant.socialHandle)
                     }
                     Section("Business hours") {
@@ -1721,12 +1742,9 @@ struct AppSettingsForm: View {
                         TextField("Order prefix", text: draft.business.orderPrefix)
                     }
                     Section("Billing") {
-                        HStack { Text("Tax rate"); Spacer()
-                            TextField("0", value: draft.billing.taxRate, format: .number).multilineTextAlignment(.trailing).frame(width: 80)
-                            #if os(iOS)
-                                .keyboardType(.decimalPad)
-                            #endif
-                        }
+                        percentField("GST on food & soft drinks", rate: draft.billing.taxRate)
+                        percentField("VAT on liquor", rate: draft.billing.liquorTaxRate.or(0.22))
+                        Toggle("Prices include tax", isOn: draft.billing.taxInclusive.or(true))
                         TextField("Tax label", text: draft.billing.taxLabel)
                         Toggle("Accept Cash", isOn: draft.billing.acceptCash)
                         Toggle("Accept Card", isOn: draft.billing.acceptCard)
@@ -1735,12 +1753,7 @@ struct AppSettingsForm: View {
                         Toggle("Print receipt", isOn: draft.billing.printReceipt)
                     }
                     Section("Inventory") {
-                        HStack { Text("Low stock threshold"); Spacer()
-                            TextField("0", value: draft.inventory.lowStockThreshold, format: .number).multilineTextAlignment(.trailing).frame(width: 80)
-                            #if os(iOS)
-                                .keyboardType(.numberPad)
-                            #endif
-                        }
+                        percentField("Low stock threshold", rate: draft.inventory.lowStockThreshold)
                         Toggle("Auto-reorder", isOn: draft.inventory.autoReorder)
                         Toggle("Track expiry", isOn: draft.inventory.trackExpiry)
                     }
@@ -1780,8 +1793,26 @@ struct AppSettingsForm: View {
         }
     }
 
+    /// A rate stored as a fraction (0.05), edited as a percentage (5)
+    private func percentField(_ label: String, rate: Binding<Double>) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField("0", value: Binding(get: { (rate.wrappedValue * 1000).rounded() / 10 },
+                                          set: { rate.wrappedValue = $0 / 100 }),
+                      format: .number)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 70)
+                #if os(iOS)
+                .keyboardType(.decimalPad)
+                #endif
+            Text("%").foregroundStyle(.secondary)
+        }
+    }
+
     private func persist() async {
         guard let store, let draft else { return }
+        saveError = nil
         do {
             try await store.save(draft)
             saveSuccess = true
@@ -1815,7 +1846,8 @@ struct AdminReservation: Codable, Identifiable, Hashable {
 }
 
 struct ReservationCreatePayload: Encodable {
-    let tableId: String
+    /// Optional: a booking can be taken before a table is chosen
+    let tableId: String?
     let guestName: String
     let guestPhone: String
     let guestCount: Int
@@ -2058,7 +2090,7 @@ private struct ReservationFormSheet: View {
                 }
                 Section("Table") {
                     Picker("Table", selection: $tableId) {
-                        Text("Select…").tag("")
+                        Text("Assign later").tag("")
                         ForEach(store.tables, id: \.id) { t in
                             Text("Table \(t.number) (\(t.capacity) seats)").tag(t.id)
                         }
@@ -2080,9 +2112,6 @@ private struct ReservationFormSheet: View {
                     else { Button("Save", action: save).disabled(!isValid) }
                 }
             }
-            .onAppear {
-                if tableId.isEmpty, let first = store.tables.first { tableId = first.id }
-            }
         }
         .interactiveDismissDisabled(saving)
     }
@@ -2090,7 +2119,6 @@ private struct ReservationFormSheet: View {
     private var isValid: Bool {
         !guestName.trimmingCharacters(in: .whitespaces).isEmpty
         && !guestPhone.trimmingCharacters(in: .whitespaces).isEmpty
-        && !tableId.isEmpty
         && guestCount > 0
     }
 
@@ -2100,9 +2128,9 @@ private struct ReservationFormSheet: View {
         // produces "Invalid Date" silently.
         let dateF = DateFormatter()
         dateF.dateFormat = "yyyy-MM-dd"
-        dateF.timeZone = .current
+        dateF.timeZone = TimeZone(identifier: "Asia/Kolkata")
         let payload = ReservationCreatePayload(
-            tableId: tableId,
+            tableId: tableId.isEmpty ? nil : tableId,
             guestName: guestName.trimmingCharacters(in: .whitespaces),
             guestPhone: guestPhone.trimmingCharacters(in: .whitespaces),
             guestCount: guestCount,

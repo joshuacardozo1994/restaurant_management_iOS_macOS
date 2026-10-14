@@ -165,6 +165,9 @@ struct CreateOrderRequest: Encodable {
     let customerPhone: String?
     let customerAddress: String?
     let waiterId: String?   // optional override; server falls back to JWT user
+    /// Same key on a retry of the same order, so a resend after a dropped
+    /// connection returns the order already placed instead of a duplicate
+    let idempotencyKey: String?
 
     struct Item: Encodable {
         let menuItemId: String
@@ -243,4 +246,17 @@ struct CreateReservationRequest: Encodable {
     let time: String   // HH:MM
     let duration: Int  // minutes
     let notes: String?
+}
+
+// MARK: - Settled bill (returned by POST /api/orders/:id/payment)
+
+/// What the server recorded for a table's payment, in whole rupees
+struct SettledBill: Decodable, Equatable {
+    let gross: Int
+    let discount: Int
+    let subtotal: Int
+    let tax: Int
+    let gstTax: Int
+    let vatTax: Int
+    let total: Int
 }
