@@ -16,6 +16,8 @@ import SwiftUI
     /// copy saved on this device (or the restaurant's rates), so a bill printed
     /// offline still shows its GST and VAT.
     var billingConfig: BillingConfig = MenuLoader.savedBillingConfig()
+    /// Restaurant details for receipts, from settings (saved for offline printing)
+    var identity: RestaurantIdentity = MenuLoader.savedIdentity()
     var billID = UUID()
     var tableNumber: Int?
     var waiter: String?
@@ -68,6 +70,13 @@ import SwiftUI
     }
 
     private static let billingConfigKey = "billingConfig"
+    private static let identityKey = "restaurantIdentity"
+
+    private static func savedIdentity() -> RestaurantIdentity {
+        guard let data = UserDefaults.standard.data(forKey: identityKey),
+              let saved = try? JSONDecoder().decode(RestaurantIdentity.self, from: data) else { return .durigos }
+        return saved
+    }
 
     private static func savedBillingConfig() -> BillingConfig {
         guard let data = UserDefaults.standard.data(forKey: billingConfigKey),
@@ -90,12 +99,27 @@ import SwiftUI
                 let liquorTaxRate: Double?
                 let taxInclusive: Bool?
             }
+            struct Restaurant: Decodable {
+                let name: String?
+                let address: String?
+                let phone: String?
+                let gstin: String?
+                let vatTin: String?
+            }
             let billing: Billing
+            let restaurant: Restaurant?
         }
         do {
             let (data, response) = try await urlSession.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
-            let billing = try JSONDecoder().decode(Settings.self, from: data).billing
+            let settings = try JSONDecoder().decode(Settings.self, from: data)
+            let billing = settings.billing
+            if let r = settings.restaurant {
+                let merged = RestaurantIdentity.durigos.merging(name: r.name, address: r.address, phone: r.phone,
+                                                               gstin: r.gstin, vatTin: r.vatTin)
+                identity = merged
+                UserDefaults.standard.set(try JSONEncoder().encode(merged), forKey: Self.identityKey)
+            }
             let config = BillingConfig(
                 taxRate: billing.taxRate ?? BillingConfig.default.taxRate,
                 liquorTaxRate: billing.liquorTaxRate ?? BillingConfig.default.liquorTaxRate,

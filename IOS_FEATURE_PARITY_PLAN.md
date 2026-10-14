@@ -59,11 +59,23 @@ unit-tested but not yet checked by hand on a device, ⬜ = still to do.
 - ✅ Manage tables: add, renumber, seats, out of service and back, delete (admin). [UI test ManageTablesUITests]
 - ✅ Kitchen chime and kitchen-ticket printing (auto or per card; iPhone/iPad to a chosen printer, Mac to the default printer). [ticket rendered in a unit test; new-order trigger verified on the simulator] ⚠️ Not yet tried on the real kitchen printer or speaker.
 
+**Third pass (14 Oct 2026)**
+- ✅ Receipt header (name, address, phone, GSTIN, VAT TIN) comes from server settings, saved for offline printing. A field that is blank or still holds a setup-wizard placeholder ("Spice Garden Restaurant", "29ABCDE1234F1Z5", …) keeps Durigo's own value, so a receipt can never print the example details. [unit test]
+- ✅ POS receipts list how the bill was paid ("Paid by ₹513 cash, ₹513 UPI"), as the web receipt does.
+- ✅ `testShouldFilterMenuWithQuery` updated: the search was made deliberately more forgiving in Feb 2026 (one typo per four letters on long searches) and the 2023 test still expected the old rule.
+- ✅ `AdminScreensUITests` sign in with `--auto-signin` as qa-admin (password from TEST_RUNNER_QA_PASS). Running them caught a regression from the role work (Reports had dropped off the admin's iPhone tabs), now fixed.
+- ✅ QA accounts and the QA10 code come from `scripts/qa-seed.cjs` in restaurant-management (local databases only).
+
+Full suite: 10 unit tests + 11 UI tests pass.
+```
+QA_PASS=$(openssl rand -hex 12) node scripts/qa-seed.cjs           # in restaurant-management, dev server running
+TEST_RUNNER_QA_PASS=$QA_PASS xcodebuild test -project Durigo.xcodeproj -scheme "Durigo (Local)" \
+  -configuration "Debug Local" -destination 'platform=iOS Simulator,name=iPhone 17' -parallel-testing-enabled NO
+```
+(POSPaymentUITests needs a table with a bill requested.)
+
 **Still to do**
-- ⬜ Receipt identity (name, GSTIN, VAT TIN, address, phone) from settings instead of hard-coded, once production settings hold Durigo's details.
-- ⬜ List each tender ("Paid by: ₹513 cash, ₹513 UPI") on the iOS receipt, as the web receipt does.
-- ⬜ `testShouldFilterMenuWithQuery` fails: decide how forgiving menu search should be.
-- ⬜ `AdminScreensUITests` still launch with the old `--autologin` arguments and admin/admin123; move them to `--auto-signin` with the QA password from TEST_RUNNER_QA_PASS.
+- ⬜ Try kitchen tickets and the chime on the real kitchen printer and device.
 
 ## Phase order (revised)
 

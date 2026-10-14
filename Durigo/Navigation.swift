@@ -118,7 +118,9 @@ extension NavigationItem {
 /// Bottom tabs on iPhone (compact): the first four of these the role can use.
 /// Everything else the role can use lives behind the "More" tab.
 func iPhoneRootTabs(for role: String?) -> [NavigationItem] {
-    Array([NavigationItem.dashboard, .pos, .kitchen, .billing, .reports]
+    // Admins keep the original Dashboard/POS/Billing/Reports tabs; Kitchen comes
+    // last so it's only a tab for roles with room for it (kitchen staff)
+    Array([NavigationItem.dashboard, .pos, .billing, .reports, .kitchen]
         .filter { $0.isAllowed(for: role) }
         .prefix(4))
 }

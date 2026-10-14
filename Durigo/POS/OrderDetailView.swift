@@ -50,6 +50,8 @@ struct OrderDetailView: View {
         let items: [MenuItem]
         let tableNumber: Int
         let bill: SettledBill
+        /// "₹513 cash, ₹513 UPI" for a split bill, "cash" otherwise
+        let paidBy: String
     }
 
     private static let paymentMethods = ["CASH", "CARD", "UPI", "WALLET"]
@@ -85,7 +87,7 @@ struct OrderDetailView: View {
             // Categories decide GST vs VAT for the breakdown
             .task { if store.menu.isEmpty { await store.loadMenu() } }
             .sheet(item: $receipt, onDismiss: { dismiss() }) { paid in
-                PaidReceiptSheet(receipt: paid, config: menuLoader.billingConfig)
+                PaidReceiptSheet(receipt: paid, config: menuLoader.billingConfig, identity: menuLoader.identity)
             }
         }
     }
@@ -533,7 +535,11 @@ struct OrderDetailView: View {
                 table: table, expectedTotal: amounts.total, method: method,
                 discount: amounts.discount > 0 ? amounts.discount : nil,
                 discountCode: appliedCode?.code, tenders: tenders)
-            receipt = PaidReceipt(items: items, tableNumber: table.number, bill: settled)
+            // "₹513 cash, ₹513 UPI" (as the web receipt lists split tenders)
+            let spoken = { (m: String) in m == "UPI" ? "UPI" : m.lowercased() }
+            let paidBy = tenders.map { $0.map { "₹\($0.amount) \(spoken($0.method))" }.joined(separator: ", ") }
+                ?? spoken(method)
+            receipt = PaidReceipt(items: items, tableNumber: table.number, bill: settled, paidBy: paidBy)
         } catch let APIError.server(code, body) where code == 409 {
             await store.loadTables()  // show the current bill
             errorMessage = APIError.server(code: code, body: body).localizedDescription
@@ -564,6 +570,7 @@ struct OrderDetailView: View {
 private struct PaidReceiptSheet: View {
     let receipt: OrderDetailView.PaidReceipt
     let config: BillingConfig
+    let identity: RestaurantIdentity
     @Environment(\.dismiss) private var dismiss
     @State private var pdfURL: URL?
 
@@ -585,7 +592,8 @@ private struct PaidReceiptSheet: View {
                         .accessibilityIdentifier("receipt-paid")
                     ForEach(pages.indices, id: \.self) { index in
                         BillRenderer.page(index, of: pages, tableNumber: receipt.tableNumber,
-                                          finalTotal: receipt.bill.total, taxes: taxes)
+                                          finalTotal: receipt.bill.total, taxes: taxes,
+                                          identity: identity, paidBy: receipt.paidBy)
                             .shadow(radius: 2)
                     }
                 }
@@ -609,6 +617,7 @@ private struct PaidReceiptSheet: View {
             .task {
                 pdfURL = await BillRenderer.renderPDF(items: receipt.items, tableNumber: receipt.tableNumber,
                                                       finalTotal: receipt.bill.total, taxes: taxes,
+                                                      identity: identity, paidBy: receipt.paidBy,
                                                       fileName: "Receipt-Table-\(receipt.tableNumber).pdf")
             }
         }

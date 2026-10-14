@@ -41,6 +41,39 @@ struct BillingConfig: Codable, Equatable {
     static let `default` = BillingConfig(taxRate: 0.05, liquorTaxRate: 0.22, taxInclusive: true)
 }
 
+/// Who the bill is from, as printed at the top of every receipt. Comes from
+/// the server's restaurant settings; the defaults are Durigo's own details.
+struct RestaurantIdentity: Codable, Equatable {
+    var name: String
+    var address: String
+    var phone: String
+    var gstin: String
+    var vatTin: String
+
+    static let durigos = RestaurantIdentity(
+        name: "Durigo's", address: "Grande Vanelim Colva", phone: "+91 9545925489",
+        gstin: "30AEJPR6889P1ZI", vatTin: "30031114703")
+
+    /// Values the web setup wizard ships as examples. A receipt must never
+    /// print these, so a field still holding one keeps Durigo's own value.
+    static let setupPlaceholders: Set<String> = [
+        "Spice Garden Restaurant", "45 MG Road, Koramangala, Bangalore 560034",
+        "+91 98765 43210", "29ABCDE1234F1Z5",
+    ]
+
+    /// Settings values merged over the current identity, skipping blanks and placeholders
+    func merging(name: String?, address: String?, phone: String?, gstin: String?, vatTin: String?) -> RestaurantIdentity {
+        func pick(_ value: String?, _ current: String) -> String {
+            guard let v = value?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty,
+                  !Self.setupPlaceholders.contains(v) else { return current }
+            return v
+        }
+        return RestaurantIdentity(name: pick(name, self.name), address: pick(address, self.address),
+                                  phone: pick(phone, self.phone), gstin: pick(gstin, self.gstin),
+                                  vatTin: pick(vatTin, self.vatTin))
+    }
+}
+
 enum TaxClass { case gst, vat }
 
 struct BillAmounts: Equatable {

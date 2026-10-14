@@ -305,13 +305,16 @@ final class DurigoUITests: XCTestCase {
 
 // MARK: - Admin screens (Users / Discounts / Modifiers) CRUD walkthroughs
 
-/// These tests log in via the `--autologin` debug args and exercise the three
+/// These tests sign in as the QA admin via `--auto-signin` (password from the
+/// QA_PASS environment variable, TEST_RUNNER_QA_PASS through xcodebuild) and
+/// exercise the three
 /// admin-CRUD screens added in late 2026. Each test creates an entity through
 /// the form sheet, edits it, deletes it, and verifies the list reflects each
 /// step. Run against the Durigo (Local) scheme so the writes go to the
 /// localhost test DB.
 final class AdminScreensUITests: XCTestCase {
     let app = XCUIApplication()
+    static var qaPassword: String { ProcessInfo.processInfo.environment["QA_PASS"] ?? "" }
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -326,9 +329,7 @@ final class AdminScreensUITests: XCTestCase {
         // to MockURLProtocol which only has a fixture for /api/menu and force-
         // unwraps on every other path. The admin tests need real localhost.
         app.launchArguments = [
-            "--autologin",
-            "--autologin-username=admin",
-            "--autologin-password=admin123",
+            "--auto-signin=qa-admin:\(Self.qaPassword)",
             "--start-tab=\(startTab)",
         ]
         app.launch()
@@ -477,13 +478,12 @@ final class AdminScreensUITests: XCTestCase {
         // On iPad it's in the sidebar. The test taps the Performance link
         // and confirms the Performance nav-bar appears.
         app.launchArguments = [
-            "--autologin",
-            "--autologin-username=admin",
-            "--autologin-password=admin123",
+            "--auto-signin=qa-admin:\(Self.qaPassword)",
             "--start-tab=reports",
         ]
         app.launch()
-        let performanceLink = app.buttons["reports-link-performance"]
+        // A plain-styled NavigationLink isn't always exposed as a button
+        let performanceLink = app.descendants(matching: .any).matching(identifier: "reports-link-performance").firstMatch
         XCTAssertTrue(performanceLink.waitForExistence(timeout: 8), "Performance link missing from Reports")
         performanceLink.tap()
         XCTAssertTrue(app.navigationBars["Performance"].waitForExistence(timeout: 8),

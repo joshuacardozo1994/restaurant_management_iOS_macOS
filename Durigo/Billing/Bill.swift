@@ -97,6 +97,10 @@ struct Bill: View {
     var finalTotal: Int?
     /// GST/VAT breakdown, shown on the last page with the total
     var taxes: ReceiptTaxes? = nil
+    /// Name, address, phone and tax numbers printed at the top
+    var identity: RestaurantIdentity = .durigos
+    /// How it was paid ("₹513 cash, ₹513 UPI"), shown under the total
+    var paidBy: String? = nil
     @State private var maxWidth: CGFloat = 0
     #if os(iOS)
     @State private var qrCodeImage: UIImage? = nil
@@ -131,7 +135,7 @@ struct Bill: View {
                 if first {
                     HStack {
                         Spacer()
-                        Text("Durigo's")
+                        Text(identity.name)
                             .font(.dancingScriptBold(size: 40))
 //                            .overlay {
 //                                Image(.christmasBells)
@@ -165,22 +169,22 @@ struct Bill: View {
                         }
                     }
                     .overlay(alignment: .topLeading) {
-                        Text("GSTIN: 30AEJPR6889P1ZI")
+                        Text("GSTIN: \(identity.gstin)")
                             .font(.system(size: 10))
                             .padding(.top)
                     }
                     
                     .overlay(alignment: .topTrailing) {
-                            Text("VAT TIN: 30031114703")
+                            Text("VAT TIN: \(identity.vatTin)")
                                 .font(.system(size: 10))
                                 .padding(.top)
                             
                         
                     }
                     
-                    Text("+91 9545925489")
+                    Text(identity.phone)
                         .font(.system(size: 11))
-                    Text("Grande Vanelim Colva ")
+                    Text(identity.address)
                         .font(.system(size: 11))
                         .padding(.bottom)
                 } else {
@@ -260,6 +264,11 @@ struct Bill: View {
                         
                         
                     
+                    if let paidBy {
+                        Text("Paid by \(paidBy)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.black.opacity(0.6))
+                    }
                     Spacer()
                     Text(ThankYouMessages.getRandomMessage())
                         .font(.dancingScriptRegular(size: 18))
@@ -315,16 +324,19 @@ enum BillRenderer {
 
     @MainActor
     static func page(_ index: Int, of pages: [[MenuItem]], tableNumber: Int?, finalTotal: Int,
-                     taxes: ReceiptTaxes?) -> some View {
+                     taxes: ReceiptTaxes?, identity: RestaurantIdentity = .durigos,
+                     paidBy: String? = nil) -> some View {
         let isLast = index == pages.count - 1
         return Bill(currentMenuItems: pages[index], tableNumber: tableNumber, first: index == 0,
-                    finalTotal: isLast ? finalTotal : nil, taxes: isLast ? taxes : nil)
+                    finalTotal: isLast ? finalTotal : nil, taxes: isLast ? taxes : nil,
+                    identity: identity, paidBy: isLast ? paidBy : nil)
             .frame(width: pageSize.width, height: pageSize.height)
             .background(Color.white)
     }
 
     @MainActor
     static func renderPDF(items: [MenuItem], tableNumber: Int?, finalTotal: Int, taxes: ReceiptTaxes?,
+                          identity: RestaurantIdentity = .durigos, paidBy: String? = nil,
                           fileName: String = "Bill.pdf") async -> URL {
         let url = URL.documentsDirectory.appending(path: fileName)
         var box = CGRect(origin: .zero, size: pageSize)
@@ -333,7 +345,8 @@ enum BillRenderer {
         for index in all.indices {
             pdf.beginPDFPage(nil)
             let renderer = ImageRenderer(content: page(index, of: all, tableNumber: tableNumber,
-                                                       finalTotal: finalTotal, taxes: taxes))
+                                                       finalTotal: finalTotal, taxes: taxes,
+                                                       identity: identity, paidBy: paidBy))
             renderer.scale = 1.0 // match PDF points exactly
             renderer.proposedSize = ProposedViewSize(pageSize)
             renderer.render { _, context in context(pdf) }

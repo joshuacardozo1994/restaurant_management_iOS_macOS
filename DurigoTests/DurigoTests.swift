@@ -40,8 +40,11 @@ final class DurigoTests: XCTestCase {
         // Case 4: Similar string within threshold
         XCTAssertTrue(Helper.shouldFilterMenuWithQuery(searchQuery: "CheeseBurgeri", itemName: "CheeseBurger", itemSuffix: nil))
 
-        // Case 5: Similar string but beyond threshold
-        XCTAssertFalse(Helper.shouldFilterMenuWithQuery(searchQuery: "CheeseBurger", itemName: "CheeseBur", itemSuffix: nil))
+        // Case 5: Longer searches tolerate one typo per four letters (Helper's
+        // dynamic threshold, Feb 2026): 12 letters allow 3 edits, not 4+
+        XCTAssertTrue(Helper.shouldFilterMenuWithQuery(searchQuery: "CheeseBurger", itemName: "CheeseBur", itemSuffix: nil))
+        XCTAssertFalse(Helper.shouldFilterMenuWithQuery(searchQuery: "CheeseBurger", itemName: "Chees", itemSuffix: nil))
+        XCTAssertFalse(Helper.shouldFilterMenuWithQuery(searchQuery: "CheeseBurger", itemName: "Chicken Pulao", itemSuffix: nil))
 
         // Case 6: Suffix matches the search string
         XCTAssertTrue(Helper.shouldFilterMenuWithQuery(searchQuery: "Special", itemName: "Pizza", itemSuffix: "Pizza Special"))
@@ -213,6 +216,22 @@ final class DurigoTests: XCTestCase {
         attachment.name = "kitchen-ticket"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    /// Settings fill in the receipt header, but never the setup wizard's
+    /// example values or blanks: those keep Durigo's own details
+    func testRestaurantIdentityIgnoresPlaceholders() {
+        let fromPlaceholders = RestaurantIdentity.durigos.merging(
+            name: "Spice Garden Restaurant", address: " ", phone: "+91 98765 43210",
+            gstin: "29ABCDE1234F1Z5", vatTin: nil)
+        XCTAssertEqual(fromPlaceholders, .durigos)
+
+        let real = RestaurantIdentity.durigos.merging(
+            name: "Durigo's Bar & Restaurant", address: "Colva Beach Road", phone: nil,
+            gstin: "30AEJPR6889P1ZI", vatTin: "30031114703")
+        XCTAssertEqual(real.name, "Durigo's Bar & Restaurant")
+        XCTAssertEqual(real.address, "Colva Beach Road")
+        XCTAssertEqual(real.phone, RestaurantIdentity.durigos.phone)
     }
 
     func testPerformanceExample() throws {

@@ -41,7 +41,8 @@ struct BillPreview: View {
             TabView {
                 ForEach(pages.indices, id: \.self) { index in
                     BillRenderer.page(index, of: pages, tableNumber: tableNumber,
-                                      finalTotal: billItems.getTotal(), taxes: taxes)
+                                      finalTotal: billItems.getTotal(), taxes: taxes,
+                                      identity: menuLoader.identity)
                 }
             }
             #if os(iOS)
@@ -143,7 +144,8 @@ struct BillPreview: View {
 
     @MainActor func render() async -> URL {
         await BillRenderer.renderPDF(items: billItems, tableNumber: tableNumber,
-                                     finalTotal: billItems.getTotal(), taxes: taxes)
+                                     finalTotal: billItems.getTotal(), taxes: taxes,
+                                     identity: menuLoader.identity)
     }
 }
 #if DEBUG
