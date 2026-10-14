@@ -695,7 +695,7 @@ struct PerformanceReportView: View {
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
                             Text("\(s.ordersHandled) orders").font(.caption)
-                            Text("\((Int(s.revenue)).rupees)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            Text("\((s.revenue).rupees)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 6)
@@ -900,7 +900,7 @@ struct SalesReportView: View {
         LazyVGrid(columns: columns, spacing: DesignTokens.spacingM) {
             StatTile(
                 title: "Revenue",
-                value: "\((Int(d.todayRevenue)).rupees)",
+                value: "\((d.todayRevenue).rupees)",
                 subtitle: "vs previous \(range.label.lowercased())",
                 icon: "indianrupeesign",
                 trend: trend(forChange: d.revenueChange)
@@ -914,7 +914,7 @@ struct SalesReportView: View {
             )
             StatTile(
                 title: "Avg order",
-                value: "\((Int(d.avgOrderValue)).rupees)",
+                value: "\((d.avgOrderValue).rupees)",
                 subtitle: "per ticket",
                 icon: "cart"
             )
@@ -953,7 +953,7 @@ struct SalesReportView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text("\((Int(item.revenue)).rupees)")
+                        Text("\((item.revenue).rupees)")
                             .font(.subheadline.monospacedDigit().weight(.semibold))
                     }
                     .padding(.vertical, 6)
@@ -972,7 +972,7 @@ struct SalesReportView: View {
                         HStack {
                             Text(displayName(forMethod: m.method)).font(.subheadline.weight(.medium))
                             Spacer()
-                            Text("\((Int(m.amount)).rupees)").font(.subheadline.monospacedDigit())
+                            Text("\((m.amount).rupees)").font(.subheadline.monospacedDigit())
                         }
                         GeometryReader { geo in
                             RoundedRectangle(cornerRadius: 3)

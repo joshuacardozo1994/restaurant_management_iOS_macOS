@@ -579,7 +579,7 @@ struct AddedItemRow: View {
             Spacer()
             
             // Price
-            Text("\((Int(item.matchedItem.price)).rupees)")
+            Text("\((item.matchedItem.price).rupees)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             
@@ -637,7 +637,7 @@ struct MatchPickerView: View {
                                         }
                                     }
                                     Spacer()
-                                    Text("\((Int(item.price)).rupees)")
+                                    Text("\((item.price).rupees)")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                 }

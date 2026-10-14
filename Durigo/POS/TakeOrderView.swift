@@ -266,7 +266,7 @@ struct TakeOrderView: View {
                             }
                         }
                         Spacer()
-                        Text("\((Int(item.price)).rupees)")
+                        Text("\((item.price).rupees)")
                             .font(.system(.body, weight: .semibold))
                             .monospacedDigit()
                         Image(systemName: "plus.circle.fill")
@@ -314,7 +314,7 @@ struct TakeOrderView: View {
                         Text("Total")
                             .font(.system(.headline, weight: .semibold))
                         Spacer()
-                        Text("\((Int(cartTotal)).rupees)")
+                        Text("\((cartTotal).rupees)")
                             .font(.system(.title3, weight: .bold))
                             .monospacedDigit()
                     }
@@ -408,7 +408,7 @@ struct TakeOrderView: View {
                 .accessibilityLabel("One more \(line.menuItem.name)")
                 .accessibilityIdentifier("cart-plus-\(line.menuItem.name)")
             }
-            Text("\((Int(line.lineTotal)).rupees)")
+            Text("\((line.lineTotal).rupees)")
                 .font(.system(.subheadline, weight: .semibold))
                 .frame(minWidth: 60, alignment: .trailing)
                 .monospacedDigit()
@@ -577,7 +577,7 @@ private struct VariantPickerSheet: View {
                                 }
                             }
                             Spacer()
-                            Text("\((Int(v.price(forBase: Double(item.price)))).rupees)")
+                            Text("\((v.price(forBase: Double(item.price))).rupees)")
                                 .font(.system(.body, weight: .semibold))
                                 .monospacedDigit()
                         }

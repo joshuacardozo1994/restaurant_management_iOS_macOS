@@ -339,7 +339,7 @@ struct TableCardView: View {
                 ordersSection
                 HStack {
                     Spacer()
-                    Text("\((Int(table.unpaidTotal)).rupees)")
+                    Text("\((table.unpaidTotal).rupees)")
                         .font(.system(.headline, weight: .bold))
                         .monospacedDigit()
                 }

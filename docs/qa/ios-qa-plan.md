@@ -252,7 +252,8 @@ render screens offscreen with the Mac's own layout and fonts:
 | Receipt / bill preview | ✅ after a fix: the Mac app didn't load Durigo's fonts (macOS ignores `UIAppFonts`), so the name printed in a plain font and ran into the GSTIN line. `ATSApplicationFontsPath` added |
 | Long bill, two pages | ✅ |
 | Kitchen ticket (80mm) | ✅ |
-| Every other screen | ⏳ needs your input: they load live data, so they need the app running with the Mac unlocked (steps below) |
+| Bill detail | ✅ header, discount and total; found and fixed: totals cut paise instead of rounding (₹1,017.50 showed ₹1,017, not ₹1,018) here and in 14 other places |
+| Every other screen | ⏳ needs your input: lists, scroll views and text fields are native Mac views that offscreen rendering can't draw (the tables grid renders blank), so they need the running app on an unlocked Mac (steps below) |
 
 All 15 unit tests pass on the Mac as well as on the iPhone simulator.
 

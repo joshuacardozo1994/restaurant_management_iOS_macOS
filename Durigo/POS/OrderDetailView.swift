@@ -197,7 +197,7 @@ struct OrderDetailView: View {
                         }
                     }
                     Spacer()
-                    Text("\((Int(item.unitPrice * Double(item.quantity))).rupees)")
+                    Text("\((item.unitPrice * Double(item.quantity)).rupees)")
                         .font(.subheadline)
                         .monospacedDigit()
                     statusChip(item.status, small: true)
@@ -531,7 +531,7 @@ struct OrderDetailView: View {
         let total = (order.items ?? [])
             .filter { $0.status != "CANCELLED" }
             .reduce(0.0) { $0 + ($1.unitPrice * Double($1.quantity)) }
-        return "\((Int(total)).rupees)"
+        return "\((total).rupees)"
     }
 
     private func statusChip(_ status: String, small: Bool = false) -> some View {

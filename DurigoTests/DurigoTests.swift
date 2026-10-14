@@ -7,6 +7,7 @@
 
 import XCTest
 import SwiftUI
+import SwiftData
 @testable import Durigo
 
 // The rendering tests run on iPhone and on the Mac
@@ -258,6 +259,7 @@ final class DurigoTests: XCTestCase {
             add(attachment)
         }
     }
+
 
     /// Money reads the same as on the web: whole rupees, Indian grouping,
     /// whatever region the device is set to

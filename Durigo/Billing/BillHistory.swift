@@ -188,14 +188,14 @@ struct BillHistory: View {
                     Text(billHistoryItem.discountReason ?? "Discount")
                         .font(.subheadline).foregroundStyle(.green)
                     Spacer()
-                    Text("−\((Int(d)).rupees)").font(.subheadline).foregroundStyle(.green)
+                    Text("−\(d.rupees)").font(.subheadline).foregroundStyle(.green)
                 }
             }
             Divider()
             HStack {
                 Text("Total")
                 Spacer()
-                Text("\((Int(billHistoryItem.totalAmount)).rupees)")
+                Text(billHistoryItem.totalAmount.rupees)
             }
             .font(.title2.weight(.bold))
             // Discounts are for the cashier and admin (the server refuses a
@@ -352,7 +352,7 @@ struct DiscountSheet: View {
                         .accessibilityIdentifier("discount-reason-field")
                 }
                 Section {
-                    LabeledContent("Discount") { Text("−\((Int(computedAmount)).rupees)").foregroundStyle(.green) }
+                    LabeledContent("Discount") { Text("−\((computedAmount).rupees)").foregroundStyle(.green) }
                     LabeledContent("Final total") { Text("\((max(0, subtotal - Int(computedAmount))).rupees)").font(.headline) }
                 }
                 if initialAmount > 0 {
