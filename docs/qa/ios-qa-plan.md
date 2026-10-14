@@ -51,9 +51,9 @@ test's name is given.
 | 1.2 | Wrong password; 10 wrong in 15 minutes | Error; then locked for 5 minutes | |
 | 1.3 | iPhone tabs per role | Admin: Dashboard, POS, Billing, Reports. Cashier: POS, Billing, Reports. Waiter: POS, Billing. Kitchen: Kitchen. Everything else under More | ✅ simulator; 🤖 AdminScreensUITests |
 | 1.4 | iPad and Mac sidebar per role | Same screens as the iPhone tabs plus More, grouped | |
-| 1.5 | Non-admin opens Settings | Account and Sign Out only; no Restaurant settings | |
+| 1.5 | Non-admin opens Settings | Account and Sign Out only; no Restaurant settings | ✅ 🤖 QAPlanUITests (waiter) |
 | 1.6 | Admin deactivates a user who is signed in on a phone | The phone's next request signs it out | |
-| 1.7 | Sign out | Token revoked; Keychain cleared; back to login | |
+| 1.7 | Sign out | Token revoked; Keychain cleared; back to login | ✅ 🤖 QAPlanUITests |
 | 1.8 | Mac: launch, sign in, load tables | Works (needs the network entitlement) | ✅ 14 Oct, Mac |
 | 1.9 | Wi-Fi off, then back on | Live indicator turns red, then green; data catches up without restarting the app | |
 
@@ -64,13 +64,13 @@ test's name is given.
 | 2.1 | Search the menu, including typos ("chiken") | Finds the item | 🤖 testShouldFilterMenuWithQuery |
 | 2.2 | Add items, variants (Peg/Quarter/…), custom item, half portion | Line prices right; half of ₹155 = ₹78 | 🤖 testBillGeneratorBillMatchesItemsToMenu |
 | 2.3 | Voice ordering | Recognised items added; mic permission prompt on first use (iPhone, iPad and Mac) | |
-| 2.4 | Pick table (or Parcel) and waiter, then Print | Preview pages; PDF generated; Share/Print works | |
-| 2.5 | Receipt tax lines | CGST + SGST on food and soft drinks, VAT on liquor, taxable value; adds up to the total | ✅ 🤖 testRenderReceiptForReview |
+| 2.4 | Pick table (or Parcel) and waiter, then Print | Preview pages; PDF generated; Share/Print works | ✅ 🤖 QAPlanUITests (table, waiter, print preview) |
+| 2.5 | Receipt tax lines | CGST + SGST on food and soft drinks, VAT on liquor, taxable value; adds up to the total | ✅ 🤖 testRenderReceiptForReview + QAPlanUITests (₹200 liquor → VAT ₹36; ₹300 food → ₹7 + ₹7) |
 | 2.6 | Custom item named after a drink ("Kingfisher pint", "Virgin Mojito", "Ginger chicken") | Kingfisher → VAT; the other two → GST | 🤖 testBillMathAllocateAndTaxClass |
 | 2.7 | Receipt header | Durigo's details from settings; never the "Spice Garden" placeholders | 🤖 testRestaurantIdentityIgnoresPlaceholders |
 | 2.8 | 20+ items | Several pages; totals and tax only on the last page; nothing overlaps | |
 | 2.9 | Print offline (Wi-Fi off) | Bill prints with GST/VAT from the cached rates; uploads when back online | |
-| 2.10 | Upload | Bill appears on the web billing history and in the CA report with the same GST/VAT as printed | |
+| 2.10 | Upload | Bill appears on the web billing history and in the CA report with the same GST/VAT as printed | ✅ uploaded with table 9 and the waiter linked (14 Oct); GST/VAT on the web once marked paid: not yet checked |
 
 ### 3. Billing history (P0)
 
@@ -185,7 +185,7 @@ test's name is given.
 | Paid receipt | Looks like the printed bill; Share/Print reachable | ✅ iPhone |
 | Manage tables, merge tables, reservation dialog | Sheets on iPhone; Mac sheet sizes | |
 | Bill Generator | Fast with one hand; table and waiter pickers; empty state | |
-| Bill preview and receipt | Durigo's header; tax lines; QR; multi-page | ✅ rendered |
+| Bill preview and receipt | Durigo's header; tax lines; QR; multi-page | ✅ rendered; ✅ on iPhone the page was 420pt on a 402pt screen and its header hid behind the back button; it now scales to fit (14 Oct) |
 | Voice ordering | Permission flow; match picker | |
 | Billing history and bill detail | Status chips; filters; discount sheet | |
 | Kitchen (iPhone list, iPad kanban, Mac) | From 1–2 m: order number, table, notes; columns fit; drag on iPad; toolbar alert menu | |

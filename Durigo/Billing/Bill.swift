@@ -304,6 +304,23 @@ struct Bill: View {
 
 /// Lays a bill out on A5-ish pages and renders them to a PDF, for printing
 /// or sharing. Used by the Bill Generator and for POS table receipts.
+/// A bill page shrunk to fit the space it's shown in (a phone is narrower than
+/// the 420pt page). Only for on-screen previews; PDFs render at full size.
+struct FittedBillPage<Page: View>: View {
+    let page: Page
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = BillRenderer.pageSize
+            let scale = min(1, geo.size.width / size.width, geo.size.height / size.height)
+            page
+                .scaleEffect(scale)
+                .frame(width: size.width * scale, height: size.height * scale)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
 enum BillRenderer {
     static let pageSize = CGSize(width: 420, height: 595)
     static let itemsPerPage = 19

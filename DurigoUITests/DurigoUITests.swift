@@ -616,3 +616,99 @@ final class ManageTablesUITests: XCTestCase {
         XCTAssertTrue(rowMenu.waitForNonExistence(timeout: 8), "Table \(number) wasn't deleted")
     }
 }
+
+// MARK: - QA plan checks (docs/qa/ios-qa-plan.md)
+
+/// Live-server checks from the iOS QA plan that can run unattended. Needs the
+/// local server, the QA accounts from scripts/qa-seed.cjs and TEST_RUNNER_QA_PASS.
+final class QAPlanUITests: XCTestCase {
+    let app = XCUIApplication()
+
+    private func launch(as role: String, tab: String) throws {
+        let password = try XCTUnwrap(ProcessInfo.processInfo.environment["QA_PASS"], "Set TEST_RUNNER_QA_PASS")
+        app.launchArguments = ["--auto-signin=qa-\(role):\(password)", "--start-tab=\(tab)"]
+        app.launch()
+    }
+
+    /// Clear a field (price fields start at "0") and type the new value
+    private func replaceText(in field: XCUIElement, with text: String) {
+        // Tap at the right-hand end so the cursor follows any existing text,
+        // then delete it (a "0" can be reported as the placeholder, not the value)
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        let existing = (field.value as? String) ?? ""
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: max(existing.count, 4)))
+        field.typeText(text)
+    }
+
+    /// The first element with this identifier, whatever SwiftUI exposes it as
+    private func element(_ id: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: id).firstMatch
+    }
+
+    // 1.5 + 1.7: a waiter's Settings has no restaurant settings; Sign Out works
+    func testWaiterSettingsAndSignOut() throws {
+        try launch(as: "waiter", tab: "settings")
+        // On iPhone, Settings lives under More
+        let moreLink = element("more-link-settings")
+        if moreLink.waitForExistence(timeout: 8) { moreLink.tap() }
+        let signOut = app.buttons["Sign Out"]
+        XCTAssertTrue(signOut.waitForExistence(timeout: 8), "Settings didn't open")
+        XCTAssertFalse(element("settings-restaurant-link").exists, "A waiter can reach restaurant settings")
+
+        signOut.tap()
+        // The confirmation is an action sheet on iPhone, an alert elsewhere
+        let inSheet = app.sheets.buttons["Sign Out"], inAlert = app.alerts.buttons["Sign Out"]
+        if inSheet.waitForExistence(timeout: 3) { inSheet.tap() } else if inAlert.exists { inAlert.tap() }
+        XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 8), "Not back at the login screen")
+    }
+
+    // 2.4 + 2.5: a Bill Generator bill with liquor and food prints GST and VAT and uploads
+    func testBillGeneratorBillShowsGSTAndVATAndUploads() throws {
+        try launch(as: "admin", tab: "pos")
+        let generator = app.buttons["Bill Generator"]
+        XCTAssertTrue(generator.waitForExistence(timeout: 10))
+        generator.tap()
+
+        let clear = app.buttons["clearBill"]
+        if clear.waitForExistence(timeout: 3), clear.isEnabled { clear.tap() }
+
+        let addItem = app.buttons["addItemButton"]
+        XCTAssertTrue(addItem.waitForExistence(timeout: 5))
+        addItem.tap()
+        addItem.tap()
+        let names = app.textFields.matching(NSPredicate(format: "identifier BEGINSWITH 'menu-item-name-TextField'"))
+        let prices = app.textFields.matching(NSPredicate(format: "identifier BEGINSWITH 'menu-item-price-TextField'"))
+        XCTAssertEqual(names.count, 2)
+        let stamp = Int(Date().timeIntervalSince1970) % 100000
+        for (i, (name, price)) in [("QA Kingfisher pint \(stamp)", "200"), ("QA fish curry \(stamp)", "300")].enumerated() {
+            replaceText(in: names.element(boundBy: i), with: name)
+            replaceText(in: prices.element(boundBy: i), with: price)
+        }
+
+        element("Table-Selector").tap()
+        app.buttons["Table 9"].tap()
+        element("Waiter-Selector").tap()
+        let waiter = app.buttons["QA Waiter"]
+        XCTAssertTrue(waiter.waitForExistence(timeout: 5), "QA Waiter not in the waiter list")
+        waiter.tap()
+
+        let printBill = element("print-bill")
+        XCTAssertTrue(printBill.isEnabled)
+        printBill.tap()
+
+        // ₹200 liquor → VAT ₹36; ₹300 food → GST ₹14 (₹7 + ₹7)
+        let vat = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'VAT on liquor'")).firstMatch
+        XCTAssertTrue(vat.waitForExistence(timeout: 10), "No VAT line on the bill")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'CGST'")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["₹36"].exists, "VAT should be ₹36")
+        XCTAssertTrue(app.staticTexts["₹7"].exists, "CGST and SGST should be ₹7 each")
+
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "bill-generator-preview"
+        shot.lifetime = .keepAlways
+        add(shot)
+        // Give the immediate upload a moment before the app is torn down
+        sleep(3)
+        print("QA_BILL_STAMP=\(stamp)")
+    }
+}

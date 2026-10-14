@@ -40,9 +40,10 @@ struct BillPreview: View {
         VStack {
             TabView {
                 ForEach(pages.indices, id: \.self) { index in
-                    BillRenderer.page(index, of: pages, tableNumber: tableNumber,
-                                      finalTotal: billItems.getTotal(), taxes: taxes,
-                                      identity: menuLoader.identity)
+                    FittedBillPage(page: BillRenderer.page(index, of: pages, tableNumber: tableNumber,
+                                                           finalTotal: billItems.getTotal(), taxes: taxes,
+                                                           identity: menuLoader.identity))
+                        .padding(.vertical, 8)
                 }
             }
             #if os(iOS)
