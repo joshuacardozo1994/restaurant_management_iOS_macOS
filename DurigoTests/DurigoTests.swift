@@ -9,6 +9,22 @@ import XCTest
 import SwiftUI
 @testable import Durigo
 
+// The rendering tests run on iPhone and on the Mac
+extension ImageRenderer {
+    @MainActor var platformImage: PlatformImage? {
+        #if os(iOS)
+        uiImage
+        #else
+        nsImage
+        #endif
+    }
+}
+#if os(iOS)
+typealias PlatformImage = UIImage
+#else
+typealias PlatformImage = NSImage
+#endif
+
 final class DurigoTests: XCTestCase {
     
     override func setUpWithError() throws {
@@ -187,7 +203,7 @@ final class DurigoTests: XCTestCase {
             .background(Color.white)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2
-        let image = try XCTUnwrap(renderer.uiImage)
+        let image = try XCTUnwrap(renderer.platformImage)
         let attachment = XCTAttachment(image: image)
         attachment.name = "receipt-review"
         attachment.lifetime = .keepAlways
@@ -258,7 +274,7 @@ final class DurigoTests: XCTestCase {
             let renderer = ImageRenderer(content: BillRenderer.page(index, of: pages, tableNumber: 4, finalTotal: 2500,
                                                                     taxes: nil))
             renderer.scale = 2
-            let attachment = XCTAttachment(image: try XCTUnwrap(renderer.uiImage))
+            let attachment = XCTAttachment(image: try XCTUnwrap(renderer.platformImage))
             attachment.name = "long-bill-page-\(index + 1)"
             attachment.lifetime = .keepAlways
             add(attachment)
@@ -282,7 +298,7 @@ final class DurigoTests: XCTestCase {
 
         let renderer = ImageRenderer(content: KitchenTicketView(order: order))
         renderer.scale = 3
-        let image = try XCTUnwrap(renderer.uiImage)
+        let image = try XCTUnwrap(renderer.platformImage)
         let attachment = XCTAttachment(image: image)
         attachment.name = "kitchen-ticket"
         attachment.lifetime = .keepAlways
