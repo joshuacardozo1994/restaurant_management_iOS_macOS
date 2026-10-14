@@ -20,7 +20,8 @@ import CoreTransferable
 // MARK: - iPhone bottom-tab roots
 
 enum IPhoneRoot: Hashable {
-    case dashboard, pos, billing, reports, more
+    case item(NavigationItem)
+    case more
 }
 
 // MARK: - Root container
@@ -50,29 +51,29 @@ struct Home: View {
         .onOpenURL { url in handleIncomingURL(url) }
         .environmentObject(menuLoader)
         .environmentObject(navigation)
-        .onAppear { menuLoader.authSession = session }
+        .onAppear {
+            menuLoader.authSession = session
+            navigation.selection = startingItem(for: role, requested: navigation.selection)
+        }
+        // A different person signing in lands on a screen their role can use
+        .onChange(of: role) {
+            navigation.selection = startingItem(for: role, requested: navigation.selection)
+        }
     }
 
     // MARK: - iPhone shell
 
+    private var role: String? { session.user?.role }
+    private var rootTabs: [NavigationItem] { iPhoneRootTabs(for: role) }
+
     private var iPhoneShell: some View {
         TabView(selection: iPhoneRootBinding) {
-            Dashboard()
-                .tabItem { Label("Dashboard", systemImage: "square.grid.2x2") }
-                .tag(IPhoneRoot.dashboard)
-
-            POSContainerView()
-                .tabItem { Label("POS", systemImage: "cart") }
-                .tag(IPhoneRoot.pos)
-
-            BillHistoryList()
-                .tabItem { Label("Billing", systemImage: "doc.text") }
-                .badge(pendingCount)
-                .tag(IPhoneRoot.billing)
-
-            Reports()
-                .tabItem { Label("Reports", systemImage: "chart.bar.doc.horizontal") }
-                .tag(IPhoneRoot.reports)
+            ForEach(rootTabs) { item in
+                destination(for: item)
+                    .tabItem { Label(item.title, systemImage: item.icon) }
+                    .badge(item == .billing ? pendingCount : 0)
+                    .tag(IPhoneRoot.item(item))
+            }
 
             iPhoneMore
                 .tabItem { Label("More", systemImage: "ellipsis") }
@@ -80,21 +81,18 @@ struct Home: View {
         }
     }
 
-    /// "More" tab: NavigationStack root that lists every NavigationItem
-    /// not already a bottom tab, plus Settings.
+    /// "More" tab: every screen this role can use that isn't a bottom tab,
+    /// plus Settings.
     private var iPhoneMore: some View {
         NavigationStack {
             List {
-                Section("Operations") {
-                    moreLink(.kitchen)
-                    moreLink(.reservations)
-                }
-                Section("Management") {
-                    moreLink(.menu)
-                    moreLink(.modifiers)
-                    moreLink(.discounts)
-                    moreLink(.inventory)
-                    moreLink(.users)
+                ForEach(NavigationSection.allCases) { section in
+                    let items = section.items.filter { $0.isAllowed(for: role) && !rootTabs.contains($0) }
+                    if !items.isEmpty {
+                        Section(section.title) {
+                            ForEach(items) { moreLink($0) }
+                        }
+                    }
                 }
                 Section("Account") {
                     moreLink(.settings)
@@ -120,28 +118,14 @@ struct Home: View {
         .accessibilityIdentifier("more-link-\(item.title.lowercased().replacingOccurrences(of: " ", with: "-"))")
     }
 
-    /// Maps NavigationItem.selection ↔ IPhoneRoot. Selection changes from
-    /// taps in the More list update Navigation.selection so the iPad
-    /// sidebar (when reopened) reflects the same active screen.
+    /// Maps NavigationItem.selection ↔ the iPhone tab. Screens that aren't a
+    /// bottom tab live under More.
     private var iPhoneRootBinding: Binding<IPhoneRoot> {
         Binding(
-            get: {
-                switch navigation.selection {
-                case .dashboard: .dashboard
-                case .pos:       .pos
-                case .billing:   .billing
-                case .reports:   .reports
-                default:         .more
-                }
-            },
+            get: { rootTabs.contains(navigation.selection) ? .item(navigation.selection) : .more },
             set: { newRoot in
-                switch newRoot {
-                case .dashboard: navigation.selection = .dashboard
-                case .pos:       navigation.selection = .pos
-                case .billing:   navigation.selection = .billing
-                case .reports:   navigation.selection = .reports
-                case .more:      break // user navigates within More via NavigationLinks
-                }
+                if case .item(let item) = newRoot { navigation.selection = item }
+                // .more: the user navigates within More via NavigationLinks
             }
         )
     }
@@ -186,9 +170,12 @@ struct Home: View {
             Section { } header: { brandHeader.padding(.bottom, 4) }
 
             ForEach(NavigationSection.allCases) { section in
-                Section(section.title) {
-                    ForEach(section.items) { item in
-                        sidebarRow(item).tag(item)
+                let items = section.items.filter { $0.isAllowed(for: role) }
+                if !items.isEmpty {
+                    Section(section.title) {
+                        ForEach(items) { item in
+                            sidebarRow(item).tag(item)
+                        }
                     }
                 }
             }
@@ -496,18 +483,21 @@ struct SettingsView: View {
                     }
                 }
 
-                Section {
-                    NavigationLink {
-                        AppSettingsForm()
-                    } label: {
-                        Label("Restaurant settings", systemImage: "building.2")
+                // Only an admin can change restaurant settings (the server refuses others)
+                if session.user?.role.uppercased() == "ADMIN" {
+                    Section {
+                        NavigationLink {
+                            AppSettingsForm()
+                        } label: {
+                            Label("Restaurant settings", systemImage: "building.2")
+                        }
+                        .accessibilityIdentifier("settings-restaurant-link")
+                    } header: {
+                        Text("Configuration")
+                    } footer: {
+                        Text("Restaurant info, business hours, tax rate, billing methods, inventory thresholds.")
+                            .font(.caption)
                     }
-                    .accessibilityIdentifier("settings-restaurant-link")
-                } header: {
-                    Text("Configuration")
-                } footer: {
-                    Text("Restaurant info, business hours, tax rate, billing methods, inventory thresholds.")
-                        .font(.caption)
                 }
 
                 Section("Server") {
@@ -2281,6 +2271,8 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
     let table: TableRef?
     let waiter: WaiterRef?
     let items: [KitchenOrderItem]
+    /// Order note: allergies, or a delivery's customer and address
+    var notes: String? = nil
 
     struct TableRef: Codable, Hashable {
         let number: Int?
@@ -2415,7 +2407,7 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
                     id: orders[oi].id, orderNumber: orders[oi].orderNumber,
                     status: orders[oi].status, type: orders[oi].type,
                     createdAt: orders[oi].createdAt, table: orders[oi].table,
-                    waiter: orders[oi].waiter, items: newItems
+                    waiter: orders[oi].waiter, items: newItems, notes: orders[oi].notes
                 )
             }
         } catch {
@@ -2444,7 +2436,7 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
                     id: orders[oi].id, orderNumber: orders[oi].orderNumber,
                     status: orders[oi].status, type: orders[oi].type,
                     createdAt: orders[oi].createdAt, table: orders[oi].table,
-                    waiter: orders[oi].waiter, items: newItems
+                    waiter: orders[oi].waiter, items: newItems, notes: orders[oi].notes
                 )
             }
         } catch {
@@ -2468,7 +2460,7 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
                 orders[idx] = KitchenOrder(
                     id: order.id, orderNumber: order.orderNumber, status: upper,
                     type: order.type, createdAt: order.createdAt, table: order.table,
-                    waiter: order.waiter, items: order.items
+                    waiter: order.waiter, items: order.items, notes: order.notes
                 )
             }
         } catch {
@@ -2494,7 +2486,7 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
                 orders[idx] = KitchenOrder(
                     id: order.id, orderNumber: order.orderNumber, status: next,
                     type: order.type, createdAt: order.createdAt, table: order.table,
-                    waiter: order.waiter, items: order.items
+                    waiter: order.waiter, items: order.items, notes: order.notes
                 )
             }
         } catch {
@@ -2944,6 +2936,15 @@ struct KitchenAdminView: View {
                 if let n = o.table?.number { Text("Table \(n)").font(.caption).foregroundStyle(.secondary) }
                 else { Text(o.type).font(.caption).foregroundStyle(.secondary) }
             }
+            if let note = o.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+                Label(note, systemImage: "exclamationmark.bubble.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.red.opacity(0.08)))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             // Waiter line — kitchen calls this person when food is ready.
             if let waiter = o.waiter?.name, !waiter.isEmpty {
                 HStack(spacing: 4) {
@@ -2975,11 +2976,12 @@ struct KitchenAdminView: View {
                         assignMenu(for: it, order: o, store: store)
                         itemStatusControl(item: it, order: o, store: store)
                     }
+                    // Item notes are often allergies: red and never truncated
                     if let n = it.notes, !n.isEmpty {
-                        Text("note: \(n)")
-                            .font(.caption2).foregroundStyle(.blue)
+                        Text(n.uppercased())
+                            .font(.caption.weight(.semibold)).foregroundStyle(.red)
                             .padding(.leading, 28)
-                            .lineLimit(1)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if let chef = it.preparedBy?.name, !chef.isEmpty,
                        it.preparedBy?.id != it.assignedTo?.id {

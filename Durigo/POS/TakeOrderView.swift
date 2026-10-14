@@ -21,6 +21,10 @@ struct TakeOrderView: View {
     @State private var cart: [CartLine] = []
     @State private var customerName: String = ""
     @State private var customerPhone: String = ""
+    @State private var deliveryAddress: String = ""
+    /// The cart line whose kitchen note is being edited
+    @State private var noteLineId: UUID?
+    @State private var noteDraft = ""
     @State private var notes: String = ""
     @State private var variantPickerItem: AdminMenuItem?
     @State private var submitting = false
@@ -74,8 +78,24 @@ struct TakeOrderView: View {
                 Text(errorMessage ?? "")
             }
             // A changed cart is a different order, so it gets a new key
-            .onChange(of: cart.map { "\($0.id)x\($0.quantity)" }) {
+            .onChange(of: cart.map { "\($0.id)x\($0.quantity)\($0.notes ?? "")" }) {
                 idempotencyKey = UUID().uuidString
+            }
+            .alert("Note for the kitchen", isPresented: Binding(
+                get: { noteLineId != nil },
+                set: { if !$0 { noteLineId = nil } }
+            )) {
+                TextField("e.g. no nuts, less spicy", text: $noteDraft)
+                Button("Save") {
+                    if let i = cart.firstIndex(where: { $0.id == noteLineId }) {
+                        let note = noteDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        cart[i].notes = note.isEmpty ? nil : note
+                    }
+                    noteLineId = nil
+                }
+                Button("Cancel", role: .cancel) { noteLineId = nil }
+            } message: {
+                Text(cart.first(where: { $0.id == noteLineId })?.menuItem.name ?? "")
             }
         }
     }
@@ -127,6 +147,10 @@ struct TakeOrderView: View {
                 .padding(.horizontal, DesignTokens.spacingL)
             TextField("Phone number", text: $customerPhone)
                 .keyboardType(.phonePad)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, DesignTokens.spacingL)
+            TextField("Delivery address", text: $deliveryAddress, axis: .vertical)
+                .lineLimit(1...3)
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal, DesignTokens.spacingL)
                 .padding(.bottom, DesignTokens.spacingS)
@@ -289,8 +313,21 @@ struct TakeOrderView: View {
                 if let v = line.variant {
                     Text(v.name).font(.caption2).foregroundStyle(.secondary)
                 }
+                if let note = line.notes {
+                    Text(note).font(.caption).italic().foregroundStyle(.orange)
+                }
             }
             Spacer()
+            // Per-item note for the kitchen ("no nuts", "less spicy")
+            Button {
+                noteDraft = line.notes ?? ""
+                noteLineId = line.id
+            } label: {
+                Image(systemName: line.notes == nil ? "square.and.pencil" : "pencil.circle.fill")
+                    .foregroundStyle(line.notes == nil ? Color.secondary : Color.orange)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(line.notes == nil ? "Add a note for \(line.menuItem.name)" : "Edit note for \(line.menuItem.name)")
             HStack(spacing: 0) {
                 Button {
                     decrement(line)
@@ -316,6 +353,20 @@ struct TakeOrderView: View {
         }
     }
 
+    /// The order note. The server has no customer fields on an order, so (as
+    /// the web does) a delivery's customer, phone and address go in the note.
+    private var orderNotes: String? {
+        let trimmed = { (s: String) in s.trimmingCharacters(in: .whitespacesAndNewlines) }
+        var parts = [trimmed(notes)]
+        if orderType == .delivery {
+            if !trimmed(customerName).isEmpty { parts.append("Customer: \(trimmed(customerName))") }
+            if !trimmed(customerPhone).isEmpty { parts.append("Phone: \(trimmed(customerPhone))") }
+            if !trimmed(deliveryAddress).isEmpty { parts.append("Address: \(trimmed(deliveryAddress))") }
+        }
+        let joined = parts.filter { !$0.isEmpty }.joined(separator: " | ")
+        return joined.isEmpty ? nil : joined
+    }
+
     private var cartTotal: Double {
         cart.reduce(0) { $0 + $1.lineTotal }
     }
@@ -339,7 +390,8 @@ struct TakeOrderView: View {
     // MARK: Cart mutations
 
     private func addToCart(_ item: AdminMenuItem, variant: AdminVariantTemplate?) {
-        if let i = cart.firstIndex(where: { $0.menuItem.id == item.id && $0.variant?.id == variant?.id }) {
+        // A line with its own note ("no onion") stays separate from plain ones
+        if let i = cart.firstIndex(where: { $0.menuItem.id == item.id && $0.variant?.id == variant?.id && $0.notes == nil }) {
             cart[i].quantity += 1
         } else {
             cart.append(CartLine(menuItem: item, variant: variant, quantity: 1, notes: nil))
@@ -370,7 +422,7 @@ struct TakeOrderView: View {
                 tableId: tableId,
                 type: orderType,
                 cart: cart,
-                notes: notes.isEmpty ? nil : notes,
+                notes: orderNotes,
                 customerName: customerName.isEmpty ? nil : customerName,
                 customerPhone: customerPhone.isEmpty ? nil : customerPhone,
                 idempotencyKey: idempotencyKey

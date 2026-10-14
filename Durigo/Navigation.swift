@@ -89,14 +89,46 @@ enum NavigationSection: CaseIterable, Identifiable {
     }
 }
 
-/// Items shown as bottom tabs on iPhone (compact). Everything else lives
-/// behind the "More" tab.
-let iPhoneRootTabs: [NavigationItem] = [
-    .dashboard,
-    .pos,
-    .billing,
-    .reports,
-]
+// MARK: - Who sees what
+
+extension NavigationItem {
+    /// The roles that can open this screen. Mirrors the web app's page access
+    /// (proxy.ts), with one difference: waiters also get Billing, which on iOS
+    /// is the Bill Generator's bill history they print and settle from. The
+    /// server still checks every request, so this only hides what a role
+    /// couldn't use anyway.
+    var allowedRoles: Set<String> {
+        switch self {
+        case .dashboard:                                  ["ADMIN"]
+        case .pos, .reservations:                         ["ADMIN", "WAITER", "CASHIER"]
+        case .kitchen:                                    ["ADMIN", "KITCHEN"]
+        case .billing:                                    ["ADMIN", "CASHIER", "WAITER"]
+        case .reports:                                    ["ADMIN", "CASHIER"]
+        case .menu, .modifiers, .discounts, .inventory, .users: ["ADMIN"]
+        case .settings:                                   ["ADMIN", "WAITER", "KITCHEN", "CASHIER"]
+        }
+    }
+
+    func isAllowed(for role: String?) -> Bool {
+        guard let role else { return false }
+        return allowedRoles.contains(role.uppercased())
+    }
+}
+
+/// Bottom tabs on iPhone (compact): the first four of these the role can use.
+/// Everything else the role can use lives behind the "More" tab.
+func iPhoneRootTabs(for role: String?) -> [NavigationItem] {
+    Array([NavigationItem.dashboard, .pos, .kitchen, .billing, .reports]
+        .filter { $0.isAllowed(for: role) }
+        .prefix(4))
+}
+
+/// The screen a role starts on: the requested one if allowed, else the
+/// first screen that role works in (as the web sends each role home)
+func startingItem(for role: String?, requested: NavigationItem) -> NavigationItem {
+    if requested.isAllowed(for: role) { return requested }
+    return [NavigationItem.pos, .kitchen, .billing, .dashboard].first { $0.isAllowed(for: role) } ?? .settings
+}
 
 @Observable class Navigation: ObservableObject {
     /// Resolved from `--start-tab=` launch args. Used as both the initial
@@ -123,8 +155,4 @@ let iPhoneRootTabs: [NavigationItem] = [
     }
 
     var selection: NavigationItem = Navigation.argDerivedSelection()
-
-    /// True when the iPhone shell should show the "More" sheet because the
-    /// selected item isn't one of the four bottom tabs.
-    var isInMoreTab: Bool { !iPhoneRootTabs.contains(selection) && selection != .settings }
 }
