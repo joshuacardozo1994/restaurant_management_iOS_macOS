@@ -423,7 +423,7 @@ struct BillGenerator: View {
         HStack(spacing: DesignTokens.spacingS) {
             Image(systemName: "person.text.rectangle")
                 .foregroundStyle(.secondary)
-            TextField("Customer phone (optional)", text: $menuLoader.customerPhone)
+            TextField("Customer phone", text: $menuLoader.customerPhone)
                 .keyboardType(.phonePad)
                 .accessibilityIdentifier("bill-customer-phone")
             TextField("Name", text: $menuLoader.customerName)
