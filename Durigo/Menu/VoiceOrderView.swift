@@ -200,9 +200,16 @@ struct VoiceOrderView: View {
         .alert("Microphone Permission Required", isPresented: $showPermissionAlert) {
             Button("OK", role: .cancel) {}
             Button("Settings") {
+                #if os(iOS)
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
+                #else
+                // System Settings → Privacy & Security → Microphone
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                    NSWorkspace.shared.open(url)
+                }
+                #endif
             }
         } message: {
             Text("Please enable microphone access in Settings to use voice ordering.")
@@ -228,9 +235,12 @@ struct VoiceOrderView: View {
         }
         
         do {
+            #if os(iOS)
+            // macOS has no audio session; the engine records from the default input
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+            #endif
             
             recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
             

@@ -302,7 +302,7 @@ struct BillHistoryList: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .navigation) {
             Menu {
                 Button {
                     showTodaysBills.toggle()
@@ -342,7 +342,7 @@ struct BillHistoryList: View {
             }
         }
 
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .primaryAction) {
             Menu {
                 Button {
                     Task { await pushUnsynced(silentIfEmpty: false) }

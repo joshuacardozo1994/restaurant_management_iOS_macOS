@@ -384,7 +384,7 @@ struct MenuGenerator: View {
         .overlay(alignment: .top) {
             if let menu = menuLoader.menu {
                 HStack(spacing: 12) {
-                    if #available(iOS 26.0, *) {
+                    if #available(iOS 26.0, macOS 26.0, *) {
                         Button(action: { isShowingSettings.toggle() }) {
                             Image(systemName: "gear")
                         }
@@ -400,7 +400,7 @@ struct MenuGenerator: View {
                     
                     Spacer()
                     
-                    if #available(iOS 26.0, *) {
+                    if #available(iOS 26.0, macOS 26.0, *) {
                         ShareLink("Export PDF", item: render(menu: menu))
                             .buttonStyle(.glass)
                             .controlSize(.large)

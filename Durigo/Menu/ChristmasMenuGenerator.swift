@@ -421,7 +421,7 @@ struct ChristmasMenuGenerator: View {
         }
         .overlay(alignment: .topTrailing, content: {
             if let menu = menuLoader.menu {
-                if #available(iOS 26.0, *) {
+                if #available(iOS 26.0, macOS 26.0, *) {
                     ShareLink("Export Menu", item: render(menu: menu))
                         .buttonStyle(.glass)
                         .padding()
@@ -433,7 +433,7 @@ struct ChristmasMenuGenerator: View {
             }
         })
         .overlay(alignment: .topLeading, content: {
-            if #available(iOS 26.0, *) {
+            if #available(iOS 26.0, macOS 26.0, *) {
                 Button(action: { isShowingSettings.toggle() }) {
                     Image(systemName: "gear")
                 }

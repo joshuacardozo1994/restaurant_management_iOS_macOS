@@ -74,7 +74,7 @@ struct BillPreview: View {
                     ProgressView()
                         .padding()
                 } else if let pdfURL {
-                    if #available(iOS 26.0, *) {
+                    if #available(iOS 26.0, macOS 26.0, *) {
                         ShareLink("Export PDF", item: pdfURL)
                             .buttonStyle(.glass)
                     } else {
@@ -82,7 +82,7 @@ struct BillPreview: View {
                             .buttonStyle(.bordered)
                     }
                 } else {
-                    if #available(iOS 26.0, *) {
+                    if #available(iOS 26.0, macOS 26.0, *) {
                         Button("Generate PDF") {
                             generatePDF()
                         }

@@ -195,7 +195,11 @@ struct MenuList: View {
                         .font(.headline)
                 }
             }
+            #if os(iOS)
             .listStyle(.insetGrouped)
+            #else
+            .listStyle(.inset)
+            #endif
         }
         .navigationTitle("Menu")
         .navigationBarTitleDisplayMode(.inline)

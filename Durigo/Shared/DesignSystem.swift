@@ -288,3 +288,48 @@ struct SectionHeader: View {
         .padding(.vertical)
     }
 }
+
+// MARK: - macOS compatibility
+//
+// The app is one SwiftUI codebase for iPhone, iPad and Mac. These shims let
+// the iOS-only modifiers and system colours used across the screens compile
+// on macOS, where they have no equivalent (or a close one), so call sites
+// don't each need #if os(iOS).
+
+#if os(macOS)
+import AppKit
+
+extension NSColor {
+    static var systemBackground: NSColor { .windowBackgroundColor }
+    static var secondarySystemBackground: NSColor { .controlBackgroundColor }
+    static var tertiarySystemBackground: NSColor { .underPageBackgroundColor }
+    static var systemGroupedBackground: NSColor { .windowBackgroundColor }
+    static var secondarySystemGroupedBackground: NSColor { .controlBackgroundColor }
+    static var tertiarySystemGroupedBackground: NSColor { .underPageBackgroundColor }
+}
+
+/// Stand-in for iOS's keyboard types; the Mac has a hardware keyboard
+enum UIKeyboardType {
+    case `default`, asciiCapable, numbersAndPunctuation, URL, numberPad, phonePad,
+         namePhonePad, emailAddress, decimalPad, twitter, webSearch, asciiCapableNumberPad
+}
+
+/// Stand-in for iOS's autocapitalisation setting
+struct TextInputAutocapitalization {
+    static let never = TextInputAutocapitalization()
+    static let words = TextInputAutocapitalization()
+    static let sentences = TextInputAutocapitalization()
+    static let characters = TextInputAutocapitalization()
+}
+
+/// Stand-in for iOS's navigation bar title styles; Mac windows have none
+enum NavigationBarTitleDisplayModeShim {
+    case automatic, inline, large
+}
+
+extension View {
+    func keyboardType(_ type: UIKeyboardType) -> some View { self }
+    func textInputAutocapitalization(_ autocapitalization: TextInputAutocapitalization?) -> some View { self }
+    func navigationBarTitleDisplayMode(_ mode: NavigationBarTitleDisplayModeShim) -> some View { self }
+}
+#endif

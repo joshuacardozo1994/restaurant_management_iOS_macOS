@@ -185,12 +185,12 @@ struct Stats: View {
             .navigationTitle("Stats")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     Button(action: { isShowingStatsFilter.toggle() }) {
                         Image(systemName: "line.3.horizontal.decrease.circle")
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .primaryAction) {
                     NavigationLink {
                         StatsChart(billHistoryItems: statsData.filteredItems)
                     } label: {

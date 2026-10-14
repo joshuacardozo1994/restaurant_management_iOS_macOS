@@ -100,7 +100,11 @@ struct Home: View {
                     moreLink(.settings)
                 }
             }
+            #if os(iOS)
             .listStyle(.insetGrouped)
+            #else
+            .listStyle(.inset)
+            #endif
             .navigationTitle("More")
         }
     }
@@ -156,7 +160,7 @@ struct Home: View {
                         // so we add it ourselves so staff can collapse the
                         // sidebar to free up screen space (esp. for the
                         // kitchen kanban which wants the full width).
-                        ToolbarItem(placement: .topBarLeading) {
+                        ToolbarItem(placement: .navigation) {
                             Button {
                                 withAnimation {
                                     columnVisibility = (columnVisibility == .all)
@@ -195,7 +199,9 @@ struct Home: View {
         }
         .listStyle(.sidebar)
         .navigationTitle("")
+        #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
+        #endif
     }
 
     private func sidebarRow(_ item: NavigationItem) -> some View {
@@ -256,6 +262,10 @@ struct Home: View {
     // MARK: - Document import (iOS bills file)
 
     private func handleIncomingURL(_ url: URL) {
+        // Files are opened in place (macOS requires it), so the URL may point
+        // outside the sandbox and must be accessed as security-scoped
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
             let data = try Data(contentsOf: url)
             let durigoBills = try JSONDecoder().decode(DurigoBills.self, from: data)
