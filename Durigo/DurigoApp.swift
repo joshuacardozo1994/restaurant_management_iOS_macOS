@@ -15,13 +15,33 @@ struct DurigoApp: App {
     @State private var session = Session()
 
     init() {
+        container = Self.makeContainer()
+    }
+
+    /// Opens the bill store. If it can't be opened (say a migration fails),
+    /// the app would otherwise crash on every launch; instead the store is
+    /// moved aside (kept, not deleted) and a fresh one created. Bills already
+    /// uploaded come back from the server.
+    private static func makeContainer() -> ModelContainer {
+        func open() throws -> ModelContainer {
+            try ModelContainer(for: BillHistoryItem.self, migrationPlan: BillHistoryItemsMigrationPlan.self)
+        }
         do {
-            container = try ModelContainer(
-                for: BillHistoryItem.self,
-                migrationPlan: BillHistoryItemsMigrationPlan.self
-            )
+            return try open()
         } catch {
-            fatalError("Failed to initialize model container.")
+            print("Bill store couldn't be opened (\(error)); moving it aside and starting fresh")
+            let store = URL.applicationSupportDirectory.appending(path: "default.store")
+            let stamp = Int(Date().timeIntervalSince1970)
+            for suffix in ["", "-shm", "-wal"] {
+                let file = URL(filePath: store.path() + suffix)
+                guard FileManager.default.fileExists(atPath: file.path()) else { continue }
+                try? FileManager.default.moveItem(at: file, to: URL(filePath: store.path() + ".unreadable-\(stamp)" + suffix))
+            }
+            do {
+                return try open()
+            } catch {
+                fatalError("Failed to initialize model container: \(error)")
+            }
         }
     }
 
