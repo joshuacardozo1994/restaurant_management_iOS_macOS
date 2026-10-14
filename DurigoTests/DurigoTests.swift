@@ -191,6 +191,30 @@ final class DurigoTests: XCTestCase {
         add(attachment)
     }
 
+    /// Renders a kitchen ticket (with item and order notes) to an image
+    /// attached to the test results, for reviewing the 80mm layout
+    @MainActor
+    func testRenderKitchenTicketForReview() throws {
+        let json = """
+        {"id":"o1","orderNumber":"ORD-320394-6773","status":"PENDING","type":"DELIVERY",
+         "createdAt":"2026-10-14T12:18:00.000Z","table":null,"waiter":{"id":"w","name":"QA Waiter"},
+         "notes":"Ring the bell twice | Customer: Maria | Phone: 9876500000 | Address: House 12, Colva beach road",
+         "items":[{"id":"i1","quantity":1,"status":"PENDING","notes":"no nuts, less spicy","menuItem":{"id":"m1","name":"Veg. Soup"},"itemName":null,"preparedBy":null,"assignedTo":null},
+                  {"id":"i2","quantity":2,"status":"PENDING","notes":null,"menuItem":{"id":"m2","name":"Coca-cola"},"itemName":null,"preparedBy":null,"assignedTo":null},
+                  {"id":"i3","quantity":1,"status":"CANCELLED","notes":null,"menuItem":{"id":"m3","name":"Cancelled thing"},"itemName":null,"preparedBy":null,"assignedTo":null}]}
+        """
+        let order = try JSONDecoder().decode(KitchenOrder.self, from: Data(json.utf8))
+        XCTAssertFalse(KitchenPrinter.pdf(for: order).isEmpty)
+
+        let renderer = ImageRenderer(content: KitchenTicketView(order: order))
+        renderer.scale = 3
+        let image = try XCTUnwrap(renderer.uiImage)
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "kitchen-ticket"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     func testPerformanceExample() throws {
         // This is an example of a performance test case.
         measure {

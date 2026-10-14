@@ -272,6 +272,30 @@ final class POSStore {
         }
     }
 
+    // MARK: Manage tables
+
+    private struct TableBody: Encodable {
+        var number: Int?
+        var capacity: Int?
+        var status: String?
+    }
+
+    func addTable(number: Int, capacity: Int) async throws {
+        _ = try await api.postJSON("/api/admin/tables", payload: TableBody(number: number, capacity: capacity))
+        await loadTables()
+    }
+
+    func updateTable(id: String, number: Int? = nil, capacity: Int? = nil, status: String? = nil) async throws {
+        _ = try await api.putJSON("/api/admin/tables/\(id)", payload: TableBody(number: number, capacity: capacity, status: status))
+        await loadTables()
+    }
+
+    /// Admin only; the server refuses a table that still has open orders
+    func deleteTable(id: String) async throws {
+        _ = try await api.delete("/api/admin/tables/\(id)")
+        await loadTables()
+    }
+
     /// The table's unpaid item value split into its GST part (food, soft
     /// drinks) and VAT part (liquor), by each item's menu category; custom
     /// items fall back to their name. Same rules the server bills by.

@@ -2300,6 +2300,10 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
     /// Active stream task — cancelled by `stop()` and on reconnect.
     private var streamTask: Task<Void, Never>?
 
+    /// Called with each order that arrives while the screen is open (after the
+    /// list has reloaded), so the view can chime and print its ticket
+    var onNewOrder: ((KitchenOrder) -> Void)?
+
     init(session: Session) { self.api = APIClient(session: session) }
 
     func load() async {
@@ -2336,7 +2340,15 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
                     for try await ev in stream {
                         if Task.isCancelled { break }
                         switch ev.event {
-                        case "order_created", "order_updated", "order_status_changed", "kitchen_update":
+                        case "order_created":
+                            await self.load()
+                            // The event's data is the new order; announce it once loaded
+                            struct Created: Decodable { let id: String }
+                            if let id = try? JSONDecoder().decode(Created.self, from: Data(ev.data.utf8)).id,
+                               let order = await MainActor.run(body: { self.orders.first { $0.id == id } }) {
+                                await MainActor.run { self.onNewOrder?(order) }
+                            }
+                        case "order_updated", "order_status_changed", "kitchen_update":
                             // Targeted patches would be nicer, but the full
                             // reload is cheap and keeps the local state in
                             // exact sync with the server filter rules.
@@ -2701,6 +2713,11 @@ struct KitchenAdminView: View {
     /// the context without re-querying.
     @State private var inspectingItem: KitchenItemContext?
     private static let tick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    /// Per device, like the web kitchen display (one screen chimes and prints,
+    /// another may not)
+    @AppStorage("kitchen.chime") private var chime = true
+    @AppStorage("kitchen.autoPrint") private var autoPrint = false
+    @State private var printError: String?
 
     var body: some View {
         NavigationStack {
@@ -2722,17 +2739,58 @@ struct KitchenAdminView: View {
                         .accessibilityIdentifier("kitchen-live-indicator")
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Toggle("Chime for new orders", isOn: $chime)
+                        Toggle("Auto-print tickets", isOn: $autoPrint)
+                        #if os(iOS)
+                        Button {
+                            KitchenPrinter.choosePrinter()
+                        } label: {
+                            Label(KitchenPrinter.savedPrinterName.map { "Printer: \($0)" } ?? "Choose printer…",
+                                  systemImage: "printer")
+                        }
+                        #endif
+                    } label: {
+                        Image(systemName: autoPrint ? "printer.fill" : chime ? "bell.fill" : "bell.slash")
+                    }
+                    .accessibilityIdentifier("kitchen-alert-settings")
+                }
             }
             .task {
                 if store == nil { store = KitchenStore(session: session) }
+                store?.onNewOrder = { order in
+                    if chime { KitchenChime.play() }
+                    if autoPrint { printTicket(order, automatic: true) }
+                }
                 await store?.load()
                 store?.start()
+            }
+            .alert("Couldn't print the ticket", isPresented: Binding(
+                get: { printError != nil }, set: { if !$0 { printError = nil } }
+            )) {
+                Button("OK") { printError = nil }
+            } message: {
+                Text(printError ?? "")
             }
             .onDisappear { store?.stop() }
             .refreshable { await store?.load() }
             .onReceive(Self.tick) { now = $0 }
             .sheet(item: $inspectingItem) { ctx in
                 KitchenItemDetailSheet(context: ctx)
+            }
+        }
+    }
+
+    /// Print an order's kitchen ticket. Automatic prints go straight to the
+    /// chosen printer; a manual print shows the print dialog when no printer
+    /// has been chosen.
+    private func printTicket(_ order: KitchenOrder, automatic: Bool) {
+        Task { @MainActor in
+            do {
+                try await KitchenPrinter.print(order, interactive: !automatic)
+            } catch {
+                printError = error.localizedDescription
             }
         }
     }
@@ -2935,6 +2993,13 @@ struct KitchenAdminView: View {
                 Spacer()
                 if let n = o.table?.number { Text("Table \(n)").font(.caption).foregroundStyle(.secondary) }
                 else { Text(o.type).font(.caption).foregroundStyle(.secondary) }
+                Button {
+                    printTicket(o, automatic: false)
+                } label: {
+                    Image(systemName: "printer").font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Print kitchen ticket")
             }
             if let note = o.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
                 Label(note, systemImage: "exclamationmark.bubble.fill")
@@ -3500,4 +3565,155 @@ private struct IngredientFormSheet: View {
 #if DEBUG
         .modelContainer(container)
 #endif
+}
+
+
+// MARK: - Kitchen chime and ticket printing
+
+#if os(iOS)
+import AudioToolbox
+import UIKit
+#else
+import AppKit
+#endif
+import PDFKit
+
+/// The sound the kitchen hears when a new order arrives
+enum KitchenChime {
+    static func play() {
+        #if os(iOS)
+        AudioServicesPlayAlertSound(SystemSoundID(1005))
+        #else
+        NSSound(named: "Glass")?.play()
+        #endif
+    }
+}
+
+/// A kitchen order ticket (KOT) for an 80mm thermal printer: table or order
+/// type, order number, time, waiter, then each item with its notes in capitals.
+/// Same content as the web's /print/kot page.
+struct KitchenTicketView: View {
+    let order: KitchenOrder
+    static let width: CGFloat = 226 // 80mm at 72 points per inch
+
+    private var time: String {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = iso.date(from: order.createdAt) ?? ISO8601DateFormatter().date(from: order.createdAt) ?? Date()
+        let f = DateFormatter()
+        f.dateFormat = "d MMM, h:mm a"
+        f.timeZone = TimeZone(identifier: "Asia/Kolkata")
+        return f.string(from: date)
+    }
+
+    var body: some View {
+        let items = order.items.filter { $0.status.uppercased() != "CANCELLED" }
+        VStack(alignment: .leading, spacing: 4) {
+            Text(order.table?.number.map { "TABLE \($0)" } ?? order.type.uppercased())
+                .font(.system(size: 22, weight: .heavy))
+            Text("#\(order.orderNumber.split(separator: "-").last.map(String.init) ?? order.orderNumber)  ·  \(time)")
+                .font(.system(size: 11, design: .monospaced))
+            if let waiter = order.waiter?.name { Text("Waiter: \(waiter)").font(.system(size: 11)) }
+            Rectangle().frame(height: 1)
+            ForEach(items) { item in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(item.quantity) × \(item.displayName)")
+                        .font(.system(size: 14, weight: .bold))
+                    if let n = item.notes, !n.isEmpty {
+                        Text("  ** \(n.uppercased()) **").font(.system(size: 12, weight: .semibold))
+                    }
+                }
+            }
+            if let note = order.notes, !note.isEmpty {
+                Rectangle().frame(height: 1)
+                Text(note.uppercased()).font(.system(size: 12, weight: .semibold))
+                    .padding(4)
+                    .border(Color.black, width: 1)
+            }
+            Rectangle().frame(height: 1)
+            Text("\(items.reduce(0) { $0 + $1.quantity }) items").font(.system(size: 10))
+        }
+        .foregroundStyle(.black)
+        .padding(8)
+        .frame(width: Self.width, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Color.white)
+    }
+}
+
+enum KitchenPrinter {
+    struct NoPrinterError: LocalizedError {
+        var errorDescription: String? {
+            "Choose a printer for auto-print first (the printer icon in the Kitchen toolbar)."
+        }
+    }
+
+    /// One-page PDF of the ticket, as tall as its content
+    @MainActor
+    static func pdf(for order: KitchenOrder) -> Data {
+        let renderer = ImageRenderer(content: KitchenTicketView(order: order))
+        renderer.proposedSize = ProposedViewSize(width: KitchenTicketView.width, height: nil)
+        let data = NSMutableData()
+        renderer.render { size, draw in
+            var box = CGRect(origin: .zero, size: size)
+            guard let consumer = CGDataConsumer(data: data as CFMutableData),
+                  let pdf = CGContext(consumer: consumer, mediaBox: &box, nil) else { return }
+            pdf.beginPDFPage(nil)
+            draw(pdf)
+            pdf.endPDFPage()
+            pdf.closePDF()
+        }
+        return data as Data
+    }
+
+    #if os(iOS)
+    private static let printerURLKey = "kitchen.printerURL"
+    private static let printerNameKey = "kitchen.printerName"
+
+    static var savedPrinterName: String? { UserDefaults.standard.string(forKey: printerNameKey) }
+
+    /// Pick the printer automatic tickets go to (remembered on this device)
+    @MainActor
+    static func choosePrinter() {
+        let saved = UserDefaults.standard.url(forKey: printerURLKey).map { UIPrinter(url: $0) }
+        let picker = UIPrinterPickerController(initiallySelectedPrinter: saved)
+        picker.present(animated: true) { picker, selected, _ in
+            guard selected, let printer = picker.selectedPrinter else { return }
+            UserDefaults.standard.set(printer.url, forKey: printerURLKey)
+            UserDefaults.standard.set(printer.displayName, forKey: printerNameKey)
+        }
+    }
+
+    @MainActor
+    static func print(_ order: KitchenOrder, interactive: Bool) async throws {
+        let controller = UIPrintInteractionController.shared
+        let info = UIPrintInfo(dictionary: nil)
+        info.outputType = .grayscale
+        info.jobName = "KOT \(order.orderNumber)"
+        controller.printInfo = info
+        controller.printingItem = pdf(for: order)
+
+        if let url = UserDefaults.standard.url(forKey: printerURLKey) {
+            controller.print(to: UIPrinter(url: url), completionHandler: nil)
+        } else if interactive {
+            controller.present(animated: true, completionHandler: nil)
+        } else {
+            throw NoPrinterError()
+        }
+    }
+    #else
+    /// On the Mac, tickets go to the default printer; a manual print shows the
+    /// print panel so another printer can be picked
+    @MainActor
+    static func print(_ order: KitchenOrder, interactive: Bool) async throws {
+        guard let document = PDFDocument(data: pdf(for: order)) else { return }
+        let info = NSPrintInfo.shared.copy() as! NSPrintInfo
+        info.topMargin = 0; info.bottomMargin = 0; info.leftMargin = 0; info.rightMargin = 0
+        guard let operation = document.printOperation(for: info, scalingMode: .pageScaleNone, autoRotate: false) else { return }
+        operation.jobTitle = "KOT \(order.orderNumber)"
+        operation.showsPrintPanel = interactive
+        operation.showsProgressPanel = interactive
+        operation.run()
+    }
+    #endif
 }

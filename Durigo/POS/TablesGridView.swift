@@ -21,6 +21,8 @@ struct TablesGridView: View {
     @State private var reservingTable: POSTable?
     /// Toggles the merge-tables modal.
     @State private var showMergeSheet = false
+    /// Toggles the add/edit tables sheet.
+    @State private var showManageSheet = false
 
     var body: some View {
         ScrollView {
@@ -65,6 +67,9 @@ struct TablesGridView: View {
         .sheet(isPresented: $showMergeSheet) {
             TableMergeView(store: store)
         }
+        .sheet(isPresented: $showManageSheet) {
+            ManageTablesView(store: store)
+        }
     }
 
     private var header: some View {
@@ -97,6 +102,11 @@ struct TablesGridView: View {
                         showMergeSheet = true
                     } label: {
                         Label("Merge Tables", systemImage: "rectangle.3.group")
+                    }
+                    Button {
+                        showManageSheet = true
+                    } label: {
+                        Label("Manage Tables", systemImage: "slider.horizontal.3")
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")
@@ -133,7 +143,10 @@ struct TablesGridView: View {
                         orderingTableId = primary?.id ?? table.id
                     },
                     onViewOrders: { detailTableId = primary?.id ?? table.id },
-                    onReserve: { reservingTable = table }
+                    onReserve: { reservingTable = table },
+                    onBackInService: {
+                        Task { try? await store.updateTable(id: table.id, status: "AVAILABLE") }
+                    }
                 )
             }
         }
@@ -240,6 +253,7 @@ struct TableCardView: View {
     let onTakeOrder: () -> Void
     let onViewOrders: () -> Void
     let onReserve: () -> Void
+    var onBackInService: () -> Void = {}
 
     /// Convenience: this card is a *secondary* group member (not the lowest).
     private var isSecondaryGroupMember: Bool {
@@ -455,10 +469,11 @@ struct TableCardView: View {
                 .buttonStyle(.borderedProminent)
             }
         case .maintenance:
-            Button("Maintenance") {}
-                .buttonStyle(.bordered)
-                .frame(maxWidth: .infinity)
-                .disabled(true)
+            Button(action: onBackInService) {
+                Label("Back in service", systemImage: "checkmark.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
         }
         }
     }
@@ -547,4 +562,152 @@ private struct OrderingContext: Identifiable {
 private struct DetailContext: Identifiable {
     let tableId: String
     var id: String { tableId }
+}
+
+
+// MARK: - Manage tables
+
+/// Add tables, renumber them, change seats, take one out of service, or
+/// (admins) delete one. Mirrors the web's Manage mode on /pos.
+struct ManageTablesView: View {
+    @Bindable var store: POSStore
+    @Environment(\.dismiss) private var dismiss
+    @Environment(Session.self) private var session
+    @State private var editing: POSTable?
+    @State private var deleting: POSTable?
+    @State private var errorMessage: String?
+    @State private var busy = false
+
+    private var isAdmin: Bool { session.user?.role.uppercased() == "ADMIN" }
+    private var nextNumber: Int { (store.tables.map(\.number).max() ?? 0) + 1 }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(store.tables) { table in
+                        row(table)
+                    }
+                } footer: {
+                    Text("A table with diners can't be taken out of service or deleted.")
+                }
+            }
+            .navigationTitle("Manage Tables")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        run { try await store.addTable(number: nextNumber, capacity: 4) }
+                    } label: {
+                        Label("Add Table \(nextNumber)", systemImage: "plus")
+                    }
+                    .disabled(busy)
+                    .accessibilityIdentifier("manage-add-table")
+                }
+            }
+            .sheet(item: $editing) { table in
+                EditTableSheet(table: table) { number, capacity in
+                    run { try await store.updateTable(id: table.id, number: number, capacity: capacity) }
+                }
+            }
+            .confirmationDialog("Delete Table \(deleting?.number ?? 0)?", isPresented: Binding(
+                get: { deleting != nil }, set: { if !$0 { deleting = nil } }
+            ), titleVisibility: .visible) {
+                Button("Delete", role: .destructive) {
+                    if let table = deleting { run { try await store.deleteTable(id: table.id) } }
+                }
+            } message: {
+                Text("Past bills keep their table number.")
+            }
+            .alert("Couldn't update the table", isPresented: Binding(
+                get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK") { errorMessage = nil }
+            } message: {
+                Text(errorMessage ?? "")
+            }
+        }
+    }
+
+    private func row(_ table: POSTable) -> some View {
+        let inUse = !table.liveOrders.isEmpty
+        let outOfService = table.statusEnum == .maintenance
+        return HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Table \(table.number)").font(.body.weight(.semibold))
+                Text("\(table.capacity) seats\(outOfService ? " • out of service" : inUse ? " • in use" : "")")
+                    .font(.caption)
+                    .foregroundStyle(outOfService ? .orange : .secondary)
+            }
+            Spacer()
+            Menu {
+                Button { editing = table } label: { Label("Edit number & seats", systemImage: "pencil") }
+                if outOfService {
+                    Button {
+                        run { try await store.updateTable(id: table.id, status: "AVAILABLE") }
+                    } label: { Label("Back in service", systemImage: "checkmark.circle") }
+                } else {
+                    Button {
+                        run { try await store.updateTable(id: table.id, status: "MAINTENANCE") }
+                    } label: { Label("Out of service", systemImage: "wrench.and.screwdriver") }
+                    .disabled(inUse)
+                }
+                if isAdmin {
+                    Button(role: .destructive) { deleting = table } label: { Label("Delete", systemImage: "trash") }
+                        .disabled(inUse)
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle").font(.title3)
+            }
+            .accessibilityIdentifier("manage-table-\(table.number)")
+        }
+    }
+
+    private func run(_ action: @escaping () async throws -> Void) {
+        busy = true
+        Task {
+            defer { busy = false }
+            do { try await action() } catch { errorMessage = error.localizedDescription }
+        }
+    }
+}
+
+private struct EditTableSheet: View {
+    let table: POSTable
+    let onSave: (_ number: Int, _ capacity: Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var number: Int
+    @State private var capacity: Int
+
+    init(table: POSTable, onSave: @escaping (Int, Int) -> Void) {
+        self.table = table
+        self.onSave = onSave
+        _number = State(initialValue: table.number)
+        _capacity = State(initialValue: table.capacity)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Stepper("Table number: \(number)", value: $number, in: 1...999)
+                Stepper("Seats: \(capacity)", value: $capacity, in: 1...30)
+            }
+            .navigationTitle("Table \(table.number)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(number, capacity)
+                        dismiss()
+                    }
+                    .disabled(number == table.number && capacity == table.capacity)
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 320, minHeight: 200)
+        #endif
+    }
 }

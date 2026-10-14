@@ -137,11 +137,16 @@ final class Session {
     /// already signed in.
     func attemptDebugAutoSignIn() async {
         #if DEBUG
-        guard !isSignedIn else { return }
         for arg in CommandLine.arguments where arg.hasPrefix("--auto-signin=") {
             let value = String(arg.dropFirst("--auto-signin=".count))
             let parts = value.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
             guard parts.count == 2 else { return }
+            // Already signed in as this user: nothing to do. As someone else
+            // (a test switching roles): sign them out here first.
+            if isSignedIn {
+                if user?.username == parts[0] { return }
+                signOut()
+            }
             try? await signIn(username: parts[0], password: parts[1])
             return
         }

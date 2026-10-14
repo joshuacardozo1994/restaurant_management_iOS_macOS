@@ -571,3 +571,48 @@ final class POSPaymentUITests: XCTestCase {
         return condition()
     }
 }
+
+// MARK: - Manage tables
+
+/// Adds a table, takes it out of service and back, then deletes it, against
+/// the local dev server as the QA admin (password from TEST_RUNNER_QA_PASS).
+final class ManageTablesUITests: XCTestCase {
+    let app = XCUIApplication()
+
+    func testAddServiceAndDeleteTable() throws {
+        let password = try XCTUnwrap(ProcessInfo.processInfo.environment["QA_PASS"], "Set TEST_RUNNER_QA_PASS")
+        app.launchArguments = ["--auto-signin=qa-admin:\(password)", "--start-tab=pos"]
+        app.launch()
+
+        let plus = app.buttons["Add"].firstMatch.exists ? app.buttons["Add"].firstMatch : app.images["plus.circle.fill"].firstMatch
+        XCTAssertTrue(app.staticTexts["Tables"].waitForExistence(timeout: 15))
+        // The + menu in the Tables header
+        let menu = app.buttons.matching(NSPredicate(format: "label == 'Add'")).firstMatch
+        (menu.exists ? menu : plus).tap()
+        app.buttons["Manage Tables"].tap()
+
+        let add = app.buttons["manage-add-table"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        let number = Int(add.label.filter(\.isNumber)) ?? 0
+        add.tap()
+
+        // A SwiftUI Menu is exposed as a pop-up button, so match by identifier on any type
+        let rowMenu = app.descendants(matching: .any).matching(identifier: "manage-table-\(number)").firstMatch
+        // The new table is the last row; lists only expose rows on screen
+        for _ in 0..<6 where !rowMenu.waitForExistence(timeout: 1.5) { app.swipeUp() }
+        XCTAssertTrue(rowMenu.waitForExistence(timeout: 5), "Table \(number) wasn't added")
+
+        rowMenu.tap()
+        app.buttons["Out of service"].tap()
+        XCTAssertTrue(app.staticTexts["4 seats • out of service"].waitForExistence(timeout: 8))
+
+        rowMenu.tap()
+        app.buttons["Back in service"].tap()
+        XCTAssertTrue(app.staticTexts["4 seats"].waitForExistence(timeout: 8))
+
+        rowMenu.tap()
+        app.buttons["Delete"].tap()
+        app.buttons["Delete"].firstMatch.tap() // confirm
+        XCTAssertTrue(rowMenu.waitForNonExistence(timeout: 8), "Table \(number) wasn't deleted")
+    }
+}
