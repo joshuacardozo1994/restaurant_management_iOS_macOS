@@ -121,7 +121,9 @@ struct BillHistoryList: View {
                     }
                 }
                 .refreshable { await refresh() }
-                .task {
+                // Runs again once sign-in finishes, so a list opened while
+                // signing in still fills from the server
+                .task(id: session.isSignedIn) {
                     if uploader == nil {
                         uploader = BillUploader(session: session)
                     }

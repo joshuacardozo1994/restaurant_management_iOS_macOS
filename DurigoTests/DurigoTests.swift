@@ -194,6 +194,77 @@ final class DurigoTests: XCTestCase {
         add(attachment)
     }
 
+    /// A bill the app can't read (here a POS order's "pos-order:…" id) is
+    /// skipped; it used to fail the whole page and empty the bill history
+    func testBillsPageSkipsAnUnreadableBill() throws {
+        let json = """
+        {"items":[
+          {"id":"pos-order:abc","date":813704511,"tableNumber":0,"items":[],"paymentStatus":"paidByCash","waiter":"QA"},
+          {"id":"E6728DC6-CE50-5387-813E-033A2255C76B","date":813704511,"tableNumber":4,
+           "items":[{"id":"96F1330B-AA72-51A4-8624-69702063C26F","name":"Soda","quantity":1,"price":20}],
+           "paymentStatus":"pending","waiter":"QA"}
+        ],"nextCursor":"2026-10-14T21:00:00.000Z"}
+        """
+        let page = try JSONDecoder().decode(BillsPage.self, from: Data(json.utf8))
+        XCTAssertEqual(page.items.count, 1)
+        XCTAssertEqual(page.items.first?.tableNumber, 4)
+        XCTAssertEqual(page.nextCursor, "2026-10-14T21:00:00.000Z")
+    }
+
+    /// The performance report as the server sends it (one-decimal
+    /// percentages; older servers without staff revenue) decodes
+    func testPerformanceReportDecodesTheServersShape() throws {
+        let json = """
+        {"avgOrderTime":0.1,"kitchenEfficiency":0,"customerSatisfaction":0,"staffProductivity":100,
+         "tableUtilization":50,"orderAccuracy":26.6,
+         "staffPerformance":[{"id":"x","name":"QA Waiter","role":"WAITER","ordersHandled":478,"avgServiceTime":0,"rating":0}],
+         "busyHours":[],"kitchenMetrics":{"avgPrepTime":0},"alerts":[]}
+        """
+        let report = try JSONDecoder().decode(PerformanceReportData.self, from: Data(json.utf8))
+        XCTAssertEqual(report.orderAccuracy, 26.6)
+        XCTAssertEqual(report.staffPerformance.first?.revenue, 0)
+    }
+
+    /// Money reads the same as on the web: whole rupees, Indian grouping,
+    /// whatever region the device is set to
+    func testRupeesAreWholeWithIndianGrouping() {
+        XCTAssertEqual(102610.0.rupees, "₹1,02,610")
+        XCTAssertEqual(500.0.rupees, "₹500")
+        XCTAssertEqual(77.5.rupees, "₹78")
+        XCTAssertEqual(1234567.rupees, "₹12,34,567")
+        XCTAssertEqual(500.0.asCurrencyString(locale: Locale(identifier: "en_US")), "₹500")
+    }
+
+    /// 2.8: a long bill runs over several pages; only the last carries the
+    /// total and tax lines, so it holds fewer items (13) than the others (19)
+    @MainActor
+    func testLongBillSplitsAcrossPages() throws {
+        func items(_ n: Int) -> [MenuItem] {
+            (1...n).map { MenuItem(id: UUID(), name: "Item \($0) with a fairly long name", quantity: 1, price: 100) }
+        }
+        XCTAssertEqual(BillRenderer.pages(items(13)).map(\.count), [13])
+        XCTAssertEqual(BillRenderer.pages(items(14)).map(\.count), [13, 1])
+        XCTAssertEqual(BillRenderer.pages(items(19)).map(\.count), [13, 6])
+        XCTAssertEqual(BillRenderer.pages(items(25)).map(\.count), [19, 6])
+        XCTAssertEqual(BillRenderer.pages(items(32)).map(\.count), [19, 13])
+        XCTAssertEqual(BillRenderer.pages(items(40)).map(\.count), [19, 19, 2])
+        // Every item lands on exactly one page, in order
+        let long = items(40)
+        XCTAssertEqual(BillRenderer.pages(long).flatMap { $0 }.map(\.id), long.map(\.id))
+
+        // Render the 25-item bill page by page for review
+        let pages = BillRenderer.pages(items(25))
+        for index in pages.indices {
+            let renderer = ImageRenderer(content: BillRenderer.page(index, of: pages, tableNumber: 4, finalTotal: 2500,
+                                                                    taxes: nil))
+            renderer.scale = 2
+            let attachment = XCTAttachment(image: try XCTUnwrap(renderer.uiImage))
+            attachment.name = "long-bill-page-\(index + 1)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+    }
+
     /// Renders a kitchen ticket (with item and order notes) to an image
     /// attached to the test results, for reviewing the 80mm layout
     @MainActor

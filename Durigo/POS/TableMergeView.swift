@@ -52,7 +52,9 @@ struct TableMergeView: View {
                                     Image(systemName: "rectangle.split.3x1.slash")
                                 }
                                 .buttonStyle(.bordered)
-                                .controlSize(.small)
+                                .controlSize(.regular)
+                                .accessibilityLabel("Unmerge \(group.displayName)")
+                                .accessibilityIdentifier("unmerge-\(group.id)")
                             }
                         }
                     }
@@ -145,8 +147,11 @@ struct TableMergeView: View {
                     .controlSize(.mini)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("merge-row-\(table.number)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var totalSelectedCapacity: Int {

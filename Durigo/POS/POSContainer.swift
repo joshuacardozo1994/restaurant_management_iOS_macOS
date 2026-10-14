@@ -19,6 +19,7 @@ enum POSTab: String, CaseIterable, Identifiable {
 
 struct POSContainerView: View {
     @Environment(Session.self) private var session
+    @EnvironmentObject private var navigation: Navigation
     @State private var tab: POSTab = .pos
     @State private var store: POSStore?
 
@@ -35,6 +36,8 @@ struct POSContainerView: View {
             .padding(.bottom, DesignTokens.spacingS)
 
             Divider().opacity(0.4)
+                .onAppear { openBillGeneratorIfAsked() }
+                .onChange(of: navigation.showBillGenerator) { openBillGeneratorIfAsked() }
 
             Group {
                 switch tab {
@@ -82,5 +85,14 @@ struct POSContainerView: View {
         .onDisappear {
             store?.stopSSE()
         }
+    }
+}
+
+extension POSContainerView {
+    /// A regenerated bill was just loaded into the Bill Generator: show it
+    fileprivate func openBillGeneratorIfAsked() {
+        guard navigation.showBillGenerator else { return }
+        navigation.showBillGenerator = false
+        tab = .billGenerator
     }
 }

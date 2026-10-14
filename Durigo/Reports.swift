@@ -539,11 +539,13 @@ struct Reports: View {
 
 struct PerformanceReportData: Decodable, Equatable {
     let avgOrderTime: Double         // minutes
-    let kitchenEfficiency: Int       // percentage 0..100
-    let customerSatisfaction: Int
+    // Percentages 0..100. The server sends one decimal (26.6), so these are
+    // Doubles; kitchen efficiency and satisfaction aren't tracked yet (0)
+    let kitchenEfficiency: Double
+    let customerSatisfaction: Double
     let staffProductivity: Double
-    let tableUtilization: Int
-    let orderAccuracy: Int
+    let tableUtilization: Double
+    let orderAccuracy: Double
     let staffPerformance: [StaffStat]
     let busyHours: [BusyHour]
     let alerts: [PerformanceAlert]
@@ -554,6 +556,16 @@ struct PerformanceReportData: Decodable, Equatable {
         let ordersHandled: Int
         let revenue: Double
         var id: String { "\(name)-\(role)" }
+
+        // Older servers didn't send revenue
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = try c.decode(String.self, forKey: .name)
+            role = try c.decode(String.self, forKey: .role)
+            ordersHandled = try c.decode(Int.self, forKey: .ordersHandled)
+            revenue = try c.decodeIfPresent(Double.self, forKey: .revenue) ?? 0
+        }
+        private enum CodingKeys: String, CodingKey { case name, role, ordersHandled, revenue }
     }
 
     struct BusyHour: Decodable, Equatable, Identifiable {
@@ -641,12 +653,17 @@ struct PerformanceReportView: View {
                        GridItem(.flexible(), spacing: DesignTokens.spacingM)]
         LazyVGrid(columns: columns, spacing: DesignTokens.spacingM) {
             StatTile(title: "Avg order time", value: String(format: "%.1f min", d.avgOrderTime), subtitle: "ticket → served", icon: "timer")
-            StatTile(title: "Kitchen efficiency", value: "\(d.kitchenEfficiency)%", subtitle: "of target throughput", icon: "fork.knife")
-            StatTile(title: "Table utilization", value: "\(d.tableUtilization)%", subtitle: "seats occupied", icon: "square.grid.3x3")
-            StatTile(title: "Order accuracy", value: "\(d.orderAccuracy)%", subtitle: "first-time correct", icon: "checkmark.seal")
-            StatTile(title: "Customer satisfaction", value: "\(d.customerSatisfaction)%", subtitle: "from feedback", icon: "face.smiling")
-            StatTile(title: "Staff productivity", value: String(format: "%.1f/hr", d.staffProductivity), subtitle: "orders per staff-hour", icon: "person.2")
+            // As on the web; kitchen efficiency and satisfaction are left out
+            // until something measures them (the server sends 0)
+            StatTile(title: "Table utilization", value: percent(d.tableUtilization), subtitle: "tables occupied now", icon: "square.grid.3x3")
+            StatTile(title: "Orders kept", value: percent(d.orderAccuracy), subtitle: "not cancelled", icon: "checkmark.seal")
+            StatTile(title: "Staff productivity", value: percent(d.staffProductivity), subtitle: "of an 8-hour shift's orders", icon: "person.2")
         }
+    }
+
+    /// 26.6 → "26.6%", 50 → "50%"
+    private func percent(_ value: Double) -> String {
+        value.rounded() == value ? "\(Int(value))%" : String(format: "%.1f%%", value)
     }
 
     private func alertsSection(_ alerts: [PerformanceReportData.PerformanceAlert]) -> some View {
@@ -678,7 +695,7 @@ struct PerformanceReportView: View {
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
                             Text("\(s.ordersHandled) orders").font(.caption)
-                            Text("₹\(Int(s.revenue))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            Text("\((Int(s.revenue)).rupees)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 6)
@@ -883,7 +900,7 @@ struct SalesReportView: View {
         LazyVGrid(columns: columns, spacing: DesignTokens.spacingM) {
             StatTile(
                 title: "Revenue",
-                value: "₹\(Int(d.todayRevenue))",
+                value: "\((Int(d.todayRevenue)).rupees)",
                 subtitle: "vs previous \(range.label.lowercased())",
                 icon: "indianrupeesign",
                 trend: trend(forChange: d.revenueChange)
@@ -897,7 +914,7 @@ struct SalesReportView: View {
             )
             StatTile(
                 title: "Avg order",
-                value: "₹\(Int(d.avgOrderValue))",
+                value: "\((Int(d.avgOrderValue)).rupees)",
                 subtitle: "per ticket",
                 icon: "cart"
             )
@@ -936,7 +953,7 @@ struct SalesReportView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text("₹\(Int(item.revenue))")
+                        Text("\((Int(item.revenue)).rupees)")
                             .font(.subheadline.monospacedDigit().weight(.semibold))
                     }
                     .padding(.vertical, 6)
@@ -955,7 +972,7 @@ struct SalesReportView: View {
                         HStack {
                             Text(displayName(forMethod: m.method)).font(.subheadline.weight(.medium))
                             Spacer()
-                            Text("₹\(Int(m.amount))").font(.subheadline.monospacedDigit())
+                            Text("\((Int(m.amount)).rupees)").font(.subheadline.monospacedDigit())
                         }
                         GeometryReader { geo in
                             RoundedRectangle(cornerRadius: 3)
@@ -1146,7 +1163,7 @@ struct CustomersReportView: View {
         LazyVGrid(columns: columns, spacing: DesignTokens.spacingM) {
             StatTile(title: "Total customers", value: "\(d.totalCustomers)",
                      subtitle: "\(d.newCustomers) new in period", icon: "person.2")
-            StatTile(title: "Avg value", value: "₹\(d.avgCustomerValue)",
+            StatTile(title: "Avg value", value: "\((d.avgCustomerValue).rupees)",
                      subtitle: "lifetime per customer", icon: "indianrupeesign.circle")
             StatTile(title: "Retention", value: String(format: "%.1f%%", d.retentionRate),
                      subtitle: "\(d.returningCustomers) returning", icon: "heart")
@@ -1164,11 +1181,11 @@ struct CustomersReportView: View {
                             .foregroundStyle(.secondary).frame(width: 20, alignment: .leading)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(c.name).font(.subheadline.weight(.medium))
-                            Text("\(c.orders) order\(c.orders == 1 ? "" : "s") · avg ₹\(c.avgOrder)")
+                            Text("\(c.orders) order\(c.orders == 1 ? "" : "s") · avg \((c.avgOrder).rupees)")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text("₹\(c.totalSpent)").font(.subheadline.monospacedDigit().weight(.semibold))
+                        Text("\((c.totalSpent).rupees)").font(.subheadline.monospacedDigit().weight(.semibold))
                     }
                     .padding(.vertical, 6)
                     if idx < spenders.count - 1 { Divider() }
@@ -1209,7 +1226,7 @@ struct CustomersReportView: View {
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
                             Text("\(p.uniqueCustomers) customers").font(.caption)
-                            Text("₹\(p.revenue)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            Text("\((p.revenue).rupees)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 6)
@@ -1347,11 +1364,11 @@ struct StaffReportView: View {
         LazyVGrid(columns: columns, spacing: DesignTokens.spacingM) {
             StatTile(title: "Active staff", value: "\(d.activeStaffCount)",
                      subtitle: "currently rostered", icon: "person.2")
-            StatTile(title: "Total revenue", value: "₹\(d.totalRevenue)",
+            StatTile(title: "Total revenue", value: "\((d.totalRevenue).rupees)",
                      subtitle: "in period", icon: "indianrupeesign.circle")
             StatTile(title: "Total orders", value: "\(d.totalOrders)",
                      subtitle: "handled by staff", icon: "doc.text")
-            StatTile(title: "Avg per staff", value: "₹\(d.avgRevenuePerStaff)",
+            StatTile(title: "Avg per staff", value: "\((d.avgRevenuePerStaff).rupees)",
                      subtitle: "revenue per head", icon: "person.crop.circle")
         }
     }
@@ -1370,7 +1387,7 @@ struct StaffReportView: View {
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
                             Text("\(p.recentOrders) orders").font(.caption)
-                            Text("₹\(p.recentRevenue)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            Text("\((p.recentRevenue).rupees)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 6)
@@ -1393,7 +1410,7 @@ struct StaffReportView: View {
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
                             Text("\(s.ordersHandled) orders").font(.caption)
-                            Text("₹\(s.revenueGenerated)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            Text("\((s.revenueGenerated).rupees)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
                     }
                     .padding(.vertical, 6)
@@ -1414,7 +1431,7 @@ struct StaffReportView: View {
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text("₹\(r.totalRevenue)").font(.subheadline.monospacedDigit().weight(.semibold))
+                        Text("\((r.totalRevenue).rupees)").font(.subheadline.monospacedDigit().weight(.semibold))
                     }
                     .padding(.vertical, 6)
                     if idx < roles.count - 1 { Divider() }
@@ -1524,7 +1541,7 @@ struct InventoryReportView: View {
         let columns = [GridItem(.flexible(), spacing: DesignTokens.spacingM),
                        GridItem(.flexible(), spacing: DesignTokens.spacingM)]
         LazyVGrid(columns: columns, spacing: DesignTokens.spacingM) {
-            StatTile(title: "Stock value", value: "₹\(d.totalValue)",
+            StatTile(title: "Stock value", value: "\((d.totalValue).rupees)",
                      subtitle: "\(d.totalItems) items", icon: "shippingbox")
             StatTile(title: "Low stock", value: "\(d.lowStockCount)",
                      subtitle: "need attention", icon: "exclamationmark.triangle",
@@ -1592,7 +1609,7 @@ struct InventoryReportView: View {
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text("₹\(s.totalValue)").font(.subheadline.monospacedDigit().weight(.semibold))
+                        Text("\((s.totalValue).rupees)").font(.subheadline.monospacedDigit().weight(.semibold))
                     }
                     .padding(.vertical, 6)
                     if idx < suppliers.count - 1 { Divider() }
@@ -1851,7 +1868,7 @@ struct CAReportView: View {
     }
 
     private func buildCAText(_ d: CAReportData) -> String {
-        let totalStr = Double(d.totalSales).asCurrencyString(locale: Self.inrLocale) ?? "₹\(d.totalSales)"
+        let totalStr = Double(d.totalSales).asCurrencyString(locale: Self.inrLocale) ?? "\((d.totalSales).rupees)"
         var lines: [String] = [
             d.monthLabel,
             "",
@@ -1860,12 +1877,12 @@ struct CAReportView: View {
             "Total Bills: \(d.totalBills)",
         ]
         if let gst = d.totalGst, let vat = d.totalVat {
-            lines.append("GST collected (food & soft drinks): \(Double(gst).asCurrencyString(locale: Self.inrLocale) ?? "₹\(gst)")")
-            lines.append("VAT collected (liquor): \(Double(vat).asCurrencyString(locale: Self.inrLocale) ?? "₹\(vat)")")
+            lines.append("GST collected (food & soft drinks): \(Double(gst).asCurrencyString(locale: Self.inrLocale) ?? "\((gst).rupees)")")
+            lines.append("VAT collected (liquor): \(Double(vat).asCurrencyString(locale: Self.inrLocale) ?? "\((vat).rupees)")")
         }
         lines += ["", "Category Breakdown:"]
         for row in d.categories {
-            let revStr = Double(row.revenue).asCurrencyString(locale: Self.inrLocale) ?? "₹\(row.revenue)"
+            let revStr = Double(row.revenue).asCurrencyString(locale: Self.inrLocale) ?? "\((row.revenue).rupees)"
             let pctStr = String(format: "%.1f%%", row.percentage)
             lines.append("\(categoryLabel(row.type)): \(revStr) (\(pctStr))")
         }

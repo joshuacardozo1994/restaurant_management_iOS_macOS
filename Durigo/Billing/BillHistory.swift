@@ -29,13 +29,14 @@ struct BillHistory: View {
             List {
                 ForEach(billHistoryItem.items) { menuItem in
                     HStack {
-                        Text(String(format: "%.1f ", menuItem.quantity))
+                        // "2×", "½×": portions as on the printed bill
+                        Text("\(menuItem.quantity.formatNumberWithFraction())× ").monospacedDigit()
                         +
                         Text(menuItem.servingSize?.shouldDisplay == true ? "\(menuItem.servingSize?.name ?? "") " : "").bold()
                         +
                         Text("\(menuItem.name)")
                         Spacer()
-                        Text("\(Int(menuItem.price * menuItem.quantity))")
+                        Text((menuItem.price * menuItem.quantity).rupees).monospacedDigit()
                     }
                 }
             }
@@ -50,6 +51,7 @@ struct BillHistory: View {
                 menuLoader.customerName = billHistoryItem.customerName ?? ""
                 menuLoader.customerPhone = billHistoryItem.customerPhone ?? ""
                 menuLoader.billID = billHistoryItem.id
+                navigation.showBillGenerator = true
                 navigation.selection = .pos
             }
             Button("Cancel", role: .cancel) {}
@@ -179,36 +181,40 @@ struct BillHistory: View {
             HStack {
                 Text("\(billHistoryItem.items.count) Items").font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
-                Text("₹\(billHistoryItem.items.getTotal())").font(.subheadline).foregroundStyle(.secondary)
+                Text("\((billHistoryItem.items.getTotal()).rupees)").font(.subheadline).foregroundStyle(.secondary)
             }
             if let d = billHistoryItem.discount, d > 0 {
                 HStack {
                     Text(billHistoryItem.discountReason ?? "Discount")
                         .font(.subheadline).foregroundStyle(.green)
                     Spacer()
-                    Text("−₹\(Int(d))").font(.subheadline).foregroundStyle(.green)
+                    Text("−\((Int(d)).rupees)").font(.subheadline).foregroundStyle(.green)
                 }
             }
             Divider()
             HStack {
                 Text("Total")
                 Spacer()
-                Text("₹\(Int(billHistoryItem.totalAmount))")
+                Text("\((Int(billHistoryItem.totalAmount)).rupees)")
             }
             .font(.title2.weight(.bold))
-            HStack(spacing: 12) {
-                Button {
-                    showingDiscountSheet = true
-                } label: {
-                    Label((billHistoryItem.discount ?? 0) > 0 ? "Edit discount" : "Apply discount",
-                          systemImage: "ticket")
-                        .font(.subheadline)
-                        .frame(maxWidth: .infinity)
+            // Discounts are for the cashier and admin (the server refuses a
+            // discounted bill from anyone else)
+            if ["ADMIN", "CASHIER"].contains(session.user?.role.uppercased() ?? "") {
+                HStack(spacing: 12) {
+                    Button {
+                        showingDiscountSheet = true
+                    } label: {
+                        Label((billHistoryItem.discount ?? 0) > 0 ? "Edit discount" : "Apply discount",
+                              systemImage: "ticket")
+                            .font(.subheadline)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("bill-detail-apply-discount")
                 }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("bill-detail-apply-discount")
+                .padding(.top, 4)
             }
-            .padding(.top, 4)
         }
         .padding()
         .sheet(isPresented: $showingDiscountSheet) {
@@ -306,7 +312,7 @@ struct DiscountSheet: View {
         NavigationStack {
             Form {
                 Section("Subtotal") {
-                    LabeledContent("Bill subtotal", value: "₹\(subtotal)")
+                    LabeledContent("Bill subtotal", value: "\((subtotal).rupees)")
                 }
                 Section("Discount") {
                     Picker("Mode", selection: $mode) {
@@ -346,8 +352,8 @@ struct DiscountSheet: View {
                         .accessibilityIdentifier("discount-reason-field")
                 }
                 Section {
-                    LabeledContent("Discount") { Text("−₹\(Int(computedAmount))").foregroundStyle(.green) }
-                    LabeledContent("Final total") { Text("₹\(max(0, subtotal - Int(computedAmount)))").font(.headline) }
+                    LabeledContent("Discount") { Text("−\((Int(computedAmount)).rupees)").foregroundStyle(.green) }
+                    LabeledContent("Final total") { Text("\((max(0, subtotal - Int(computedAmount))).rupees)").font(.headline) }
                 }
                 if initialAmount > 0 {
                     Section {

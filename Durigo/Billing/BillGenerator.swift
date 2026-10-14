@@ -326,10 +326,11 @@ struct BillGenerator: View {
     @Environment(Session.self) private var session
     @State private var showingBillClearAlert = false
     @State private var isShowingMenuList = false
-    /// Live waiter directory pulled from /api/users/waiters. Falls back to
-    /// a hardcoded WAITER-role set if the fetch fails (offline-tolerant).
+    /// Live waiter directory pulled from /api/users/waiters. Offline, the
+    /// last list fetched is used (so bills still print, linked to the right
+    /// people); a hardcoded set only if the server has never been reached.
     /// Stored as `[WaiterRef]` so the dropdown can group by role.
-    @State private var waiterStaff: [WaiterRef] = [
+    @State private var waiterStaff: [WaiterRef] = Self.cachedWaiters() ?? [
         WaiterRef(id: "fallback-1", name: "Alcin",   role: "WAITER"),
         WaiterRef(id: "fallback-2", name: "Anthony", role: "WAITER"),
         WaiterRef(id: "fallback-3", name: "Antone",  role: "WAITER"),
@@ -337,6 +338,14 @@ struct BillGenerator: View {
         WaiterRef(id: "fallback-5", name: "Monica",  role: "WAITER"),
         WaiterRef(id: "fallback-6", name: "Joshua",  role: "WAITER"),
     ]
+    private static let waitersCacheKey = "billGenerator.waiters"
+
+    private static func cachedWaiters() -> [WaiterRef]? {
+        guard let data = UserDefaults.standard.data(forKey: waitersCacheKey),
+              let list = try? JSONDecoder().decode([WaiterRef].self, from: data),
+              !list.isEmpty else { return nil }
+        return list
+    }
 
     var body: some View {
         NavigationStack {
@@ -505,7 +514,7 @@ struct BillGenerator: View {
                 Text("Total")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("₹\(menuLoader.billItems.getTotal())")
+                Text("\((menuLoader.billItems.getTotal()).rupees)")
                     .font(.system(.title, design: .rounded, weight: .bold))
                     .accessibilityIdentifier("bill generator items total")
             }
@@ -585,7 +594,12 @@ struct BillGenerator: View {
         do {
             let data = try await api.get("/api/users/waiters")
             let live = try JSONDecoder().decode([WaiterRef].self, from: data)
-            if !live.isEmpty { waiterStaff = live }
+            if !live.isEmpty {
+                waiterStaff = live
+                if let data = try? JSONEncoder().encode(live) {
+                    UserDefaults.standard.set(data, forKey: Self.waitersCacheKey)
+                }
+            }
         } catch {
             // Keep the hardcoded fallback list — non-fatal.
         }

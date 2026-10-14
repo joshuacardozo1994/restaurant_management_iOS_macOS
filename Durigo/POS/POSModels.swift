@@ -205,7 +205,7 @@ extension Array where Element == OrderItemModifier {
 
 // MARK: - Waiter directory (returned by GET /api/users/waiters)
 
-struct WaiterRef: Decodable, Identifiable, Hashable {
+struct WaiterRef: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let role: String

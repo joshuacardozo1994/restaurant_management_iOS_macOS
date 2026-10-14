@@ -584,11 +584,11 @@ final class ManageTablesUITests: XCTestCase {
         app.launchArguments = ["--auto-signin=qa-admin:\(password)", "--start-tab=pos"]
         app.launch()
 
-        let plus = app.buttons["Add"].firstMatch.exists ? app.buttons["Add"].firstMatch : app.images["plus.circle.fill"].firstMatch
         XCTAssertTrue(app.staticTexts["Tables"].waitForExistence(timeout: 15))
-        // The + menu in the Tables header
-        let menu = app.buttons.matching(NSPredicate(format: "label == 'Add'")).firstMatch
-        (menu.exists ? menu : plus).tap()
+        // The + menu in the Tables header (not a table card's "Add" button)
+        let menu = app.descendants(matching: .any).matching(identifier: "pos-new-menu").firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        menu.tap()
         app.buttons["Manage Tables"].tap()
 
         let add = app.buttons["manage-add-table"]
@@ -758,6 +758,8 @@ final class QAPlanUITests: XCTestCase {
 
         let extras = element("cart-extras-Veg. Soup")
         XCTAssertTrue(extras.waitForExistence(timeout: 5), "No extras button on the cart line")
+        // The search keyboard can cover the cart
+        if app.keyboards.count > 0 { app.keyboards.buttons.matching(NSPredicate(format: "label IN {'search', 'Search', 'return', 'Return', 'done', 'Done'}")).firstMatch.tap() }
         extras.tap()
         let cheese = element("extra-Extra cheese")
         XCTAssertTrue(cheese.waitForExistence(timeout: 5))
@@ -860,11 +862,11 @@ final class QAPlanUITests: XCTestCase {
     }
 
     /// A JSON call to the local server (GET without a body, POST with one)
-    private func call(_ path: String, _ body: [String: Any]? = nil, token: String?, query: [URLQueryItem] = []) throws -> Any {
+    private func call(_ path: String, _ body: [String: Any]? = nil, token: String?, query: [URLQueryItem] = [], method: String? = nil) throws -> Any {
         var url = URL(string: "http://localhost:3000")!.appending(path: path)
         if !query.isEmpty { url.append(queryItems: query) }
         var req = URLRequest(url: url)
-        req.httpMethod = body == nil ? "GET" : "POST"
+        req.httpMethod = method ?? (body == nil ? "GET" : "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token { req.setValue("auth-token=\(token)", forHTTPHeaderField: "Cookie") }
         if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body) }
@@ -896,3 +898,622 @@ final class QAPlanUITests: XCTestCase {
     }
 }
 
+// MARK: - QA plan: sign-in, bills, reservations, kitchen, settings
+
+extension QAPlanUITests {
+    /// "14:05" in the restaurant's time zone, `minutes` from now
+    private func istTime(minutesFromNow minutes: Int) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        f.timeZone = TimeZone(identifier: "Asia/Kolkata")
+        return f.string(from: Date().addingTimeInterval(TimeInterval(minutes * 60)))
+    }
+
+    private func screenshot(_ name: String) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    /// Opens a screen that lives under More on iPhone (a sidebar row on iPad)
+    private func open(_ title: String) {
+        let row = element("more-link-\(title.lowercased())")
+        if row.waitForExistence(timeout: 4) { row.tap(); return }
+        let sidebar = app.buttons[title].firstMatch
+        if sidebar.waitForExistence(timeout: 4) { sidebar.tap() }
+    }
+
+    // 1.2: a wrong password shows the server's message; after 10 wrong tries
+    // that username is locked out (a throwaway username, so no real account is)
+    func testWrongPasswordThenLockout() throws {
+        app.launchArguments = ["--signed-out"]
+        app.launch()
+        let username = app.textFields["loginUsername"]
+        XCTAssertTrue(username.waitForExistence(timeout: 10), "Not on the login screen")
+        let stamp = Int(Date().timeIntervalSince1970) % 100000
+        username.tap()
+        username.typeText("qa-nobody-\(stamp)")
+        let password = app.secureTextFields["loginPassword"]
+        let submit = app.buttons["loginSubmit"]
+        let error = element("loginError")
+        var lockedOut = false
+        for attempt in 1...11 {
+            password.tap()
+            password.typeText("wrong-\(attempt)\n")
+            if !error.waitForExistence(timeout: 8) { submit.tap() }
+            XCTAssertTrue(error.waitForExistence(timeout: 8), "No error after a wrong password")
+            if error.label.localizedCaseInsensitiveContains("too many") { lockedOut = true; break }
+            // Clear the password for the next try
+            password.tap()
+            password.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 12))
+        }
+        screenshot("login-locked-out")
+        XCTAssertTrue(lockedOut, "Still no lockout message after 11 wrong passwords: \(error.label)")
+    }
+
+    // 1.6: an admin deactivates a waiter who is signed in; the app's next
+    // request signs them out
+    func testDeactivatedUserIsSignedOut() throws {
+        let admin = try apiToken("admin")
+        let users = try XCTUnwrap(call("/api/admin/users", token: admin) as? [[String: Any]])
+        let waiterId = try XCTUnwrap(users.first { $0["username"] as? String == "qa-waiter" }?["id"] as? String)
+        try launch(as: "waiter", tab: "pos")
+        XCTAssertTrue(element("pos-new-menu").waitForExistence(timeout: 15), "POS didn't load")
+        _ = try call("/api/admin/users/\(waiterId)/toggle-active", ["active": false], token: admin, method: "PATCH")
+        addTeardownBlock { [self] in
+            _ = try? call("/api/admin/users/\(waiterId)/toggle-active", ["active": true], token: admin, method: "PATCH")
+        }
+        // Any request will do: open Billing
+        app.tabBars.buttons["Billing"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["loginSubmit"].waitForExistence(timeout: 20), "Still signed in after being deactivated")
+        screenshot("deactivated-signed-out")
+    }
+
+    /// Uploads a pending ₹(price) bill as the cashier; returns its id
+    private func uploadPendingBill(name: String, price: Int) throws -> String {
+        let id = UUID().uuidString
+        let bill: [String: Any] = [
+            "id": id, "date": Date().timeIntervalSinceReferenceDate, "tableNumber": 9,
+            "items": [["id": UUID().uuidString, "name": name, "quantity": 1, "price": price]],
+            "paymentStatus": "pending", "waiter": "QA Waiter",
+        ]
+        _ = try call("/api/bills/upload", ["items": [bill]], token: try apiToken("cashier"))
+        return id
+    }
+
+    /// The server's copy of an app bill
+    private func serverBill(_ id: String) throws -> [String: Any]? {
+        let page = try XCTUnwrap(call("/api/bills", token: try apiToken("cashier"), query: [URLQueryItem(name: "limit", value: "50")]) as? [String: Any])
+        return (page["items"] as? [[String: Any]])?.first { $0["id"] as? String == id }
+    }
+
+    // 3.4 + 3.3 + 3.2: a bill uploaded from another device appears live; the
+    // cashier gives 10% off and marks it paid by UPI; the server has both
+    func testBillAppearsLiveThenDiscountedAndPaid() throws {
+        try launch(as: "cashier", tab: "billing")
+        XCTAssertTrue(app.navigationBars["Billing"].waitForExistence(timeout: 15) || app.staticTexts["Billing"].waitForExistence(timeout: 5))
+        sleep(3) // let the live stream connect
+        let stamp = Int(Date().timeIntervalSince1970) % 100000
+        let id = try uploadPendingBill(name: "QA live bill \(stamp)", price: 1000)
+
+        let row = element("BillHistoryList-Item-\(id)")
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "The uploaded bill didn't appear live")
+        row.tap()
+
+        let discount = element("bill-detail-apply-discount")
+        XCTAssertTrue(discount.waitForExistence(timeout: 8), "No discount button for the cashier")
+        discount.tap()
+        app.buttons["10%"].firstMatch.tap()
+        element("discount-apply-button").tap()
+        XCTAssertTrue(app.staticTexts["−₹100"].waitForExistence(timeout: 8), "Discount not shown on the bill")
+
+        element("bill-payment-menu").tap()
+        app.buttons["UPI"].firstMatch.tap()
+        screenshot("bill-discounted-paid")
+
+        var saved: [String: Any]?
+        for _ in 0..<20 {
+            saved = try serverBill(id)
+            if saved?["paymentStatus"] as? String == "paidByUPI" { break }
+            sleep(1)
+        }
+        XCTAssertEqual(saved?["paymentStatus"] as? String, "paidByUPI")
+        XCTAssertEqual(saved?["discount"] as? Double, 100)
+    }
+
+    // 3.3 + 5.3: a waiter sees no discount controls on a bill
+    func testWaiterSeesNoDiscountOnABill() throws {
+        let id = try uploadPendingBill(name: "QA waiter bill", price: 500)
+        try launch(as: "waiter", tab: "billing")
+        let row = element("BillHistoryList-Item-\(id)")
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "The bill isn't listed")
+        row.tap()
+        XCTAssertTrue(element("bill-payment-menu").waitForExistence(timeout: 8), "Bill didn't open")
+        XCTAssertFalse(element("bill-detail-apply-discount").exists, "A waiter can discount a bill")
+    }
+
+    // 7.1 + 7.2: a reservation with no table for later today is saved; one in
+    // the past is refused with a reason; statuses change from its sheet
+    func testReservationCreateRefusePastAndStatuses() throws {
+        try launch(as: "admin", tab: "reservations")
+        open("Reservations")
+        let stamp = Int(Date().timeIntervalSince1970) % 100000
+        func create(name: String, time: String) {
+            let add = element("admin-reservations-new")
+            XCTAssertTrue(add.waitForExistence(timeout: 10), "No + on reservations")
+            add.tap()
+            let nameField = app.textFields["reservation-form-name"]
+            XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+            nameField.tap(); nameField.typeText(name)
+            let phone = app.textFields["Phone"]
+            phone.tap(); phone.typeText("9800011122")
+            replaceText(in: app.textFields["reservation-form-time"], with: time)
+            app.buttons["Save"].tap()
+        }
+        // Later today (at 23:xx this may roll into tomorrow; the test runs at night)
+        create(name: "QA Later \(stamp)", time: istTime(minutesFromNow: 60))
+        let later = app.staticTexts["QA Later \(stamp)"]
+        XCTAssertTrue(later.waitForExistence(timeout: 10), "Reservation for later today wasn't saved")
+
+        create(name: "QA Past \(stamp)", time: istTime(minutesFromNow: -120))
+        let refusal = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'already passed'")).firstMatch
+        XCTAssertTrue(refusal.waitForExistence(timeout: 10), "A reservation in the past wasn't refused with a reason")
+        screenshot("reservation-past-refused")
+        app.buttons["Cancel"].firstMatch.tap()
+
+        // Each status closes the sheet; the row's chip shows the new one
+        for status in ["Confirmed", "Arrived"] {
+            XCTAssertTrue(later.waitForExistence(timeout: 5))
+            later.tap()
+            let button = app.buttons[status].firstMatch
+            XCTAssertTrue(button.waitForExistence(timeout: 5), "No \(status) button")
+            button.tap()
+            XCTAssertTrue(app.staticTexts[status].waitForExistence(timeout: 8), "Row doesn't show \(status)")
+        }
+        later.tap()
+        app.buttons["Completed"].firstMatch.tap()
+        let admin = try apiToken("admin")
+        var status: String?
+        for _ in 0..<10 {
+            let today = try call("/api/reservations/today", token: admin) as? [[String: Any]]
+            status = today?.first { $0["guestName"] as? String == "QA Later \(stamp)" }?["status"] as? String
+            if status == "COMPLETED" { break }
+            sleep(1)
+        }
+        XCTAssertEqual(status, "COMPLETED", "Completed didn't reach the server")
+        screenshot("reservation-statuses")
+    }
+
+    // 6.6 + 6.7: on the kitchen board, move an order to Preparing, mark an item
+    // Ready, and assign a cook; the server has all three
+    func testKitchenPhaseItemStatusAndCook() throws {
+        let orderId = try placeTakeawayOrder()
+        let admin = try apiToken("admin")
+        let order = try XCTUnwrap(call("/api/orders/\(orderId)", token: admin) as? [String: Any])
+        let itemId = try XCTUnwrap(((order["items"] as? [[String: Any]])?.first)?["id"] as? String)
+
+        try launch(as: "admin", tab: "kitchen")
+        open("Kitchen")
+        let status = element("kitchen-item-status-\(itemId)")
+        XCTAssertTrue(status.waitForExistence(timeout: 15), "The new order isn't on the board")
+        for _ in 0..<6 where !status.isHittable { app.swipeUp() }
+
+        let assign = element("kitchen-item-assign-\(itemId)")
+        assign.tap()
+        let cook = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'QA Kitchen'")).firstMatch
+        XCTAssertTrue(cook.waitForExistence(timeout: 5), "QA Kitchen isn't offered as a cook")
+        cook.tap()
+
+        status.tap()
+        let ready = app.buttons["Ready"].firstMatch
+        XCTAssertTrue(ready.waitForExistence(timeout: 5))
+        ready.tap()
+        screenshot("kitchen-item-ready-assigned")
+
+        var item: [String: Any]?
+        for _ in 0..<15 {
+            let fresh = try XCTUnwrap(call("/api/orders/\(orderId)", token: admin) as? [String: Any])
+            item = (fresh["items"] as? [[String: Any]])?.first
+            if item?["status"] as? String == "READY", item?["assignedToId"] != nil, !(item?["assignedToId"] is NSNull) { break }
+            sleep(1)
+        }
+        XCTAssertEqual(item?["status"] as? String, "READY", "Item status didn't reach the server")
+        XCTAssertNotNil(item?["assignedToId"] as? String, "The cook wasn't saved")
+    }
+
+    // 9.3: a GST rate out of range is refused with the field named, and the
+    // form keeps every field labelled
+    func testSettingsRefusesAnOutOfRangeRate() throws {
+        try launch(as: "admin", tab: "settings")
+        open("Settings")
+        let link = element("settings-restaurant-link")
+        XCTAssertTrue(link.waitForExistence(timeout: 10))
+        link.tap()
+        XCTAssertTrue(element("settings-restaurant-name").waitForExistence(timeout: 10), "Restaurant settings didn't load")
+        XCTAssertTrue(app.staticTexts["GSTIN"].exists, "Fields have no labels")
+        let gst = app.textFields.matching(NSPredicate(format: "value == '5' OR placeholderValue == '0'")).firstMatch
+        XCTAssertTrue(gst.waitForExistence(timeout: 5), "No GST field")
+        replaceText(in: gst, with: "150")
+        element("settings-save").tap()
+        let refusal = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'GST rate'")).firstMatch
+        XCTAssertTrue(refusal.waitForExistence(timeout: 10), "An out-of-range GST wasn't refused with the field named")
+        screenshot("settings-refused")
+    }
+}
+
+// MARK: - QA plan: ordering, reservations from POS, payment, menu, print
+
+extension QAPlanUITests {
+    /// Scrolls until the element is on screen (the table grid and kitchen
+    /// list are lazy, so far-down cards don't exist until scrolled to)
+    @discardableResult
+    private func reveal(_ el: XCUIElement, timeout: TimeInterval = 15) -> Bool {
+        _ = el.waitForExistence(timeout: min(timeout, 6))
+        for _ in 0..<15 {
+            if el.exists && el.isHittable { return true }
+            app.swipeUp(velocity: .slow)
+        }
+        return el.exists && el.isHittable
+    }
+
+    /// The first table card that offers Take Order, scrolling to find one
+    private func firstFreeTableOnScreen() throws -> Int {
+        let take = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'take-order-'")).firstMatch
+        XCTAssertTrue(reveal(take), "No free table")
+        return try XCTUnwrap(Int(take.identifier.replacingOccurrences(of: "take-order-", with: "")))
+    }
+
+    /// The number of a table with no orders and no reservation
+    private func freeTableNumber(excluding: Set<Int> = []) throws -> Int {
+        let admin = try apiToken("admin")
+        let tables = try XCTUnwrap(call("/api/tables", token: admin) as? [[String: Any]])
+        // Tables already in a merged group can't be picked again
+        let groups = try call("/api/tables/groups", token: admin) as? [[String: Any]] ?? []
+        let grouped = Set(groups.flatMap { ($0["members"] as? [[String: Any]] ?? []).compactMap { ($0["table"] as? [String: Any])?["number"] as? Int } })
+        let free = tables.compactMap { t -> Int? in
+            guard t["status"] as? String == "AVAILABLE",
+                  ((t["orders"] as? [Any]) ?? []).isEmpty,
+                  let n = t["number"] as? Int, !excluding.contains(n), !grouped.contains(n) else { return nil }
+            return n
+        }
+        return try XCTUnwrap(free.sorted().first, "No free table")
+    }
+
+    // 4.2: a category, a search and the quantity buttons give the right cart,
+    // and Send to Kitchen places that order
+    func testTakeOrderWithCategorySearchAndQuantity() throws {
+        try launch(as: "waiter", tab: "pos")
+        let number = try firstFreeTableOnScreen()
+        element("take-order-\(number)").tap()
+
+        let beverages = element("category-chip-Beverages")
+        XCTAssertTrue(beverages.waitForExistence(timeout: 8), "No category chips")
+        beverages.tap()
+        let search = app.textFields["Search menu"]
+        search.tap()
+        search.typeText("Soda")
+        let soda = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Soda,'")).firstMatch
+        XCTAssertTrue(soda.waitForExistence(timeout: 5), "Soda isn't under Beverages")
+        soda.tap()
+        let plus = element("cart-plus-Soda")
+        XCTAssertTrue(plus.waitForExistence(timeout: 5), "No + on the cart line")
+        // The search keyboard can cover the cart
+        if app.keyboards.count > 0 { app.keyboards.buttons.matching(NSPredicate(format: "label IN {'search', 'Search', 'return', 'Return', 'done', 'Done'}")).firstMatch.tap() }
+        reveal(plus)
+        plus.tap(); plus.tap()
+        element("cart-minus-Soda").tap()
+        // ₹20 × 2
+        XCTAssertTrue(app.staticTexts["₹40"].waitForExistence(timeout: 5), "Cart line isn't ₹40 for 2 sodas")
+
+        let send = app.buttons["Send to Kitchen"]
+        if !send.isEnabled {
+            app.buttons.matching(NSPredicate(format: "label CONTAINS 'Select…'")).firstMatch.tap()
+            app.buttons["QA Waiter"].firstMatch.tap()
+        }
+        send.tap()
+        XCTAssertTrue(element("view-orders-\(number)").waitForExistence(timeout: 10), "Table \(number) didn't take the order")
+
+        let admin = try apiToken("admin")
+        let tables = try XCTUnwrap(call("/api/tables", token: admin) as? [[String: Any]])
+        let table = try XCTUnwrap(tables.first { $0["number"] as? Int == number })
+        // The newest order (a merged table also lists its group's older ones)
+        let order = try XCTUnwrap((table["orders"] as? [[String: Any]])?.max { ($0["createdAt"] as? String ?? "") < ($1["createdAt"] as? String ?? "") })
+        let orderId = try XCTUnwrap(order["id"] as? String)
+        let full = try XCTUnwrap(call("/api/orders/\(orderId)", token: admin) as? [String: Any])
+        let lines = try XCTUnwrap(full["items"] as? [[String: Any]])
+        XCTAssertEqual(lines.count, 1)
+        XCTAssertEqual(lines.first?["quantity"] as? Int, 2)
+        // Leave the table free for the next run
+        _ = try? call("/api/orders/\(orderId)/status", ["status": "CANCELLED", "reason": "QA clean-up"], token: admin, method: "PATCH")
+    }
+
+    // 4.7: a reservation booked from a table card, for later today, shows on that card
+    func testReservationFromATableCard() throws {
+        try launch(as: "waiter", tab: "pos")
+        let number = try firstFreeTableOnScreen()
+        let reserve = element("reserve-table-\(number)")
+        XCTAssertTrue(reveal(reserve), "No reserve button on table \(number)")
+        reserve.tap()
+        let stamp = Int(Date().timeIntervalSince1970) % 100000
+        let name = app.textFields["Name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap(); name.typeText("QA Card \(stamp)")
+        let phone = app.textFields["Phone"]
+        phone.tap(); phone.typeText("9800022233")
+        app.buttons["Book"].tap()
+        let ok = app.alerts.buttons["OK"]
+        XCTAssertTrue(ok.waitForExistence(timeout: 10), "No confirmation that it was booked")
+        screenshot("reservation-from-card")
+        ok.tap()
+
+        let today = try XCTUnwrap(call("/api/reservations/today", token: try apiToken("admin")) as? [[String: Any]])
+        let booked = try XCTUnwrap(today.first { $0["guestName"] as? String == "QA Card \(stamp)" }, "Not saved for today")
+        XCTAssertNotNil(booked["tableId"] as? String, "Saved without the table")
+        let onCard = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'QA Card \(stamp)'")).firstMatch
+        XCTAssertTrue(onCard.waitForExistence(timeout: 10), "The reservation isn't shown on the table card")
+        if let id = booked["id"] as? String {
+            _ = try? call("/api/reservations/\(id)", nil, token: try apiToken("admin"), method: "DELETE")
+        }
+    }
+
+    // 5.3: a ₹ discount typed by the cashier comes off the total
+    func testCashierRupeeDiscount() throws {
+        // Its own table with a bill requested, so it doesn't depend on the data
+        let admin = try apiToken("admin"), waiter = try apiToken("waiter")
+        let number = try freeTableNumber()
+        let tables = try XCTUnwrap(call("/api/tables", token: admin) as? [[String: Any]])
+        let tableId = try XCTUnwrap(tables.first { $0["number"] as? Int == number }?["id"] as? String)
+        let menu = try XCTUnwrap(call("/api/admin/menu", token: waiter) as? [[String: Any]])
+        let soup = try XCTUnwrap(menu.first { $0["name"] as? String == "Veg. Soup" }?["id"] as? String)
+        let placed = try XCTUnwrap(call("/api/pos/orders", [
+            "type": "DINE_IN", "tableId": tableId, "idempotencyKey": UUID().uuidString,
+            "items": [["menuItemId": soup, "quantity": 2]],
+        ], token: waiter) as? [String: Any])
+        let orderId = try XCTUnwrap(((placed["order"] as? [String: Any]) ?? placed)["id"] as? String)
+        _ = try call("/api/admin/tables/\(tableId)", ["status": "BILL_REQUESTED"], token: admin, method: "PUT")
+        addTeardownBlock { [self] in
+            _ = try? call("/api/orders/\(orderId)/status", ["status": "CANCELLED", "reason": "QA clean-up"], token: admin, method: "PATCH")
+        }
+        try launch(as: "cashier", tab: "pos")
+        let process = app.buttons["Process Payment"].firstMatch
+        XCTAssertTrue(process.waitForExistence(timeout: 15), "No table with a bill requested")
+        for _ in 0..<8 where !process.isHittable { app.swipeUp() }
+        process.tap()
+        let total = app.staticTexts["pay-total"]
+        XCTAssertTrue(total.waitForExistence(timeout: 8))
+        let before = Int(total.label.filter(\.isNumber)) ?? 0
+        let amount = app.textFields["pay-discount-amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 5), "No ₹ discount field for the cashier")
+        amount.tap()
+        amount.typeText("10")
+        let after = before - 10
+        let deadline = Date().addingTimeInterval(8)
+        while Date() < deadline, Int(total.label.filter(\.isNumber)) != after { RunLoop.current.run(until: Date().addingTimeInterval(0.25)) }
+        XCTAssertEqual(Int(total.label.filter(\.isNumber)), after, "₹10 off didn't come off the total")
+        screenshot("cashier-rupee-discount")
+    }
+
+    // 9.1: a menu item made in the app is offered in POS straight away
+    func testNewMenuItemShowsInPOS() throws {
+        try launch(as: "admin", tab: "menu")
+        open("Menu")
+        let actions = element("admin-menu-actions-button")
+        XCTAssertTrue(actions.waitForExistence(timeout: 10))
+        actions.tap()
+        app.buttons["New Item"].tap()
+        let stamp = Int(Date().timeIntervalSince1970) % 100000
+        let name = element("admin-menu-form-name")
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap(); name.typeText("QA Menu \(stamp)")
+        replaceText(in: app.textFields["0"].firstMatch, with: "123")
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Category'")).firstMatch.tap()
+        app.buttons["Beverages"].firstMatch.tap()
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts["QA Menu \(stamp)"].waitForExistence(timeout: 10), "New item not in the menu list")
+
+        let admin = try apiToken("admin")
+        let menu = try XCTUnwrap(call("/api/admin/menu", token: admin) as? [[String: Any]])
+        let created = try XCTUnwrap(menu.first { $0["name"] as? String == "QA Menu \(stamp)" }, "Not saved on the server")
+        XCTAssertEqual(created["price"] as? Double, 123)
+        addTeardownBlock { [self] in
+            if let id = created["id"] as? String { _ = try? call("/api/admin/menu-items/\(id)", nil, token: admin, method: "DELETE") }
+        }
+
+        let pos = app.tabBars.buttons["POS"].exists ? app.tabBars.buttons["POS"] : app.buttons["POS"].firstMatch
+        pos.tap()
+        let take = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'take-order-'")).firstMatch
+        XCTAssertTrue(reveal(take))
+        take.tap()
+        let search = app.textFields["Search menu"]
+        XCTAssertTrue(search.waitForExistence(timeout: 8))
+        search.tap(); search.typeText("QA Menu \(stamp)")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'QA Menu \(stamp)'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "POS doesn't offer the new item")
+    }
+
+    // 4.6: two free tables merged from the POS + menu become one group on the
+    // server; unmerging from the same sheet removes it
+    func testMergeAndUnmergeTables() throws {
+        let admin = try apiToken("admin")
+        let first = try freeTableNumber()
+        let second = try freeTableNumber(excluding: [first])
+        try launch(as: "admin", tab: "pos")
+        let menu = element("pos-new-menu")
+        XCTAssertTrue(menu.waitForExistence(timeout: 15))
+        menu.tap()
+        app.buttons["Merge Tables"].tap()
+        for n in [first, second] {
+            let row = element("merge-row-\(n)")
+            XCTAssertTrue(reveal(row), "Table \(n) isn't offered for merging")
+            row.tap()
+        }
+        app.buttons["Merge"].tap()
+
+        func groupId() throws -> String? {
+            let groups = try call("/api/tables/groups", token: admin) as? [[String: Any]] ?? []
+            return groups.first { g in
+                let numbers = ((g["members"] as? [[String: Any]]) ?? []).compactMap { ($0["table"] as? [String: Any])?["number"] as? Int ?? $0["number"] as? Int }
+                return Set(numbers) == [first, second]
+            }?["id"] as? String
+        }
+        var id: String?
+        for _ in 0..<10 { id = try groupId(); if id != nil { break }; sleep(1) }
+        let merged = try XCTUnwrap(id, "Tables \(first) and \(second) weren't merged on the server")
+        screenshot("tables-merged")
+
+        menu.tap()
+        app.buttons["Merge Tables"].tap()
+        let unmerge = element("unmerge-\(merged)")
+        XCTAssertTrue(unmerge.waitForExistence(timeout: 8), "The new group isn't listed to unmerge")
+        unmerge.tap()
+        var still: String? = merged
+        for _ in 0..<10 { still = try groupId(); if still == nil { break }; sleep(1) }
+        XCTAssertNil(still, "The group is still there after unmerging")
+    }
+
+    // 3.5: Regenerate puts an old bill back in the Bill Generator to reprint it
+    func testRegenerateAnOldBill() throws {
+        let stamp = Int(Date().timeIntervalSince1970) % 100000
+        let id = try uploadPendingBill(name: "QA reprint \(stamp)", price: 260)
+        try launch(as: "admin", tab: "billing")
+        let row = element("BillHistoryList-Item-\(id)")
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "The bill isn't listed")
+        row.tap()
+        // The secondary toolbar action sits behind "More" on iPhone
+        let regenerate = app.buttons["Regenerate"].firstMatch
+        if !regenerate.waitForExistence(timeout: 3) {
+            app.navigationBars.buttons.matching(NSPredicate(format: "label == 'More' OR identifier == 'More'")).firstMatch.tap()
+        }
+        XCTAssertTrue(regenerate.waitForExistence(timeout: 5), "No Regenerate on the bill")
+        regenerate.tap()
+        app.alerts.buttons["Regenerate"].tap()
+        let line = app.textFields.matching(NSPredicate(format: "value == 'QA reprint \(stamp)'")).firstMatch
+        XCTAssertTrue(line.waitForExistence(timeout: 10), "The Bill Generator doesn't hold the old bill's line")
+        XCTAssertTrue(element("print-bill").isEnabled, "Can't print the regenerated bill")
+        screenshot("bill-regenerated")
+    }
+
+    // 6.4: the print button on a kitchen card prints, or asks for a printer
+    func testKitchenCardPrint() throws {
+        let orderId = try placeTakeawayOrder()
+        try launch(as: "kitchen", tab: "kitchen")
+        let more = element("kitchen-more-\(orderId)")
+        XCTAssertTrue(reveal(more), "The new order isn't on the board")
+        more.tap()
+        let print = app.buttons["Print ticket"].firstMatch
+        XCTAssertTrue(print.waitForExistence(timeout: 5), "No Print ticket in the card's menu")
+        print.tap()
+        // No printer chosen on the simulator: the system print sheet opens
+        let sheet = app.buttons.matching(NSPredicate(format: "label == 'Print' OR label == 'Select Printer' OR label CONTAINS 'Printer'")).firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10) || app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'printer'")).firstMatch.exists,
+                      "Neither the print sheet nor a printer message appeared")
+        screenshot("kitchen-print")
+    }
+}
+
+// MARK: - Screen review tour
+
+/// Opens every screen as the admin and attaches a screenshot of each, for the
+/// screen review in docs/qa/ios-qa-plan.md (part 2). Not a pass/fail check:
+/// run it on the iPhone and the iPad, light and dark, and look at the images.
+final class ScreenTourUITests: XCTestCase {
+    let app = XCUIApplication()
+
+    private func shot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func element(_ id: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: id).firstMatch
+    }
+
+    private func goBack() {
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        if back.exists && back.isHittable { back.tap() }
+    }
+
+    func testTourEveryScreen() throws {
+        let password = try XCTUnwrap(ProcessInfo.processInfo.environment["QA_PASS"], "Set TEST_RUNNER_QA_PASS")
+        app.launchArguments = ["--auto-signin=qa-admin:\(password)", "--start-tab=dashboard"]
+        app.launch()
+        sleep(5)
+        shot("01-dashboard")
+
+        // Screens behind More (iPhone) or in the sidebar (iPad)
+        for title in ["Kitchen", "Reservations", "Menu", "Modifiers", "Discounts", "Inventory", "Users", "Settings"] {
+            let more = app.tabBars.buttons["More"]
+            if more.exists { more.tap() }
+            let row = element("more-link-\(title.lowercased())")
+            if row.waitForExistence(timeout: 3) { row.tap() } else { app.buttons[title].firstMatch.tap() }
+            sleep(3)
+            shot("02-\(title.lowercased())")
+            if title == "Settings" {
+                let link = element("settings-restaurant-link")
+                if link.waitForExistence(timeout: 3) { link.tap(); sleep(3); shot("03-restaurant-settings"); goBack() }
+            }
+            if more.exists { goBack() }
+        }
+
+        // POS: tables, take order, order details
+        let pos = app.tabBars.buttons["POS"].exists ? app.tabBars.buttons["POS"] : app.buttons["POS"].firstMatch
+        pos.tap(); sleep(3)
+        shot("04-pos-tables")
+        let take = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'take-order-'")).firstMatch
+        if take.waitForExistence(timeout: 5) {
+            for _ in 0..<4 where !take.isHittable { app.swipeUp() }
+            take.tap(); sleep(3); shot("05-take-order")
+            let cancel = app.buttons["Cancel"].firstMatch
+            if cancel.exists { cancel.tap() } else { app.swipeDown(velocity: .fast) }
+            sleep(1)
+        }
+        let view = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'view-orders-'")).firstMatch
+        if view.waitForExistence(timeout: 5) {
+            for _ in 0..<4 where !view.isHittable { app.swipeUp() }
+            view.tap(); sleep(3); shot("06-order-details")
+            let close = app.buttons["Close"].firstMatch
+            if close.exists { close.tap() } else { app.swipeDown(velocity: .fast) }
+            sleep(1)
+        }
+        let generator = app.buttons["Bill Generator"]
+        if generator.waitForExistence(timeout: 3) { generator.tap(); sleep(2); shot("07-bill-generator") }
+
+        // Billing: list and one bill
+        let billing = app.tabBars.buttons["Billing"].exists ? app.tabBars.buttons["Billing"] : app.buttons["Billing"].firstMatch
+        billing.tap(); sleep(4)
+        shot("08-billing")
+        let bill = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH 'BillHistoryList-Item-'")).firstMatch
+        if bill.waitForExistence(timeout: 5) { bill.tap(); sleep(3); shot("09-bill-detail"); goBack() }
+
+        // Reports and each breakout
+        let reports = app.tabBars.buttons["Reports"].exists ? app.tabBars.buttons["Reports"] : app.buttons["Reports"].firstMatch
+        reports.tap(); sleep(4)
+        shot("10-reports")
+        for route in ["ca", "sales", "performance", "customers", "staff", "inventory"] {
+            let link = element("reports-link-\(route)")
+            if link.waitForExistence(timeout: 3) {
+                for _ in 0..<4 where !link.isHittable { app.swipeUp() }
+                link.tap(); sleep(4); shot("11-report-\(route)")
+                if route == "ca" {
+                    // 8.2: Copy for CA confirms, and Share opens the share sheet
+                    let copy = element("ca-copy-button")
+                    if copy.waitForExistence(timeout: 5) {
+                        copy.tap()
+                        XCTAssertTrue(app.buttons["Copied"].waitForExistence(timeout: 3), "Copy for CA didn't confirm")
+                    }
+                    let share = app.buttons["Share"].firstMatch
+                    if share.waitForExistence(timeout: 3) {
+                        share.tap(); sleep(2); shot("12-ca-share-sheet")
+                        let close = app.buttons["Close"].firstMatch
+                        if close.waitForExistence(timeout: 3) { close.tap() } else { app.swipeDown(velocity: .fast) }
+                        sleep(1)
+                    }
+                }
+                goBack(); sleep(1)
+            }
+        }
+    }
+}

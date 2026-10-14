@@ -236,14 +236,10 @@ final class BillUploader {
             throw err
         }
 
-        struct PageResponse: Decodable {
-            let items: [BillHistoryItemCopy]
-            let nextCursor: String?
-        }
 
-        let page: PageResponse
+        let page: BillsPage
         do {
-            page = try JSONDecoder().decode(PageResponse.self, from: data)
+            page = try JSONDecoder().decode(BillsPage.self, from: data)
         } catch {
             lastError = .decoding(error)
             throw BillSyncError.decoding(error)
@@ -304,4 +300,31 @@ final class BillUploader {
 
         return UploadSummary(attempted: unsynced.count, succeeded: totalSucceeded, failed: totalFailed)
     }
+}
+
+/// One page of GET /api/bills
+struct BillsPage: Decodable {
+    let items: [BillHistoryItemCopy]
+    let nextCursor: String?
+
+    /// Bills are read one at a time, so a bill this version can't read is
+    /// skipped instead of emptying the whole page (and the bill history)
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        nextCursor = try container.decodeIfPresent(String.self, forKey: .nextCursor)
+        var list = try container.nestedUnkeyedContainer(forKey: .items)
+        var bills: [BillHistoryItemCopy] = []
+        while !list.isAtEnd {
+            if let bill = try? list.decode(BillHistoryItemCopy.self) {
+                bills.append(bill)
+            } else {
+                // Consume the unreadable element so decoding moves on
+                _ = try? list.decode(SkippedBill.self)
+            }
+        }
+        items = bills
+    }
+
+    private enum CodingKeys: String, CodingKey { case items, nextCursor }
+    private struct SkippedBill: Decodable {}
 }

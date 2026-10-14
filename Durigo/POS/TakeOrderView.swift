@@ -222,11 +222,13 @@ struct TakeOrderView: View {
         } label: {
             Text(name)
                 .font(.system(.footnote, weight: .medium))
-                .padding(.horizontal, 12).padding(.vertical, 6)
+                .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(Capsule().fill(isSelected ? Color.accentColor : Color(.tertiarySystemBackground)))
                 .foregroundStyle(isSelected ? Color.white : Color.primary)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("category-chip-\(name)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var filteredItems: [AdminMenuItem] {
@@ -264,7 +266,7 @@ struct TakeOrderView: View {
                             }
                         }
                         Spacer()
-                        Text("₹\(Int(item.price))")
+                        Text("\((Int(item.price)).rupees)")
                             .font(.system(.body, weight: .semibold))
                             .monospacedDigit()
                         Image(systemName: "plus.circle.fill")
@@ -312,7 +314,7 @@ struct TakeOrderView: View {
                         Text("Total")
                             .font(.system(.headline, weight: .semibold))
                         Spacer()
-                        Text("₹\(Int(cartTotal))")
+                        Text("\((Int(cartTotal)).rupees)")
                             .font(.system(.title3, weight: .bold))
                             .monospacedDigit()
                     }
@@ -357,6 +359,8 @@ struct TakeOrderView: View {
                 } label: {
                     Image(systemName: line.modifiers.isEmpty ? "plus.square.on.square" : "plus.square.fill.on.square.fill")
                         .foregroundStyle(line.modifiers.isEmpty ? Color.secondary : Color.accentColor)
+                        .frame(width: 32, height: 36)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Extras for \(line.menuItem.name)")
@@ -369,6 +373,8 @@ struct TakeOrderView: View {
             } label: {
                 Image(systemName: line.notes == nil ? "square.and.pencil" : "pencil.circle.fill")
                     .foregroundStyle(line.notes == nil ? Color.secondary : Color.orange)
+                    .frame(width: 32, height: 36)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(line.notes == nil ? "Add a note for \(line.menuItem.name)" : "Edit note for \(line.menuItem.name)")
@@ -377,8 +383,14 @@ struct TakeOrderView: View {
                     decrement(line)
                 } label: {
                     Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                        .font(.title3)
+                        // 36pt, not the 17pt glyph: hit in a hurry at a table
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("One fewer \(line.menuItem.name)")
+                .accessibilityIdentifier("cart-minus-\(line.menuItem.name)")
                 Text("\(line.quantity)")
                     .font(.system(.body, weight: .semibold))
                     .frame(minWidth: 28)
@@ -387,10 +399,16 @@ struct TakeOrderView: View {
                     increment(line)
                 } label: {
                     Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
+                        .font(.title3)
+                        // 36pt, not the 17pt glyph: hit in a hurry at a table
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("One more \(line.menuItem.name)")
+                .accessibilityIdentifier("cart-plus-\(line.menuItem.name)")
             }
-            Text("₹\(Int(line.lineTotal))")
+            Text("\((Int(line.lineTotal)).rupees)")
                 .font(.system(.subheadline, weight: .semibold))
                 .frame(minWidth: 60, alignment: .trailing)
                 .monospacedDigit()
@@ -514,7 +532,7 @@ private struct ModifierPickerSheet: View {
                             Text(m.name)
                             Spacer()
                             if m.price > 0 {
-                                Text("+₹\(m.price)").monospacedDigit().foregroundStyle(.secondary)
+                                Text("+\((m.price).rupees)").monospacedDigit().foregroundStyle(.secondary)
                             }
                         }
                         .contentShape(Rectangle())
@@ -559,7 +577,7 @@ private struct VariantPickerSheet: View {
                                 }
                             }
                             Spacer()
-                            Text("₹\(Int(v.price(forBase: Double(item.price))))")
+                            Text("\((Int(v.price(forBase: Double(item.price)))).rupees)")
                                 .font(.system(.body, weight: .semibold))
                                 .monospacedDigit()
                         }

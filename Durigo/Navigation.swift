@@ -157,4 +157,7 @@ func startingItem(for role: String?, requested: NavigationItem) -> NavigationIte
     }
 
     var selection: NavigationItem = Navigation.argDerivedSelection()
+    /// Set when a past bill is regenerated: POS opens on the Bill Generator
+    /// (where that bill now is) instead of the table grid
+    var showBillGenerator = false
 }

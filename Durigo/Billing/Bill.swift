@@ -126,7 +126,7 @@ struct Bill: View {
         HStack {
             Text(label)
             Spacer()
-            Text(amount < 0 ? "−₹\(-amount)" : "₹\(amount)")
+            Text(amount < 0 ? "−\((-amount).rupees)" : "\((amount).rupees)")
         }
     }
 
@@ -219,7 +219,7 @@ struct Bill: View {
                                     .padding(.bottom, 3)
                                 
                             }
-                            Text("₹\(item.lineTotal)")
+                            Text("\((item.lineTotal).rupees)")
                         }
                     }
                     .font(.system(size: 12))
@@ -246,7 +246,7 @@ struct Bill: View {
                         .padding(.top, 6)
                     }
                         HStack(alignment: .center) {
-                            Text("Total: ₹\(finalTotal)")
+                            Text("Total: \((finalTotal).rupees)")
                                 .font(.system(size: 20))
                                 .bold()
                             #if os(iOS)

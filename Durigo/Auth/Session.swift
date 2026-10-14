@@ -44,6 +44,14 @@ final class Session {
     var isSignedIn: Bool { token != nil }
 
     init() {
+        #if DEBUG
+        // UI tests that start at the login screen (`--signed-out`)
+        if CommandLine.arguments.contains("--signed-out") {
+            for key in [KeychainHelper.Key.authToken, .authUserId, .authUsername, .authUserName, .authUserRole] {
+                _ = KeychainHelper.delete(key)
+            }
+        }
+        #endif
         // Restore from Keychain on launch.
         self.token = KeychainHelper.load(.authToken)
         if let id = KeychainHelper.load(.authUserId),

@@ -201,7 +201,7 @@ struct TablesGridView: View {
                             .labelStyle(.iconOnly)
                     }
                     .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .controlSize(.regular)
                     .accessibilityLabel("Unmerge \(group.displayName)")
                 }
                 .padding(.vertical, 4)
@@ -339,7 +339,7 @@ struct TableCardView: View {
                 ordersSection
                 HStack {
                     Spacer()
-                    Text("₹\(Int(table.unpaidTotal))")
+                    Text("\((Int(table.unpaidTotal)).rupees)")
                         .font(.system(.headline, weight: .bold))
                         .monospacedDigit()
                 }
@@ -440,6 +440,8 @@ struct TableCardView: View {
                     Image(systemName: "calendar")
                 }
                 .buttonStyle(.bordered)
+                .accessibilityLabel("Reserve table \(table.number)")
+                .accessibilityIdentifier("reserve-table-\(table.number)")
             }
         case .reserved:
             Button(action: onTakeOrder) {

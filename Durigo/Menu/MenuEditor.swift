@@ -515,7 +515,7 @@ private struct MenuItemRow: View {
                 }
             }
             Spacer()
-            Text("₹\(item.price)")
+            Text("\((item.price).rupees)")
                 .font(.system(.body, design: .rounded, weight: .semibold))
                 .foregroundStyle(item.available ? .primary : .secondary)
             Toggle("", isOn: Binding(

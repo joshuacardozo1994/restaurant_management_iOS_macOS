@@ -54,7 +54,11 @@ struct Home: View {
         .onAppear {
             menuLoader.authSession = session
             navigation.selection = startingItem(for: role, requested: navigation.selection)
+            // After the first layout: a visibility set before it is ignored
+            DispatchQueue.main.async { fitSidebar(to: navigation.selection) }
         }
+        // The kitchen board gets the whole screen, as on the web
+        .onChange(of: navigation.selection) { _, item in fitSidebar(to: item) }
         // A different person signing in lands on a screen their role can use
         .onChange(of: role) {
             navigation.selection = startingItem(for: role, requested: navigation.selection)
@@ -104,6 +108,15 @@ struct Home: View {
             .listStyle(.inset)
             #endif
             .navigationTitle("More")
+        }
+    }
+
+    /// iPad/Mac: hide the sidebar on the kitchen board; bring it back after
+    private func fitSidebar(to item: NavigationItem) {
+        if item == .kitchen {
+            columnVisibility = .detailOnly
+        } else if columnVisibility == .detailOnly {
+            columnVisibility = .all
         }
     }
 
@@ -387,7 +400,7 @@ struct Dashboard: View {
             Text("Today's Revenue")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("₹\(Int(s.todayRevenue).formatted(.number))")
+            Text("\(s.todayRevenue.rupees)")
                 .font(.system(.largeTitle, design: .rounded, weight: .bold))
             HStack(spacing: 6) {
                 Image(systemName: s.revenueChange >= 0 ? "arrow.up.right" : "arrow.down.right")
@@ -1117,7 +1130,7 @@ struct DiscountsAdminView: View {
     private func formatValue(_ d: AdminDiscount) -> String {
         switch d.type {
         case "PERCENTAGE": "\(d.value)% off"
-        case "FIXED":      "₹\(d.value) off"
+        case "FIXED":      "\((d.value).rupees) off"
         case "BOGO":       "BOGO"
         default:           "\(d.value)"
         }
@@ -1493,7 +1506,7 @@ struct ModifiersAdminView: View {
                     }
                 }
                 Spacer()
-                Text(m.price > 0 ? "+₹\(m.price)" : (m.price == 0 ? "Free" : "−₹\(-m.price)"))
+                Text(m.price > 0 ? "+\((m.price).rupees)" : (m.price == 0 ? "Free" : "−\((-m.price).rupees)"))
                     .font(.system(.body, design: .rounded, weight: .semibold))
                     .foregroundStyle(m.price > 0 ? .primary : .secondary)
             }
@@ -1727,35 +1740,23 @@ struct AppSettingsForm: View {
         NavigationStack {
             Form {
                 if let draft = Binding($draft) {
-                    Section("Restaurant") {
-                        TextField("Name", text: draft.restaurant.name).accessibilityIdentifier("settings-restaurant-name")
-                        TextField("Address", text: draft.restaurant.address)
-                        TextField("Phone", text: draft.restaurant.phone).keyboardType(.phonePad)
-                        TextField("Email", text: draft.restaurant.email).keyboardType(.emailAddress).textInputAutocapitalization(.never)
-                        TextField("GSTIN", text: draft.restaurant.gstin).textInputAutocapitalization(.characters)
-                        TextField("VAT TIN", text: draft.restaurant.vatTin.orEmpty)
-                        TextField("Social handle", text: draft.restaurant.socialHandle)
+                    // Only what reaches a bill; the server keeps the other
+                    // stored settings, which nothing reads yet (as on the web)
+                    Section {
+                        labeledField("Name", text: draft.restaurant.name).accessibilityIdentifier("settings-restaurant-name")
+                        labeledField("Address", text: draft.restaurant.address)
+                        labeledField("Phone", text: draft.restaurant.phone).keyboardType(.phonePad)
+                        labeledField("GSTIN", text: draft.restaurant.gstin).textInputAutocapitalization(.characters)
+                        labeledField("VAT TIN", text: draft.restaurant.vatTin.orEmpty)
+                    } header: {
+                        Text("Restaurant")
+                    } footer: {
+                        Text("Printed at the top of every bill. The VAT TIN prints on bills with liquor.")
                     }
-                    Section("Business hours") {
-                        TextField("Opening", text: draft.business.openingTime).keyboardType(.numbersAndPunctuation)
-                        TextField("Closing", text: draft.business.closingTime).keyboardType(.numbersAndPunctuation)
-                        TextField("Order prefix", text: draft.business.orderPrefix)
-                    }
-                    Section("Billing") {
+                    Section("Tax") {
                         percentField("GST on food & soft drinks", rate: draft.billing.taxRate)
                         percentField("VAT on liquor", rate: draft.billing.liquorTaxRate.or(0.22))
-                        Toggle("Prices include tax", isOn: draft.billing.taxInclusive.or(true))
-                        TextField("Tax label", text: draft.billing.taxLabel)
-                        Toggle("Accept Cash", isOn: draft.billing.acceptCash)
-                        Toggle("Accept Card", isOn: draft.billing.acceptCard)
-                        Toggle("Accept UPI", isOn: draft.billing.acceptUPI)
-                        Toggle("Accept Digital Wallet", isOn: draft.billing.acceptDigitalWallet)
-                        Toggle("Print receipt", isOn: draft.billing.printReceipt)
-                    }
-                    Section("Inventory") {
-                        percentField("Low stock threshold", rate: draft.inventory.lowStockThreshold)
-                        Toggle("Auto-reorder", isOn: draft.inventory.autoReorder)
-                        Toggle("Track expiry", isOn: draft.inventory.trackExpiry)
+                        Toggle("Menu prices include tax", isOn: draft.billing.taxInclusive.or(true))
                     }
                 } else {
                     if store?.isLoading == true {
@@ -1790,6 +1791,15 @@ struct AppSettingsForm: View {
                 await store?.load()
                 draft = store?.settings
             }
+        }
+    }
+
+    /// A text field that keeps its label beside it once filled in (a plain
+    /// TextField in a Form only shows its label as the placeholder)
+    private func labeledField(_ label: String, text: Binding<String>) -> some View {
+        LabeledContent(label) {
+            TextField(label, text: text, prompt: Text("Not set"))
+                .multilineTextAlignment(.trailing)
         }
     }
 
@@ -2084,6 +2094,7 @@ private struct ReservationFormSheet: View {
                     HStack {
                         Text("Time"); Spacer()
                         TextField("HH:MM", text: $time).multilineTextAlignment(.trailing).frame(width: 80)
+                            .keyboardType(.numbersAndPunctuation)
                             .accessibilityIdentifier("reservation-form-time")
                     }
                     Stepper(value: $duration, in: 30...480, step: 30) { Text("\(duration) min") }
@@ -2523,8 +2534,13 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
     }
 
     var groupedByStatus: [(status: String, orders: [KitchenOrder])] {
-        let order: [String: Int] = ["PENDING": 0, "CONFIRMED": 1, "PREPARING": 2, "READY": 3, "SERVED": 4]
-        let grouped = Dictionary(grouping: orders, by: { $0.status.uppercased() })
+        let order: [String: Int] = ["PENDING": 0, "PREPARING": 2, "READY": 3, "SERVED": 4]
+        // Confirmed orders are "To do" too: one section, as in the iPad's
+        // To do column (two sections both titled "To do" read as a bug)
+        let grouped = Dictionary(grouping: orders, by: { o -> String in
+            let status = o.status.uppercased()
+            return status == "CONFIRMED" ? "PENDING" : status
+        })
         return grouped
             .sorted { (order[$0.key] ?? 99) < (order[$1.key] ?? 99) }
             .map { ($0.key, $0.value.sorted { $0.createdAt < $1.createdAt }) }
@@ -2918,19 +2934,39 @@ struct KitchenAdminView: View {
         if store.orders.isEmpty {
             emptyKitchen
         } else {
-            HStack(alignment: .top, spacing: DesignTokens.spacingM) {
-                ForEach(cols, id: \.status) { col in
-                    kanbanColumn(
-                        store: store,
-                        targetStatus: col.status,
-                        title: col.title,
-                        color: col.color,
-                        orders: ordersForColumn(col.status, store: store)
-                    )
+            // Four columns side by side when each gets at least 240pt
+            // (landscape); otherwise (portrait iPad) the board scrolls
+            // sideways rather than squeezing cards until numbers wrap
+            GeometryReader { geo in
+                let gaps = DesignTokens.spacingM * 3 + DesignTokens.spacingL * 2
+                if (geo.size.width - gaps) / 4 >= Self.minKanbanColumn {
+                    kanbanBoard(store: store, cols: cols, columnWidth: nil)
+                } else {
+                    ScrollView(.horizontal) {
+                        kanbanBoard(store: store, cols: cols, columnWidth: Self.minKanbanColumn)
+                            .frame(height: geo.size.height)
+                    }
                 }
             }
-            .padding(DesignTokens.spacingL)
         }
+    }
+
+    private static let minKanbanColumn: CGFloat = 240
+
+    private func kanbanBoard(store: KitchenStore, cols: [(status: String, title: String, color: Color)], columnWidth: CGFloat?) -> some View {
+        HStack(alignment: .top, spacing: DesignTokens.spacingM) {
+            ForEach(cols, id: \.status) { col in
+                kanbanColumn(
+                    store: store,
+                    targetStatus: col.status,
+                    title: col.title,
+                    color: col.color,
+                    orders: ordersForColumn(col.status, store: store)
+                )
+                .frame(width: columnWidth)
+            }
+        }
+        .padding(DesignTokens.spacingL)
     }
 
     private func ordersForColumn(_ targetStatus: String, store: KitchenStore) -> [KitchenOrder] {
@@ -3017,8 +3053,9 @@ struct KitchenAdminView: View {
         // card. Staff only use the trailing counter — "order 6764" — so we
         // show just the last 4 chars with a `#` prefix, matching the
         // OrderDetailView pattern.
-        let shortNum = o.orderNumber.split(separator: "-").last.map(String.init)
-            ?? String(o.orderNumber.suffix(4))
+        // Old numbers ("ORD-2605028900502") have no short counter: last 4
+        let lastPart = o.orderNumber.split(separator: "-").last.map(String.init) ?? o.orderNumber
+        let shortNum = lastPart.count > 6 ? String(lastPart.suffix(4)) : lastPart
         // Tight inter-row spacing inside the kanban card so cards stack
         // densely. Header → items: 4pt; items → footer: 4pt.
         return VStack(alignment: .leading, spacing: 4) {
@@ -3049,7 +3086,10 @@ struct KitchenAdminView: View {
                             Label("Cancel order…", systemImage: "xmark.circle")
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle").font(.caption)
+                        // 36pt: was a 14pt target on a busy kitchen screen
+                        Image(systemName: "ellipsis.circle").font(.body)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
                     }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
@@ -3059,7 +3099,9 @@ struct KitchenAdminView: View {
                     Button {
                         printTicket(o, automatic: false)
                     } label: {
-                        Image(systemName: "printer").font(.caption)
+                        Image(systemName: "printer").font(.body)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Print kitchen ticket")
@@ -3227,7 +3269,9 @@ struct KitchenAdminView: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            .padding(.horizontal, 5).padding(.vertical, 2)
+            // Big enough to hit in a hurry (the chip was ~16pt tall)
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .contentShape(Capsule())
             .background(
                 Capsule().stroke(
                     style: StrokeStyle(lineWidth: 1, dash: assignedName == nil ? [3] : [])
@@ -3278,7 +3322,9 @@ struct KitchenAdminView: View {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 7, weight: .bold))
             }
-            .padding(.horizontal, 5).padding(.vertical, 2)
+            // Big enough to hit in a hurry (the chip was ~16pt tall)
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .contentShape(Capsule())
             .background(Capsule().fill(color.opacity(0.18)))
             .foregroundStyle(color)
         }

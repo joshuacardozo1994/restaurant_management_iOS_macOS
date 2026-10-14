@@ -167,7 +167,10 @@ final class POSStore {
             notes: notes
         )
         let data = try await api.postJSON("/api/reservations", payload: payload)
-        return try JSONDecoder().decode(POSReservation.self, from: data)
+        let created = try JSONDecoder().decode(POSReservation.self, from: data)
+        // Show it on the table card straight away, without waiting for a reload
+        upcomingReservations.append(created)
+        return created
     }
 
     func loadWaiters() async {

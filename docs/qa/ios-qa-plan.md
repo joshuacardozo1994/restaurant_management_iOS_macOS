@@ -48,28 +48,28 @@ test's name is given.
 | # | Check | Expected | Status |
 |---|---|---|---|
 | 1.1 | Sign in as each role | Lands on that role's first screen | ✅ simulator |
-| 1.2 | Wrong password; 10 wrong in 15 minutes | Error; then locked for 5 minutes | |
+| 1.2 | Wrong password; 10 wrong in 15 minutes | Error; then locked for 5 minutes | ✅ 🤖 QAPlanUITests testWrongPasswordThenLockout (server's message; locked after 10, a throwaway username) |
 | 1.3 | iPhone tabs per role | Admin: Dashboard, POS, Billing, Reports. Cashier: POS, Billing, Reports. Waiter: POS, Billing. Kitchen: Kitchen. Everything else under More | ✅ simulator; 🤖 AdminScreensUITests |
-| 1.4 | iPad and Mac sidebar per role | Same screens as the iPhone tabs plus More, grouped | |
+| 1.4 | iPad and Mac sidebar per role | Same screens as the iPhone tabs plus More, grouped | ✅ iPad simulator tour, each role (admin, waiter, cashier, kitchen); kitchen board hides the sidebar. Mac: ⏳ needs your unlocked screen (screen capture is blocked while the Mac is locked) |
 | 1.5 | Non-admin opens Settings | Account and Sign Out only; no Restaurant settings | ✅ 🤖 QAPlanUITests (waiter) |
-| 1.6 | Admin deactivates a user who is signed in on a phone | The phone's next request signs it out | |
+| 1.6 | Admin deactivates a user who is signed in on a phone | The phone's next request signs it out | ✅ 🤖 testDeactivatedUserIsSignedOut |
 | 1.7 | Sign out | Token revoked; Keychain cleared; back to login | ✅ 🤖 QAPlanUITests |
 | 1.8 | Mac: launch, sign in, load tables | Works (needs the network entitlement) | ✅ 14 Oct, Mac |
-| 1.9 | Wi-Fi off, then back on | Live indicator turns red, then green; data catches up without restarting the app | |
+| 1.9 | Wi-Fi off, then back on | Live indicator turns red, then green; data catches up without restarting the app | ✅ simulator, server stopped as a stand-in for Wi-Fi: indicator red within 20s, green again ~25s after it came back, no restart. Real Wi-Fi: ⏳ on a device |
 
 ### 2. Bill Generator (P0: what staff use today)
 
 | # | Check | Expected | Status |
 |---|---|---|---|
-| 2.1 | Search the menu, including typos ("chiken") | Finds the item | 🤖 testShouldFilterMenuWithQuery |
-| 2.2 | Add items, variants (Peg/Quarter/…), custom item, half portion | Line prices right; half of ₹155 = ₹78 | 🤖 testBillGeneratorBillMatchesItemsToMenu |
-| 2.3 | Voice ordering | Recognised items added; mic permission prompt on first use (iPhone, iPad and Mac) | |
+| 2.1 | Search the menu, including typos ("chiken") | Finds the item | ✅ 🤖 testShouldFilterMenuWithQuery (passed 15 Oct) |
+| 2.2 | Add items, variants (Peg/Quarter/…), custom item, half portion | Line prices right; half of ₹155 = ₹78 | ✅ 🤖 testBillGeneratorBillMatchesItemsToMenu (passed 15 Oct) |
+| 2.3 | Voice ordering | Recognised items added; mic permission prompt on first use (iPhone, iPad and Mac) | ⏳ needs a real device (microphone) |
 | 2.4 | Pick table (or Parcel) and waiter, then Print | Preview pages; PDF generated; Share/Print works | ✅ 🤖 QAPlanUITests (table, waiter, print preview) |
 | 2.5 | Receipt tax lines | CGST + SGST on food and soft drinks, VAT on liquor, taxable value; adds up to the total | ✅ 🤖 testRenderReceiptForReview + QAPlanUITests (₹200 liquor → VAT ₹36; ₹300 food → ₹7 + ₹7) |
-| 2.6 | Custom item named after a drink ("Kingfisher pint", "Virgin Mojito", "Ginger chicken") | Kingfisher → VAT; the other two → GST | 🤖 testBillMathAllocateAndTaxClass |
-| 2.7 | Receipt header | Durigo's details from settings; never the "Spice Garden" placeholders | 🤖 testRestaurantIdentityIgnoresPlaceholders |
-| 2.8 | 20+ items | Several pages; totals and tax only on the last page; nothing overlaps | |
-| 2.9 | Print offline (Wi-Fi off) | Bill prints with GST/VAT from the cached rates; uploads when back online | |
+| 2.6 | Custom item named after a drink ("Kingfisher pint", "Virgin Mojito", "Ginger chicken") | Kingfisher → VAT; the other two → GST | ✅ 🤖 testBillMathAllocateAndTaxClass (passed 15 Oct) |
+| 2.7 | Receipt header | Durigo's details from settings; never the "Spice Garden" placeholders | ✅ 🤖 testRestaurantIdentityIgnoresPlaceholders (passed 15 Oct) |
+| 2.8 | 20+ items | Several pages; totals and tax only on the last page; nothing overlaps | ✅ 🤖 testLongBillSplitsAcrossPages (13 on the last page, 19 on the others) |
+| 2.9 | Print offline (Wi-Fi off) | Bill prints with GST/VAT from the cached rates; uploads when back online | ✅ simulator: bill printed with the server stopped (VAT ₹36, CGST ₹7 from cached rates) and uploaded once it was back, linked to QA Waiter. Fixed: the waiter list is now cached for offline (was a stale hardcoded list) |
 | 2.10 | Upload | Bill appears on the web billing history and in the CA report with the same GST/VAT as printed | ✅ uploaded with table 9 and the waiter linked (14 Oct); GST/VAT on the web once marked paid: not yet checked |
 | 2.11 | Customer phone and name on a bill; the waiter picked | Server links the bill to the waiter by id and to the customer by phone ("+91 …", spaces ignored); both show in the staff and customer reports | ✅ 🤖 QAPlanUITests (Bill Generator test checks the server) |
 | 2.12 | Update over an existing install (bills saved before) | App opens; old bills still listed (store upgraded V4 → V5) | ✅ simulator (iPhone and iPad upgrade, iPad fresh install) |
@@ -78,23 +78,23 @@ test's name is given.
 
 | # | Check | Expected | Status |
 |---|---|---|---|
-| 3.1 | List pages through server bills; filter by status | Correct; pending count badge on the tab | |
-| 3.2 | Mark a bill paid by cash, UPI or card | Saved; the server updates | |
-| 3.3 | Discount on a bill (cashier/admin), percent or ₹ | Total updates; a waiter can't upload a discounted bill (the server refuses) | |
-| 3.4 | Bill uploaded from another device | Appears live | |
-| 3.5 | Duplicate a bill; reprint an old bill | Works | |
+| 3.1 | List pages through server bills; filter by status | Correct; pending count badge on the tab | ✅ 🤖 BillsPage + API checks 11.9/11.12; pending badge on the tab. Fixed: the list was empty on any device once a POS order had been paid (one unreadable bill failed the whole page); API check 11.12 |
+| 3.2 | Mark a bill paid by cash, UPI or card | Saved; the server updates | ✅ 🤖 testBillAppearsLiveThenDiscountedAndPaid (UPI, checked on the server) |
+| 3.3 | Discount on a bill (cashier/admin), percent or ₹ | Total updates; a waiter can't upload a discounted bill (the server refuses) | ✅ 🤖 same test (10% off, saved on the server); testWaiterSeesNoDiscountOnABill. Fixed: waiters no longer see Apply discount |
+| 3.4 | Bill uploaded from another device | Appears live | ✅ 🤖 same test: appears within seconds of the upload |
+| 3.5 | Duplicate a bill; reprint an old bill | Works | ✅ 🤖 testRegenerateAnOldBill. Fixed: Regenerate now opens the Bill Generator holding the bill (it used to leave you on the table grid) |
 
 ### 4. POS tables and ordering (P0)
 
 | # | Check | Expected | Status |
 |---|---|---|---|
 | 4.1 | An order placed on another device | Table card updates live | ✅ simulator |
-| 4.2 | Take an order: categories, search, variants, quantity | Cart right; Send to Kitchen | |
+| 4.2 | Take an order: categories, search, variants, quantity | Cart right; Send to Kitchen | ✅ 🤖 testTakeOrderWithCategorySearchAndQuantity (2 × Soda reached the server) |
 | 4.3 | Per-item note | Shows on the cart line and in red on the kitchen card | ✅ simulator |
 | 4.4 | Takeaway; delivery with name, phone and address | Delivery details reach the kitchen in the order note | ✅ simulator |
-| 4.5 | Retry Send after the network drops | Exactly one order (idempotency key) | |
-| 4.6 | Merge and unmerge tables; order at a merged table | Secondary tables route to the primary | |
-| 4.7 | Reservation from a table card; today's date | Saved; shown on the card | |
+| 4.5 | Retry Send after the network drops | Exactly one order (idempotency key) | ✅ the key survives retries (only a changed cart gets a new one); the server side is API check 2.x |
+| 4.6 | Merge and unmerge tables; order at a merged table | Secondary tables route to the primary | ✅ 🤖 testMergeAndUnmergeTables; secondary tables show "Order at Table 2" (tour). Fixed: unmerge buttons were 20×10pt and unlabelled |
+| 4.7 | Reservation from a table card; today's date | Saved; shown on the card | ✅ 🤖 testReservationFromATableCard. Fixed: the booking now shows on the card straight away |
 | 4.8 | Manage tables: add, renumber, seats, out of service, delete | Works; can't take an occupied table out of service | ✅ 🤖 ManageTablesUITests |
 | 4.9 | Extras on a cart line (extras button, for that category) | Line price adds the extra; "+ Extra cheese" on the order, kitchen card, item details and ticket | ✅ 🤖 QAPlanUITests (iPhone and iPad) |
 | 4.10 | Cancel a whole order from the order screen, with a reason | Leaves the bill and the kitchen; table freed when nothing else is open; hidden for staff once food is served (admins still can) | ✅ 🤖 QAPlanUITests (iPhone and iPad) |
@@ -106,7 +106,7 @@ test's name is given.
 |---|---|---|---|
 | 5.1 | Breakdown for food + liquor | GST and VAT match the web for the same table | ✅ simulator (₹1,140 → GST ₹24, VAT ₹115) |
 | 5.2 | Discount code QA10; invalid code | 10% off and taxes recomputed; invalid code shows the server's reason | ✅ 🤖 POSPaymentUITests |
-| 5.3 | ₹ discount as cashier; waiter sees no discount controls | As described | |
+| 5.3 | ₹ discount as cashier; waiter sees no discount controls | As described | ✅ 🤖 testCashierRupeeDiscount (₹10 off the total) + testWaiterSeesNoDiscountOnABill |
 | 5.4 | Split 2/3/4 ways and by hand; parts don't add up | Pay disabled until they add up | ✅ 🤖 POSPaymentUITests |
 | 5.5 | Bill changed on another device before paying | Refused with "The bill changed from ₹X to ₹Y"; screen reloads | ✅ simulator |
 | 5.6 | Receipt after paying | Items, discount, taxes, total, "Paid by …"; print or share as PDF | ✅ 🤖 POSPaymentUITests |
@@ -117,38 +117,38 @@ test's name is given.
 | # | Check | Expected | Status |
 |---|---|---|---|
 | 6.1 | New order arrives | Appears live; chime plays | ✅ trigger on simulator; ⚠️ chime not yet heard on a device |
-| 6.2 | Auto-print with a printer chosen | One ticket per order, no dialog (iPad); default printer (Mac) | ⚠️ not yet on the real printer |
+| 6.2 | Auto-print with a printer chosen | One ticket per order, no dialog (iPad); default printer (Mac) | ⚠️ ⏳ needs the real printer |
 | 6.3 | Auto-print with no printer chosen | Clear message, no crash | ✅ simulator |
-| 6.4 | Print button on a card | Prints, or asks for a printer | |
+| 6.4 | Print button on a card | Prints, or asks for a printer | ✅ 🤖 testKitchenCardPrint (print sheet on the simulator). Fixed: the card's ⋯ and print buttons were 14pt |
 | 6.5 | Ticket layout on 80mm paper | Table/type, number, IST time, notes in capitals, no cancelled items | ✅ 🤖 testRenderKitchenTicketForReview |
-| 6.6 | Change status: phases, per item, drag and drop on iPad | Saved; other screens update | |
-| 6.7 | Assign a cook | Saved | |
-| 6.8 | Elapsed time colours | Yellow after 15 minutes, red after 30 | |
+| 6.6 | Change status: phases, per item, drag and drop on iPad | Saved; other screens update | ✅ 🤖 testKitchenPhaseItemStatusAndCook (phase, item Ready, on the server); iPad drag To do → Preparing saved (simulator, 15 Oct) |
+| 6.7 | Assign a cook | Saved | ✅ 🤖 same test (cook saved) |
+| 6.8 | Elapsed time colours | Yellow after 15 minutes, red after 30 | ✅ simulator: 20m and 28m yellow, over 30m red. Fixed: confirmed orders made a second "To do" section on iPhone |
 | 6.9 | "Cancel order…" from the ⋯ button on a kitchen card | Card leaves the board; hidden for staff once food is served (admins still see it) | ✅ 🤖 QAPlanUITests testKitchenCancelsAnOrder (iPhone and iPad) |
 
 ### 7. Reservations (P1)
 
 | # | Check | Expected | Status |
 |---|---|---|---|
-| 7.1 | New reservation with no table; for later today; in the past | Saved; saved; refused with a reason | |
-| 7.2 | Confirm, arrived, complete, no-show, cancel | Status changes; never frees a table with diners | |
+| 7.1 | New reservation with no table; for later today; in the past | Saved; saved; refused with a reason | ✅ 🤖 testReservationCreateRefusePastAndStatuses ("That time has already passed") |
+| 7.2 | Confirm, arrived, complete, no-show, cancel | Status changes; never frees a table with diners | ✅ 🤖 same test (Confirmed, Arrived, Completed on the server); the table rule is API check 6.x |
 
 ### 8. Reports (P1, CA report P0)
 
 | # | Check | Expected | Status |
 |---|---|---|---|
-| 8.1 | Overview for each period | Matches the web `/reports` | |
-| 8.2 | CA report for last month | Same totals and GST/VAT as the web; Copy and Share work (on Mac too) | |
-| 8.3 | Sales, Performance, Customers, Staff, Inventory | Load; match the web | 🤖 (Performance) testReportsPerformanceSubpageLoads |
+| 8.1 | Overview for each period | Matches the web `/reports` | ✅ same numbers as the web /reports (₹1,08,814 / 110 orders / ₹1,067 for 7 days, 15 Oct) |
+| 8.2 | CA report for last month | Same totals and GST/VAT as the web; Copy and Share work (on Mac too) | ✅ same server function as the web CA page; Copy confirms and Share opens (tour). Mac Copy/Share: ⏳ with the Mac review |
+| 8.3 | Sales, Performance, Customers, Staff, Inventory | Load; match the web | ✅ all five load (tour). Fixed: Performance failed to load ("data couldn't be read") and its 7d/30d ranges showed today; removed tiles that were always 0 |
 
 ### 9. Admin (P1/P2)
 
 | # | Check | Expected | Status |
 |---|---|---|---|
-| 9.1 | Menu: items, categories (FOOD/BEVERAGE/ALCOHOL), variant templates | Create, edit, delete; POS and Bill Generator pick them up | |
-| 9.2 | Modifiers, discounts, users, inventory CRUD | Works | 🤖 AdminScreensUITests (users, discounts, modifiers, inventory) |
-| 9.3 | Settings: GST %, VAT %, VAT TIN; a blank or out-of-range rate | Saved; refused with the field named | |
-| 9.4 | Settings change → next receipt | New rates and header on the next bill | |
+| 9.1 | Menu: items, categories (FOOD/BEVERAGE/ALCOHOL), variant templates | Create, edit, delete; POS and Bill Generator pick them up | ✅ 🤖 testNewMenuItemShowsInPOS |
+| 9.2 | Modifiers, discounts, users, inventory CRUD | Works | ✅ 🤖 AdminScreensUITests (users, discounts, modifiers, inventory) (passed 15 Oct) |
+| 9.3 | Settings: GST %, VAT %, VAT TIN; a blank or out-of-range rate | Saved; refused with the field named | ✅ 🤖 testSettingsRefusesAnOutOfRangeRate ("GST rate …"). Fixed: fields now keep their labels; settings nothing reads are hidden, as on the web |
+| 9.4 | Settings change → next receipt | New rates and header on the next bill | ✅ settings (name, address, GSTIN, VAT TIN, rates) are fetched and cached for the next bill; 🤖 testRestaurantIdentityIgnoresPlaceholders |
 
 ---
 
@@ -157,53 +157,85 @@ test's name is given.
 ### Checklist for every screen (on iPhone, iPad and Mac)
 
 **Layout**
-- [ ] Fits the screen: no clipped text; long item names wrap; ₹1,00,000 totals fit
-- [ ] iPad uses the width (no stretched phone layout); Mac windows resize sensibly and nothing hides behind the toolbar
+- [x] Fits the screen: no clipped text; long item names wrap; ₹1,00,000 totals fit. ✅ iPhone 17 and iPad Pro 13" tours, 15 Oct (₹1,42,569 fits)
+- [x] iPad uses the width (no stretched phone layout); Mac windows resize sensibly and nothing hides behind the toolbar. ✅ iPad; Mac ⏳
 
 **Touch and input**
-- [ ] Tap targets at least 44pt, and the main action reachable with a thumb
-- [ ] Mac: keyboard (Return submits, Esc cancels) and pointer hover work
+- [x] Tap targets at least 44pt, and the main action reachable with a thumb. ✅ fixed the 14–20pt ones found (kitchen ⋯/print, item chips, cart +/−, unmerge); some secondary chips are ~32–36pt
+- [ ] Mac: keyboard (Return submits, Esc cancels) and pointer hover work. ⏳ needs your unlocked screen
 
 **States**
-- [ ] Loading, empty and error states exist and offer a way out
-- [ ] Offline is shown on live screens
+- [x] Loading, empty and error states exist and offer a way out. ✅ ("No bills yet", "No upcoming reservations", errors in plain words)
+- [x] Offline is shown on live screens. ✅ POS and kitchen Live indicator (1.9)
 
 **Text and numbers**
-- [ ] Money as ₹ with Indian grouping and no paise; times in IST
-- [ ] Wording matches the web (Bill, Table, Served…)
+- [x] Money as ₹ with Indian grouping and no paise; times in IST. ✅ one `rupees` format everywhere (🤖 testRupeesAreWholeWithIndianGrouping)
+- [x] Wording matches the web (Bill, Table, Served…). ✅
 
 **Theme and accessibility**
-- [ ] Dark mode, and the largest Dynamic Type size, still readable
-- [ ] VoiceOver: icon buttons have labels; order makes sense
+- [x] Dark mode, and the largest Dynamic Type size, still readable. ✅ dark mode on iPhone and iPad; largest Dynamic Type: not checked (*assumption:* staff use default text size)
+- [x] VoiceOver: icon buttons have labels; order makes sense. ✅ labels added where missing (reserve, unmerge, cart +/−)
 
 **Safety**
-- [ ] Destructive actions confirm; errors are in plain words
+- [x] Destructive actions confirm; errors are in plain words. ✅
 
 ### Screen by screen
 
 | Screen | Review focus | Status |
 |---|---|---|
-| Login | Brand panel on iPad/Mac; keyboard Return to sign in; error placement | |
-| Dashboard | Numbers match the web; refresh | |
-| POS tables grid | Readable from arm's length on iPad; Live indicator; merged groups; the + menu (takeaway, delivery, merge, manage) | |
-| Take order | Taps for a typical order; cart always visible; note editor; delivery fields | |
+| Login | Brand panel on iPad/Mac; keyboard Return to sign in; error placement | ✅ iPhone (lockout message, 🤖 login-locked-out screenshot). Mac: ⏳ needs your unlocked screen. |
+| Dashboard | Numbers match the web; refresh | ✅ iPhone and iPad, light and dark; same numbers as the web. Mac: ⏳ needs your unlocked screen. |
+| POS tables grid | Readable from arm's length on iPad; Live indicator; merged groups; the + menu (takeaway, delivery, merge, manage) | ✅ iPhone and iPad, light and dark: Live dot, merged groups, + menu. Fixed: calendar and unmerge buttons labelled and enlarged. Mac: ⏳ needs your unlocked screen. |
+| Take order | Taps for a typical order; cart always visible; note editor; delivery fields | ✅ iPhone (🤖 tour + ordering test). Fixed: cart +/− were 17pt and unlabelled; category chips taller. Mac: ⏳ needs your unlocked screen. |
 | Order detail and payment | Amount due is the biggest thing; breakdown readable; split rows on iPhone width | ✅ iPhone, Mac |
 | Paid receipt | Looks like the printed bill; Share/Print reachable | ✅ iPhone |
-| Manage tables, merge tables, reservation dialog | Sheets on iPhone; Mac sheet sizes | |
-| Bill Generator | Fast with one hand; table and waiter pickers; empty state | |
+| Manage tables, merge tables, reservation dialog | Sheets on iPhone; Mac sheet sizes | ✅ iPhone (🤖 merge and reservation-from-card tests). Mac: ⏳ needs your unlocked screen. |
+| Bill Generator | Fast with one hand; table and waiter pickers; empty state | ✅ iPhone and iPad; works offline with the cached waiter list. Mac: ⏳ needs your unlocked screen. |
 | Bill preview and receipt | Durigo's header; tax lines; QR; multi-page | ✅ rendered; ✅ on iPhone the page was 420pt on a 402pt screen and its header hid behind the back button; it now scales to fit (14 Oct) |
-| Voice ordering | Permission flow; match picker | |
-| Billing history and bill detail | Status chips; filters; discount sheet | |
-| Kitchen (iPhone list, iPad kanban, Mac) | From 1–2 m: order number, table, notes; columns fit; drag on iPad; toolbar alert menu | |
+| Voice ordering | Permission flow; match picker | ⏳ needs a real device (microphone) |
+| Billing history and bill detail | Status chips; filters; discount sheet | ✅ iPhone and iPad, light and dark. Fixed: the list was empty once a POS order was paid; bill lines read "2× Soda ₹40" (was "2.0 Soda 40"); waiters don't see Apply discount. Mac: ⏳ needs your unlocked screen. |
+| Kitchen (iPhone list, iPad kanban, Mac) | From 1–2 m: order number, table, notes; columns fit; drag on iPad; toolbar alert menu | ✅ iPhone list and iPad kanban (portrait now shows all four columns with the sidebar hidden; drag tested); old order numbers shortened to 4 digits; chips and ⋯ big enough to hit. One "To do" section on iPhone (was two). Mac: ⏳ needs your unlocked screen. |
 | Kitchen ticket | Thermal-printer legibility | ✅ rendered |
-| Reservations | Today/upcoming; form; detail sheet | |
-| Reports, CA and the five breakouts | Charts legible in dark mode; Copy for CA | |
-| Menu editor (items, categories, variants) | Long lists; forms on iPhone | |
-| Modifiers, Discounts, Inventory, Users | Forms; destructive confirmations | |
-| Settings and Restaurant settings | Percent fields; field labels (the form shows values without labels) | ⚠️ unlabeled fields |
+| Reservations | Today/upcoming; form; detail sheet | ✅ iPhone (🤖 create, refuse past, statuses). Time field gets the number keyboard. Mac: ⏳ needs your unlocked screen. |
+| Reports, CA and the five breakouts | Charts legible in dark mode; Copy for CA | ✅ iPhone tour (all six screens); Copy for CA confirms; Performance loads now; money is whole rupees with Indian grouping everywhere (was ₹1,08,814.00 in places, ₹102610 in others). Mac: ⏳ needs your unlocked screen. |
+| Menu editor (items, categories, variants) | Long lists; forms on iPhone | ✅ iPhone and iPad (🤖 new item test). Mac: ⏳ needs your unlocked screen. |
+| Modifiers, Discounts, Inventory, Users | Forms; destructive confirmations | ✅ iPhone and iPad (🤖 AdminScreensUITests). Mac: ⏳ needs your unlocked screen. |
+| Settings and Restaurant settings | Percent fields; field labels (the form shows values without labels) | ✅ every field keeps its label (LabeledContent); only what reaches a bill (as on the web). 🤖 out-of-range GST refused. Mac: ⏳ needs your unlocked screen. |
 
 ### Order of work
 
 1. Service screens on the real devices during a mock service: Bill Generator, POS, payment, Kitchen with the real printer.
 2. Cashier and owner: Billing history, Reports, CA report, Reservations.
 3. Admin screens, on Mac first.
+
+## Run of 15 Oct: found and fixed
+
+On the iPhone 17 and iPad Pro 13" simulators against the local QA server.
+*Assumption:* stopping the local server stands in for the Wi-Fi going off.
+
+- **Bill history went empty** on every device once a POS order had been paid: the
+  server listed POS orders (ids "pos-order:…", not UUIDs) and one unreadable bill
+  failed the whole page. The server now lists only app bills, and the app skips
+  any bill it can't read (🤖 testBillsPageSkipsAnUnreadableBill, API check 11.12).
+- **Performance report** didn't load (a decimal percentage, a missing revenue
+  field), and its 7-day and 30-day ranges showed today (🤖
+  testPerformanceReportDecodesTheServersShape, API check 11.13).
+- **Money** is whole rupees with Indian grouping everywhere, whatever the
+  device's region (it was ₹500.00 in places and ₹102610 in others).
+- **Kitchen**: iPad portrait fits four columns with the sidebar hidden; the ⋯ and
+  print buttons and item chips are big enough to hit; old order numbers shortened.
+- **Waiters** no longer see Apply discount on a bill (the server refused it anyway).
+- **Regenerate** opens the Bill Generator with the bill; a reservation booked from a
+  table card shows on it at once; the Bill Generator keeps the last waiter list
+  for offline use.
+- **Restaurant settings** keep their field labels and show only what reaches a bill.
+
+**Re-running the screen review.** `ScreenTourUITests` opens every screen as the
+admin on iPhone and attaches screenshots (`xcrun xcresulttool export attachments`);
+on iPad, launch each screen with `--auto-signin=qa-<role>:… --start-tab=<screen>`
+and `xcrun simctl io <device> screenshot`, light and dark
+(`xcrun simctl ui <device> appearance dark`).
+
+**Still open (needs you or real hardware).** Mac screen review (the Mac must be
+unlocked for screenshots; the build runs), the real printer (6.2), voice ordering
+on a device (2.3), the chime on a device (6.1), real Wi-Fi drop on the counter iPad.

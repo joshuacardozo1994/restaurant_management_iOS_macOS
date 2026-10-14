@@ -197,7 +197,7 @@ struct OrderDetailView: View {
                         }
                     }
                     Spacer()
-                    Text("₹\(Int(item.unitPrice * Double(item.quantity)))")
+                    Text("\((Int(item.unitPrice * Double(item.quantity))).rupees)")
                         .font(.subheadline)
                         .monospacedDigit()
                     statusChip(item.status, small: true)
@@ -289,7 +289,7 @@ struct OrderDetailView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("₹\(amounts.total)")
+                Text("\((amounts.total).rupees)")
                     .font(.system(.title2, weight: .bold))
                     .monospacedDigit()
                     .accessibilityIdentifier("pay-total")
@@ -303,7 +303,7 @@ struct OrderDetailView: View {
         HStack {
             Text(label)
             Spacer()
-            Text(amount < 0 ? "−₹\(-amount)" : "₹\(amount)").monospacedDigit()
+            Text(amount < 0 ? "−\((-amount).rupees)" : "\((amount).rupees)").monospacedDigit()
         }
         .font(.subheadline)
         .foregroundStyle(.secondary)
@@ -407,7 +407,7 @@ struct OrderDetailView: View {
         Text("Discount").font(.system(.subheadline, weight: .semibold))
         if let appliedCode {
             HStack {
-                Label("\(appliedCode.code): −₹\(appliedCode.amount)", systemImage: "ticket.fill")
+                Label("\(appliedCode.code): −\((appliedCode.amount).rupees)", systemImage: "ticket.fill")
                     .foregroundStyle(.green)
                 Spacer()
                 Button("Remove", role: .destructive) { self.appliedCode = nil }
@@ -429,6 +429,7 @@ struct OrderDetailView: View {
             HStack {
                 Text("or amount ₹").font(.subheadline).foregroundStyle(.secondary)
                 TextField("0", text: $discountText)
+                    .accessibilityIdentifier("pay-discount-amount")
                     .keyboardType(.numberPad)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 120)
@@ -474,7 +475,7 @@ struct OrderDetailView: View {
             } label: { Label("Add a payment", systemImage: "plus.circle") }
             Spacer()
             let remaining = total - paid
-            Text(remaining == 0 ? "Adds up" : remaining > 0 ? "₹\(remaining) left" : "₹\(-remaining) too much")
+            Text(remaining == 0 ? "Adds up" : remaining > 0 ? "\((remaining).rupees) left" : "\((-remaining).rupees) too much")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(remaining == 0 ? .green : .red)
         }
@@ -497,8 +498,8 @@ struct OrderDetailView: View {
     }
 
     private func payButtonTitle(total: Int) -> String {
-        if splitting { return "Pay ₹\(total) in \(splits.count) parts" }
-        return selectedMethod.map { "Pay ₹\(total) via \(methodName($0))" } ?? "Select Payment Method"
+        if splitting { return "Pay \((total).rupees) in \(splits.count) parts" }
+        return selectedMethod.map { "Pay \((total).rupees) via \(methodName($0))" } ?? "Select Payment Method"
     }
 
     private func methodName(_ method: String) -> String {
@@ -530,7 +531,7 @@ struct OrderDetailView: View {
         let total = (order.items ?? [])
             .filter { $0.status != "CANCELLED" }
             .reduce(0.0) { $0 + ($1.unitPrice * Double($1.quantity)) }
-        return "₹\(Int(total))"
+        return "\((Int(total)).rupees)"
     }
 
     private func statusChip(_ status: String, small: Bool = false) -> some View {
@@ -589,7 +590,7 @@ struct OrderDetailView: View {
                 discountCode: appliedCode?.code, tenders: tenders)
             // "₹513 cash, ₹513 UPI" (as the web receipt lists split tenders)
             let spoken = { (m: String) in m == "UPI" ? "UPI" : m.lowercased() }
-            let paidBy = tenders.map { $0.map { "₹\($0.amount) \(spoken($0.method))" }.joined(separator: ", ") }
+            let paidBy = tenders.map { $0.map { "\(($0.amount).rupees) \(spoken($0.method))" }.joined(separator: ", ") }
                 ?? spoken(method)
             receipt = PaidReceipt(items: items, tableNumber: table.number, bill: settled, paidBy: paidBy)
         } catch let APIError.server(code, body) where code == 409 {
@@ -638,7 +639,7 @@ private struct PaidReceiptSheet: View {
             ScrollView {
                 let pages = BillRenderer.pages(receipt.items)
                 VStack(spacing: DesignTokens.spacingL) {
-                    Label("Paid ₹\(receipt.bill.total)", systemImage: "checkmark.seal.fill")
+                    Label("Paid \((receipt.bill.total).rupees)", systemImage: "checkmark.seal.fill")
                         .font(.headline)
                         .foregroundStyle(.green)
                         .accessibilityIdentifier("receipt-paid")
