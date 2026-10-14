@@ -122,7 +122,7 @@ struct Bill: View {
         HStack {
             Text(label)
             Spacer()
-            Text("₹\(amount)")
+            Text(amount < 0 ? "−₹\(-amount)" : "₹\(amount)")
         }
     }
 
@@ -224,6 +224,10 @@ struct Bill: View {
                 if let finalTotal {
                     if let taxes {
                         VStack(spacing: 1) {
+                            if taxes.amounts.discount > 0 {
+                                taxRow("Items", taxes.amounts.gross)
+                                taxRow("Discount", -taxes.amounts.discount)
+                            }
                             taxRow("Taxable value", taxes.amounts.subtotal)
                             if taxes.amounts.gstTax > 0 {
                                 taxRow("CGST @ \(taxes.halfGstRate)\(taxes.inclusive)", taxes.cgst)
@@ -286,6 +290,58 @@ struct Bill: View {
 //                Spacer()
 //            }
         
+    }
+}
+
+/// Lays a bill out on A5-ish pages and renders them to a PDF, for printing
+/// or sharing. Used by the Bill Generator and for POS table receipts.
+enum BillRenderer {
+    static let pageSize = CGSize(width: 420, height: 595)
+    static let itemsPerPage = 19
+    /// The last page also carries the total and up to six tax/discount lines
+    static let itemsOnLastPage = 13
+
+    static func pages(_ items: [MenuItem]) -> [[MenuItem]] {
+        var pages = stride(from: 0, to: items.count, by: itemsPerPage).map {
+            Array(items[$0 ..< min($0 + itemsPerPage, items.count)])
+        }
+        // Move the overflow of a full last page onto a page of its own
+        if let last = pages.last, last.count > itemsOnLastPage {
+            pages[pages.count - 1] = Array(last.prefix(itemsOnLastPage))
+            pages.append(Array(last.dropFirst(itemsOnLastPage)))
+        }
+        return pages.isEmpty ? [[]] : pages
+    }
+
+    @MainActor
+    static func page(_ index: Int, of pages: [[MenuItem]], tableNumber: Int?, finalTotal: Int,
+                     taxes: ReceiptTaxes?) -> some View {
+        let isLast = index == pages.count - 1
+        return Bill(currentMenuItems: pages[index], tableNumber: tableNumber, first: index == 0,
+                    finalTotal: isLast ? finalTotal : nil, taxes: isLast ? taxes : nil)
+            .frame(width: pageSize.width, height: pageSize.height)
+            .background(Color.white)
+    }
+
+    @MainActor
+    static func renderPDF(items: [MenuItem], tableNumber: Int?, finalTotal: Int, taxes: ReceiptTaxes?,
+                          fileName: String = "Bill.pdf") async -> URL {
+        let url = URL.documentsDirectory.appending(path: fileName)
+        var box = CGRect(origin: .zero, size: pageSize)
+        guard let pdf = CGContext(url as CFURL, mediaBox: &box, nil) else { return url }
+        let all = pages(items)
+        for index in all.indices {
+            pdf.beginPDFPage(nil)
+            let renderer = ImageRenderer(content: page(index, of: all, tableNumber: tableNumber,
+                                                       finalTotal: finalTotal, taxes: taxes))
+            renderer.scale = 1.0 // match PDF points exactly
+            renderer.proposedSize = ProposedViewSize(pageSize)
+            renderer.render { _, context in context(pdf) }
+            pdf.endPDFPage()
+            if index < all.count - 1 { await Task.yield() }
+        }
+        pdf.closePDF()
+        return url
     }
 }
 

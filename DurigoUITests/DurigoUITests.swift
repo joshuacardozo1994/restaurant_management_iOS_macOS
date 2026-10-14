@@ -501,3 +501,73 @@ final class AdminScreensUITests: XCTestCase {
                       "Restaurant settings link missing")
     }
 }
+
+// MARK: - POS table payment (discount code + split bill + receipt)
+
+/// Pays a table that has a bill requested, using a discount code and a
+/// two-way split, against the local dev server. Needs a QA cashier and a
+/// "QA10" (10% off) code in the local database; the cashier's password comes
+/// from the QA_PASS environment variable (TEST_RUNNER_QA_PASS when run through
+/// xcodebuild), never from source.
+final class POSPaymentUITests: XCTestCase {
+    let app = XCUIApplication()
+
+    func testPayTableWithCodeAndSplit() throws {
+        let password = try XCTUnwrap(ProcessInfo.processInfo.environment["QA_PASS"], "Set TEST_RUNNER_QA_PASS")
+        app.launchArguments = ["--auto-signin=qa-cashier:\(password)", "--start-tab=pos"]
+        app.launch()
+
+        let process = app.buttons["Process Payment"].firstMatch
+        XCTAssertTrue(process.waitForExistence(timeout: 15), "No table with a bill requested")
+        process.tap()
+
+        let total = app.staticTexts["pay-total"]
+        XCTAssertTrue(total.waitForExistence(timeout: 5))
+        let before = Int(total.label.filter(\.isNumber)) ?? 0
+
+        let code = app.textFields["pay-code-field"]
+        XCTAssertTrue(code.waitForExistence(timeout: 5))
+        code.tap()
+        code.typeText("QA10")
+        app.buttons["pay-code-apply"].tap()
+
+        // 10% off, rounded to whole rupees, then GST/VAT recomputed
+        let expected = before - Int((Double(before) * 0.10).rounded())
+        XCTAssertTrue(waitFor { amount(total.label) == expected }, "Total \(total.label), expected ₹\(expected)")
+
+        // Split in two: the parts must add up before Pay is enabled
+        let split = app.switches["pay-split-toggle"]
+        XCTAssertTrue(split.waitForExistence(timeout: 5))
+        if !split.isHittable { app.swipeUp() }
+        split.tap()
+        let twoWays = app.buttons["pay-split-2"]
+        XCTAssertTrue(twoWays.waitForExistence(timeout: 5))
+        twoWays.tap()
+        let pay = app.buttons["pay-button"]
+        if !pay.isHittable { app.swipeUp() }
+        XCTAssertTrue(pay.isEnabled)
+        XCTAssertTrue(pay.label.contains("in 2 parts"), pay.label)
+        pay.tap()
+
+        let paid = app.staticTexts["receipt-paid"]
+        XCTAssertTrue(paid.waitForExistence(timeout: 10), "No receipt after paying")
+        XCTAssertEqual(amount(paid.label), expected)
+
+        let receipt = XCTAttachment(screenshot: app.screenshot())
+        receipt.name = "pos-receipt"
+        receipt.lifetime = .keepAlways
+        add(receipt)
+    }
+
+    /// "₹1,026" → 1026
+    private func amount(_ label: String) -> Int? { Int(label.filter(\.isNumber)) }
+
+    private func waitFor(timeout: TimeInterval = 8, _ condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return condition()
+    }
+}

@@ -10,10 +10,6 @@ import SwiftData
 
 
 
-struct GroupedMenu: Identifiable, Equatable {
-    let id: Int
-    let items: [MenuItem]
-}
 
 struct BillPreview: View {
     @Query var billHistoryItems: [BillHistoryItem]
@@ -22,7 +18,6 @@ struct BillPreview: View {
     @EnvironmentObject private var menuLoader: MenuLoader
     let tableNumber: Int?
     let waiter: String
-    let maxItemCount = 19
     let billID: UUID
     let billItems: [MenuItem]
     @State private var pdfURL: URL?
@@ -31,20 +26,7 @@ struct BillPreview: View {
     /// only resolves inside the view tree (not in init).
     @State private var uploader: BillUploader?
 
-    /// The last page also carries up to four tax lines, so it holds fewer items
-    private let lastPageItemCount = 15
-
-    private var groupedArray: [GroupedMenu] {
-        var groups = stride(from: 0, to: billItems.count, by: maxItemCount).map { index in
-            GroupedMenu(id: index, items: Array(billItems[index ..< min(index + maxItemCount, billItems.count)]))
-        }
-        // Move the overflow of a full last page onto a page of its own
-        if let last = groups.last, last.items.count > lastPageItemCount {
-            groups[groups.count - 1] = GroupedMenu(id: last.id, items: Array(last.items.prefix(lastPageItemCount)))
-            groups.append(GroupedMenu(id: last.id + lastPageItemCount, items: Array(last.items.dropFirst(lastPageItemCount))))
-        }
-        return groups
-    }
+    private var pages: [[MenuItem]] { BillRenderer.pages(billItems) }
 
     /// GST on food, VAT on liquor, worked out the way the server will record it
     private var taxes: ReceiptTaxes {
@@ -57,12 +39,9 @@ struct BillPreview: View {
     var body: some View {
         VStack {
             TabView {
-                ForEach(groupedArray) { group in
-                    Bill(currentMenuItems: group.items, tableNumber: tableNumber, first: groupedArray.first == group,
-                         finalTotal: groupedArray.last == group ? billItems.getTotal() : nil,
-                         taxes: groupedArray.last == group ? taxes : nil)
-                            .frame(width: 420, height: 595)
-                            .background(Color.white)
+                ForEach(pages.indices, id: \.self) { index in
+                    BillRenderer.page(index, of: pages, tableNumber: tableNumber,
+                                      finalTotal: billItems.getTotal(), taxes: taxes)
                 }
             }
             #if os(iOS)
@@ -163,53 +142,8 @@ struct BillPreview: View {
     }
 
     @MainActor func render() async -> URL {
-        // 1: Save it to our documents directory
-        let url = URL.documentsDirectory.appending(path: "Bill.pdf")
-
-        // 2: PDF size - must match the frame size used in preview
-        let pageWidth: CGFloat = 420
-        let pageHeight: CGFloat = 595
-        var box = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
-
-        // 3: Create the CGContext for our PDF pages
-        guard let pdf = CGContext(url as CFURL, mediaBox: &box, nil) else {
-            return url
-        }
-
-        // 4: Render each page - use Task.yield() to prevent blocking
-        for (index, group) in groupedArray.enumerated() {
-            pdf.beginPDFPage(nil)
-
-            let billView = Bill(
-                currentMenuItems: group.items,
-                tableNumber: tableNumber,
-                first: groupedArray.first == group,
-                finalTotal: groupedArray.last == group ? billItems.getTotal() : nil,
-                taxes: groupedArray.last == group ? taxes : nil
-            )
-            .frame(width: pageWidth, height: pageHeight)
-            .background(Color.white)
-
-            let renderer = ImageRenderer(content: billView)
-            // Set scale to 1.0 to match PDF point size exactly
-            renderer.scale = 1.0
-            // Set proposed size to ensure consistent layout
-            renderer.proposedSize = ProposedViewSize(width: pageWidth, height: pageHeight)
-
-            renderer.render { size, context in
-                context(pdf)
-            }
-
-            pdf.endPDFPage()
-
-            // Yield to allow UI updates between pages
-            if index < groupedArray.count - 1 {
-                await Task.yield()
-            }
-        }
-        pdf.closePDF()
-
-        return url
+        await BillRenderer.renderPDF(items: billItems, tableNumber: tableNumber,
+                                     finalTotal: billItems.getTotal(), taxes: taxes)
     }
 }
 #if DEBUG

@@ -272,19 +272,70 @@ final class POSStore {
         }
     }
 
+    /// The table's unpaid item value split into its GST part (food, soft
+    /// drinks) and VAT part (liquor), by each item's menu category; custom
+    /// items fall back to their name. Same rules the server bills by.
+    func grossByTax(for table: POSTable) -> (gst: Int, vat: Int) {
+        let typeByItem = Dictionary(menu.map { ($0.id, $0.category.type) }, uniquingKeysWith: { a, _ in a })
+        var gst = 0.0, vat = 0.0
+        for order in table.liveOrders {
+            for item in order.items ?? [] where item.status != "CANCELLED" {
+                let value = item.unitPrice * Double(item.quantity)
+                let type = item.menuItemId.flatMap { typeByItem[$0] }
+                switch BillMath.taxClass(categoryType: type, name: item.displayName) {
+                case .gst: gst += value
+                case .vat: vat += value
+                }
+            }
+        }
+        return (Int(gst.rounded()), Int(vat.rounded()))
+    }
+
+    /// The rupee value of a discount code against a bill, or the server's
+    /// reason it can't be used ("expired", "minimum order ₹500", …)
+    func discountCodeValue(code: String, orderTotal: Int) async throws -> Int {
+        struct Body: Encodable { let code: String; let orderTotal: Int }
+        struct Response: Decodable { let valid: Bool?; let error: String?; let calculatedDiscount: Int? }
+        let data = try await api.postJSON("/api/discounts/validate", payload: Body(code: code, orderTotal: orderTotal))
+        let response = try JSONDecoder().decode(Response.self, from: data)
+        guard response.valid != false, let value = response.calculatedDiscount else {
+            throw DiscountCodeError(message: response.error ?? "Invalid discount code")
+        }
+        return value
+    }
+
+    struct DiscountCodeError: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    /// One part of a split bill
+    struct Tender: Encodable, Equatable {
+        let amount: Int
+        let method: String
+    }
+
     /// Settle every unpaid order on the table. The server works out the bill
     /// (GST on food, VAT on liquor), records the payments, completes the orders
     /// and frees the table in one transaction; it refuses with 409 if the bill
     /// changed since `expectedTotal` was shown, and never records a payment twice.
+    /// A discount (manual or by code) is for cashiers and admins only.
     @discardableResult
-    func processPayment(table: POSTable, expectedTotal: Int, method: String) async throws -> SettledBill {
+    func processPayment(table: POSTable, expectedTotal: Int, method: String,
+                        discount: Int? = nil, discountCode: String? = nil,
+                        tenders: [Tender]? = nil) async throws -> SettledBill {
         guard let anchor = table.liveOrders.first else { throw APIError.badResponse }
         struct PaymentBody: Encodable {
             let method: String
             let expectedTotal: Int
+            let discount: Int?
+            let discountCode: String?
+            let tenders: [Tender]?
         }
-        let data = try await api.postJSON("/api/orders/\(anchor.id)/payment",
-                                          payload: PaymentBody(method: method, expectedTotal: expectedTotal))
+        let body = PaymentBody(method: method, expectedTotal: expectedTotal,
+                               discount: discountCode == nil ? discount : nil,
+                               discountCode: discountCode, tenders: tenders)
+        let data = try await api.postJSON("/api/orders/\(anchor.id)/payment", payload: body)
         struct Response: Decodable { let bill: SettledBill }
         let bill = try JSONDecoder().decode(Response.self, from: data).bill
         await loadTables()
