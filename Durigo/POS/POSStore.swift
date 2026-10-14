@@ -242,6 +242,7 @@ final class POSStore {
                     notes: String? = nil,
                     customerName: String? = nil,
                     customerPhone: String? = nil,
+                    customerAddress: String? = nil,
                     idempotencyKey: String) async throws -> POSOrder {
         let payload = CreateOrderRequest(
             tableId: tableId,
@@ -259,7 +260,7 @@ final class POSStore {
             notes: notes,
             customerName: customerName,
             customerPhone: customerPhone,
-            customerAddress: nil,
+            customerAddress: customerAddress,
             waiterId: selectedWaiterId,
             idempotencyKey: idempotencyKey
         )

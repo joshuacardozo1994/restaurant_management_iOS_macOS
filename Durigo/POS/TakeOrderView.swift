@@ -48,7 +48,7 @@ struct TakeOrderView: View {
             VStack(spacing: 0) {
                 waiterPickerBar
                 Divider()
-                if orderType == .delivery {
+                if orderType != .dineIn {
                     customerSection
                     Divider()
                 }
@@ -152,22 +152,37 @@ struct TakeOrderView: View {
 
     private var customerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Customer")
+            // Required for delivery; optional for takeaway, where a phone
+            // number links the order to the customer for the customer report
+            Text(orderType == .delivery ? "Customer" : "Customer (optional)")
                 .font(.system(.subheadline, weight: .semibold))
                 .padding(.horizontal, DesignTokens.spacingL)
                 .padding(.top, DesignTokens.spacingM)
-            TextField("Customer name", text: $customerName)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal, DesignTokens.spacingL)
-            TextField("Phone number", text: $customerPhone)
-                .keyboardType(.phonePad)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal, DesignTokens.spacingL)
-            TextField("Delivery address", text: $deliveryAddress, axis: .vertical)
-                .lineLimit(1...3)
+            if orderType == .delivery {
+                TextField("Customer name", text: $customerName)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal, DesignTokens.spacingL)
+                TextField("Phone number", text: $customerPhone)
+                    .keyboardType(.phonePad)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal, DesignTokens.spacingL)
+                TextField("Delivery address", text: $deliveryAddress, axis: .vertical)
+                    .lineLimit(1...3)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal, DesignTokens.spacingL)
+                    .padding(.bottom, DesignTokens.spacingS)
+            } else {
+                HStack {
+                    TextField("Phone number", text: $customerPhone)
+                        .keyboardType(.phonePad)
+                        .accessibilityIdentifier("takeaway-customer-phone")
+                    TextField("Name", text: $customerName)
+                        .accessibilityIdentifier("takeaway-customer-name")
+                }
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal, DesignTokens.spacingL)
                 .padding(.bottom, DesignTokens.spacingS)
+            }
         }
     }
 
@@ -443,6 +458,11 @@ struct TakeOrderView: View {
         }
     }
 
+    private func trimmedOrNil(_ s: String) -> String? {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
+
     private func submit() async {
         submitting = true
         defer { submitting = false }
@@ -452,8 +472,9 @@ struct TakeOrderView: View {
                 type: orderType,
                 cart: cart,
                 notes: orderNotes,
-                customerName: customerName.isEmpty ? nil : customerName,
-                customerPhone: customerPhone.isEmpty ? nil : customerPhone,
+                customerName: trimmedOrNil(customerName),
+                customerPhone: trimmedOrNil(customerPhone),
+                customerAddress: orderType == .delivery ? trimmedOrNil(deliveryAddress) : nil,
                 idempotencyKey: idempotencyKey
             )
             // Refresh tables so we pick up the new status from the server.

@@ -821,6 +821,44 @@ final class QAPlanUITests: XCTestCase {
         waitForExpectations(timeout: 10)
     }
 
+    // POS customers: a takeaway with a phone number is linked to the customer
+    // (the script after the run checks the database for QA_TAKEAWAY_PHONE)
+    func testTakeawayWithCustomer() throws {
+        try launch(as: "waiter", tab: "pos")
+        let newMenu = element("pos-new-menu")
+        XCTAssertTrue(newMenu.waitForExistence(timeout: 15))
+        newMenu.tap()
+        app.buttons["Takeaway Order"].tap()
+
+        let phone = app.textFields["takeaway-customer-phone"]
+        XCTAssertTrue(phone.waitForExistence(timeout: 8), "No customer fields on takeaway")
+        let number = "98123\(10000 + Int(Date().timeIntervalSince1970) % 90000)"
+        phone.tap()
+        phone.typeText("+91 \(number)")
+        let name = app.textFields["takeaway-customer-name"]
+        name.tap()
+        name.typeText("QA Takeaway")
+
+        let search = app.textFields["Search menu"]
+        search.tap()
+        search.typeText("Veg. Soup")
+        let soupRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Veg. Soup,'")).firstMatch
+        XCTAssertTrue(soupRow.waitForExistence(timeout: 5))
+        soupRow.tap()
+        let normal = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Normal'")).firstMatch
+        if normal.waitForExistence(timeout: 3) { normal.tap() }
+
+        let send = app.buttons["Send to Kitchen"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        XCTAssertTrue(send.isEnabled, "Takeaway with a customer can't be sent")
+        send.tap()
+        // The sheet closes once the order is placed
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: send)
+        waitForExpectations(timeout: 10)
+        print("QA_TAKEAWAY_PHONE=\(number)")
+    }
+
     /// A JSON call to the local server (GET without a body, POST with one)
     private func call(_ path: String, _ body: [String: Any]? = nil, token: String?, query: [URLQueryItem] = []) throws -> Any {
         var url = URL(string: "http://localhost:3000")!.appending(path: path)

@@ -98,6 +98,7 @@ test's name is given.
 | 4.8 | Manage tables: add, renumber, seats, out of service, delete | Works; can't take an occupied table out of service | ✅ 🤖 ManageTablesUITests |
 | 4.9 | Extras on a cart line (extras button, for that category) | Line price adds the extra; "+ Extra cheese" on the order, kitchen card, item details and ticket | ✅ 🤖 QAPlanUITests (iPhone and iPad) |
 | 4.10 | Cancel a whole order from the order screen, with a reason | Leaves the bill and the kitchen; table freed when nothing else is open; hidden for staff once food is served (admins still can) | ✅ 🤖 QAPlanUITests (iPhone and iPad) |
+| 4.11 | Takeaway with an optional customer phone and name; delivery customer and address | Order linked to the customer found or created by phone; delivery address saved on the customer | ✅ 🤖 QAPlanUITests testTakeawayWithCustomer (link checked in the database) |
 
 ### 5. POS payment (P0, money)
 

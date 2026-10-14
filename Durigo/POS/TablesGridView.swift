@@ -114,6 +114,8 @@ struct TablesGridView: View {
                 }
                 .menuStyle(.button)
                 .buttonStyle(.borderless)
+                .accessibilityLabel("New order")
+                .accessibilityIdentifier("pos-new-menu")
             }
         }
     }
