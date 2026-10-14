@@ -145,12 +145,14 @@ struct POSOrderItem: Decodable, Identifiable, Hashable {
         let description: String?
     }
 
+    // The names saved on the line when it was ordered come first, so a
+    // bill doesn't change if the menu item is renamed or the variant deleted
     var displayName: String {
-        menuItem?.name ?? itemName ?? "Item"
+        itemName ?? menuItem?.name ?? "Item"
     }
 
     var displayVariant: String? {
-        variantTemplate?.name ?? servingSizeName
+        servingSizeName ?? variantTemplate?.name
     }
 }
 

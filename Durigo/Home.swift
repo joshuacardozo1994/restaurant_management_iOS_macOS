@@ -2249,7 +2249,8 @@ struct KitchenOrderItem: Codable, Identifiable, Hashable {
         let role: String?
     }
 
-    var displayName: String { menuItem?.name ?? itemName ?? "Custom item" }
+    /// The name saved on the line when it was ordered, else the menu's
+    var displayName: String { itemName ?? menuItem?.name ?? "Custom item" }
 }
 
 // Transferable conformance lets a KitchenOrder be the payload of a SwiftUI
