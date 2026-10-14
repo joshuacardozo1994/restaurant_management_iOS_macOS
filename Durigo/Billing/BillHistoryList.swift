@@ -310,7 +310,7 @@ struct BillHistoryList: View {
                     Label("\(showTodaysBills ? "● " : "")Show today's bills", systemImage: "calendar")
                 }
                 TableDropdownSelector(showIfSelected: true, selectedOption: $selectedTable, options: Array(1...20))
-                WaiterDropdownSelector(showIfSelected: true, selectedOption: $selectedWaiter, staff: [
+                WaiterDropdownSelector(showIfSelected: true, selectedOption: $selectedWaiter, selectedId: .constant(nil), staff: [
                     WaiterRef(id: "fallback-1", name: "Alcin",   role: "WAITER"),
                     WaiterRef(id: "fallback-2", name: "Anthony", role: "WAITER"),
                     WaiterRef(id: "fallback-3", name: "Antone",  role: "WAITER"),

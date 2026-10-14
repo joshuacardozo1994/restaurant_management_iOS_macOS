@@ -71,6 +71,8 @@ test's name is given.
 | 2.8 | 20+ items | Several pages; totals and tax only on the last page; nothing overlaps | |
 | 2.9 | Print offline (Wi-Fi off) | Bill prints with GST/VAT from the cached rates; uploads when back online | |
 | 2.10 | Upload | Bill appears on the web billing history and in the CA report with the same GST/VAT as printed | ✅ uploaded with table 9 and the waiter linked (14 Oct); GST/VAT on the web once marked paid: not yet checked |
+| 2.11 | Customer phone and name on a bill; the waiter picked | Server links the bill to the waiter by id and to the customer by phone ("+91 …", spaces ignored); both show in the staff and customer reports | ✅ 🤖 QAPlanUITests (Bill Generator test checks the server) |
+| 2.12 | Update over an existing install (bills saved before) | App opens; old bills still listed (store upgraded V4 → V5) | ✅ simulator (iPhone and iPad upgrade, iPad fresh install) |
 
 ### 3. Billing history (P0)
 

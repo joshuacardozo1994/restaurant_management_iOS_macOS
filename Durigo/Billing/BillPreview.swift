@@ -20,6 +20,10 @@ struct BillPreview: View {
     let waiter: String
     let billID: UUID
     let billItems: [MenuItem]
+    /// Sent with the bill so the server's staff and customer reports count it
+    var waiterId: String? = nil
+    var customerName: String? = nil
+    var customerPhone: String? = nil
     @State private var pdfURL: URL?
     @State private var isGeneratingPDF = false
     /// Created lazily on first appear — needs `session`, which @Environment
@@ -119,13 +123,17 @@ struct BillPreview: View {
             }
             existing.items = billItems
             existing.waiter = waiter
+            existing.waiterId = waiterId
+            existing.customerName = customerName
+            existing.customerPhone = customerPhone
             // The data just changed — mark unsynced so the immediate upload
             // below (and any later retry) sees it as needing a push.
             existing.syncedAt = nil
             return existing
         }
         guard let tableNumber else { return nil }
-        let bill = BillHistoryItem(id: billID, items: billItems, tableNumber: tableNumber, waiter: waiter)
+        let bill = BillHistoryItem(id: billID, items: billItems, tableNumber: tableNumber, waiter: waiter,
+                                   waiterId: waiterId, customerName: customerName, customerPhone: customerPhone)
         modelContext.insert(bill)
         return bill
     }

@@ -262,6 +262,9 @@ final class BillUploader {
                 existing.date = copy.date
                 existing.tableNumber = copy.tableNumber
                 existing.waiter = copy.waiter
+                existing.waiterId = copy.waiterId
+                existing.customerName = copy.customerName
+                existing.customerPhone = copy.customerPhone
                 existing.paymentStatus = BillHistoryItemStatus(rawValue: copy.paymentStatus.rawValue) ?? .pending
                 existing.items = copy.items
                 existing.syncedAt = now

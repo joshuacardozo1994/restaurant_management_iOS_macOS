@@ -46,6 +46,9 @@ struct BillHistory: View {
                 menuLoader.billItems = billHistoryItem.items
                 menuLoader.tableNumber = billHistoryItem.tableNumber
                 menuLoader.waiter = billHistoryItem.waiter
+                menuLoader.waiterId = billHistoryItem.waiterId
+                menuLoader.customerName = billHistoryItem.customerName ?? ""
+                menuLoader.customerPhone = billHistoryItem.customerPhone ?? ""
                 menuLoader.billID = billHistoryItem.id
                 navigation.selection = .pos
             }

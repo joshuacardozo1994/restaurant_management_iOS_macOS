@@ -69,20 +69,31 @@ struct TableDropdownSelector: View {
 
 struct WaiterDropdownSelector: View {
     var showIfSelected = false
+    /// The name printed on the bill
     @Binding var selectedOption: String?
+    /// The picked person's user id, sent with the bill so the staff report
+    /// counts it even if two people share a name or someone is renamed
+    @Binding var selectedId: String?
     /// Live directory of staff who can serve a table — both waiters and
-    /// admins, with role attached so the picker can group them. Selection
-    /// is still by name (matches the old String-based binding) since
-    /// `MenuLoader.waiter` is a name string for legacy bill compatibility.
+    /// admins, with role attached so the picker can group them.
     let staff: [WaiterRef]
+
+    /// The picked id; a bill reopened from history may only have a name
+    private var currentId: String {
+        if let selectedId { return selectedId }
+        return staff.first { $0.name == selectedOption }?.id ?? ""
+    }
 
     private var waitersOnly: [WaiterRef] { staff.filter { $0.role == "WAITER" } }
     private var adminsOnly:  [WaiterRef] { staff.filter { $0.role == "ADMIN"  } }
 
     var body: some View {
         Picker(selection: Binding(
-            get: { selectedOption ?? "" },
-            set: { selectedOption = $0.isEmpty ? nil : $0 }
+            get: { currentId },
+            set: { id in
+                selectedId = id.isEmpty ? nil : id
+                selectedOption = staff.first { $0.id == id }?.name
+            }
         )) {
             Text("Waiter").tag("")
             // Waiters first — that's the primary attribution group for
@@ -90,14 +101,14 @@ struct WaiterDropdownSelector: View {
             if !waitersOnly.isEmpty {
                 Section("Waiters") {
                     ForEach(waitersOnly) { w in
-                        Text(w.name).tag(w.name)
+                        Text(w.name).tag(w.id)
                     }
                 }
             }
             if !adminsOnly.isEmpty {
                 Section("Admins") {
                     ForEach(adminsOnly) { a in
-                        Text(a.name).tag(a.name)
+                        Text(a.name).tag(a.id)
                     }
                 }
             }
@@ -394,14 +405,32 @@ struct BillGenerator: View {
                 )
                 WaiterDropdownSelector(
                     selectedOption: $menuLoader.waiter,
+                    selectedId: $menuLoader.waiterId,
                     staff: waiterStaff
                 )
                 Spacer()
             }
+            customerFields
         }
         .padding(DesignTokens.spacingL)
         .frame(maxWidth: .infinity, alignment: .leading)
         .webCardBackground(cornerRadius: DesignTokens.cornerRadiusMedium)
+    }
+
+    /// Optional: a phone number links the bill to the customer (found or
+    /// created on the server) for the customer report
+    private var customerFields: some View {
+        HStack(spacing: DesignTokens.spacingS) {
+            Image(systemName: "person.text.rectangle")
+                .foregroundStyle(.secondary)
+            TextField("Customer phone (optional)", text: $menuLoader.customerPhone)
+                .keyboardType(.phonePad)
+                .accessibilityIdentifier("bill-customer-phone")
+            TextField("Name", text: $menuLoader.customerName)
+                .accessibilityIdentifier("bill-customer-name")
+        }
+        .textFieldStyle(.roundedBorder)
+        .font(.subheadline)
     }
 
     // MARK: Items card
@@ -516,7 +545,10 @@ struct BillGenerator: View {
                 tableNumber: menuLoader.tableNumber,
                 waiter: menuLoader.waiter ?? "Unknown",
                 billID: menuLoader.billID,
-                billItems: menuLoader.billItems
+                billItems: menuLoader.billItems,
+                waiterId: menuLoader.waiterId,
+                customerName: trimmedOrNil(menuLoader.customerName),
+                customerPhone: trimmedOrNil(menuLoader.customerPhone)
             )
         } label: {
             Image(systemName: "printer")
@@ -528,6 +560,11 @@ struct BillGenerator: View {
             || menuLoader.waiter == nil
         )
         .accessibilityIdentifier("print-bill")
+    }
+
+    private func trimmedOrNil(_ s: String) -> String? {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
     }
 
     /// Fetch the live waiter directory (active WAITER + ADMIN users) so

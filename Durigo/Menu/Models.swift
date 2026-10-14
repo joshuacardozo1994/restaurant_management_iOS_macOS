@@ -250,6 +250,10 @@ struct BillHistoryItemCopy: Identifiable, Codable {
     var waiter: String
     var discount: Double?
     var discountReason: String?
+    /// Optional: older .durigobills files and app versions don't have these
+    var waiterId: String?
+    var customerName: String?
+    var customerPhone: String?
 
     init(id: UUID, date: Date = Date(), items: [MenuItem], tableNumber: Int, paymentStatus: Status = .pending,  waiter: String, discount: Double? = nil, discountReason: String? = nil) {
         self.id = id
@@ -271,6 +275,9 @@ struct BillHistoryItemCopy: Identifiable, Codable {
         self.waiter = billHistoryItem.waiter
         self.discount = billHistoryItem.discount
         self.discountReason = billHistoryItem.discountReason
+        self.waiterId = billHistoryItem.waiterId
+        self.customerName = billHistoryItem.customerName
+        self.customerPhone = billHistoryItem.customerPhone
     }
 
     func convertToBillHistoryItem() -> BillHistoryItem {
@@ -280,7 +287,10 @@ struct BillHistoryItemCopy: Identifiable, Codable {
             paymentStatus: BillHistoryItemStatus(rawValue: self.paymentStatus.rawValue) ?? .pending,
             waiter: self.waiter,
             discount: self.discount,
-            discountReason: self.discountReason
+            discountReason: self.discountReason,
+            waiterId: self.waiterId,
+            customerName: self.customerName,
+            customerPhone: self.customerPhone
         )
     }
 }

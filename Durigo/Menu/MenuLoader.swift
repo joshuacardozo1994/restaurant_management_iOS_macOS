@@ -21,6 +21,11 @@ import SwiftUI
     var billID = UUID()
     var tableNumber: Int?
     var waiter: String?
+    /// The picked waiter's user id (the name above is what prints)
+    var waiterId: String?
+    /// Optional customer for this bill; the phone finds them on the server
+    var customerName = ""
+    var customerPhone = ""
     private var _billItems: [MenuItem] = []
     var billItems: [MenuItem] {
         get { _billItems }
@@ -42,6 +47,9 @@ import SwiftUI
         billItems.removeAll()
         tableNumber = nil
         waiter = nil
+        waiterId = nil
+        customerName = ""
+        customerPhone = ""
         billID = UUID()
     }
 

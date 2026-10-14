@@ -685,6 +685,15 @@ final class QAPlanUITests: XCTestCase {
             replaceText(in: prices.element(boundBy: i), with: price)
         }
 
+        // A customer, written the way people do; the server keeps 10 digits
+        let phone = app.textFields["bill-customer-phone"]
+        XCTAssertTrue(phone.exists, "No customer phone field")
+        phone.tap()
+        phone.typeText("+91 99001 \(10000 + stamp % 90000)")
+        let customer = app.textFields["bill-customer-name"]
+        customer.tap()
+        customer.typeText("QA Guest \(stamp)")
+
         element("Table-Selector").tap()
         app.buttons["Table 9"].tap()
         element("Waiter-Selector").tap()
@@ -710,6 +719,19 @@ final class QAPlanUITests: XCTestCase {
         // Give the immediate upload a moment before the app is torn down
         sleep(3)
         print("QA_BILL_STAMP=\(stamp)")
+
+        // On the server: linked to QA Waiter by id, and to the customer
+        let admin = try apiToken("admin")
+        let staff = try XCTUnwrap(call("/api/users/waiters", token: admin) as? [[String: Any]])
+        let qaWaiterId = try XCTUnwrap(staff.first { $0["name"] as? String == "QA Waiter" }?["id"] as? String)
+        let page = try XCTUnwrap(call("/api/bills", token: admin, query: [URLQueryItem(name: "limit", value: "20")]) as? [String: Any])
+        let bills = try XCTUnwrap(page["items"] as? [[String: Any]])
+        let uploaded = try XCTUnwrap(bills.first { bill in
+            (bill["items"] as? [[String: Any]])?.contains { ($0["name"] as? String)?.contains("\(stamp)") == true } == true
+        }, "The bill didn't reach the server")
+        XCTAssertEqual(uploaded["waiterId"] as? String, qaWaiterId)
+        XCTAssertEqual(uploaded["customerName"] as? String, "QA Guest \(stamp)")
+        XCTAssertEqual(uploaded["customerPhone"] as? String, "99001\(10000 + stamp % 90000)")
     }
 
     // 3.x: extras add their price to a line and show on the order; a waiter
@@ -799,24 +821,32 @@ final class QAPlanUITests: XCTestCase {
         waitForExpectations(timeout: 10)
     }
 
+    /// A JSON call to the local server (GET without a body, POST with one)
+    private func call(_ path: String, _ body: [String: Any]? = nil, token: String?, query: [URLQueryItem] = []) throws -> Any {
+        var url = URL(string: "http://localhost:3000")!.appending(path: path)
+        if !query.isEmpty { url.append(queryItems: query) }
+        var req = URLRequest(url: url)
+        req.httpMethod = body == nil ? "GET" : "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token { req.setValue("auth-token=\(token)", forHTTPHeaderField: "Cookie") }
+        if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body) }
+        var result: Data?
+        let done = XCTestExpectation()
+        URLSession.shared.dataTask(with: req) { data, _, _ in result = data; done.fulfill() }.resume()
+        _ = XCTWaiter.wait(for: [done], timeout: 10)
+        return try JSONSerialization.jsonObject(with: try XCTUnwrap(result))
+    }
+
+    /// A session token for a QA account
+    private func apiToken(_ role: String) throws -> String {
+        let password = try XCTUnwrap(ProcessInfo.processInfo.environment["QA_PASS"], "Set TEST_RUNNER_QA_PASS")
+        let login = try XCTUnwrap(call("/api/auth/login", ["username": "qa-\(role)", "password": password], token: nil) as? [String: Any])
+        return try XCTUnwrap(login["token"] as? String)
+    }
+
     /// A takeaway Veg. Soup placed through the API as qa-waiter; returns its id
     private func placeTakeawayOrder() throws -> String {
-        let password = try XCTUnwrap(ProcessInfo.processInfo.environment["QA_PASS"], "Set TEST_RUNNER_QA_PASS")
-        let base = URL(string: "http://localhost:3000")!
-        func call(_ path: String, _ body: [String: Any]?, token: String?) throws -> Any {
-            var req = URLRequest(url: base.appending(path: path))
-            req.httpMethod = body == nil ? "GET" : "POST"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            if let token { req.setValue("auth-token=\(token)", forHTTPHeaderField: "Cookie") }
-            if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body) }
-            var result: Data?
-            let done = XCTestExpectation()
-            URLSession.shared.dataTask(with: req) { data, _, _ in result = data; done.fulfill() }.resume()
-            _ = XCTWaiter.wait(for: [done], timeout: 10)
-            return try JSONSerialization.jsonObject(with: try XCTUnwrap(result))
-        }
-        let login = try XCTUnwrap(call("/api/auth/login", ["username": "qa-waiter", "password": password], token: nil) as? [String: Any])
-        let token = try XCTUnwrap(login["token"] as? String)
+        let token = try apiToken("waiter")
         let menu = try XCTUnwrap(call("/api/admin/menu", nil, token: token) as? [[String: Any]])
         let soup = try XCTUnwrap(menu.first { $0["name"] as? String == "Veg. Soup" }?["id"] as? String)
         let placed = try XCTUnwrap(call("/api/pos/orders", [
