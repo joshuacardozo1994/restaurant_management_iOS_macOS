@@ -51,14 +51,19 @@ unit-tested but not yet checked by hand on a device, ⬜ = still to do.
 - ☑️ Reservations: table optional ("Assign later"); dates and times sent in IST.
 - ☑️ The unit-test target now builds against the app (`@testable import Durigo`, iOS 18 deployment target). It had never compiled against it. One existing test, `testShouldFilterMenuWithQuery` (fuzzy menu search threshold), fails and needs a decision on the intended search behaviour.
 
-**Still to do** (ranked)
-- ⬜ Role-based screens: every role currently sees every screen (the server still refuses what a role can't do).
-- ⬜ Kitchen: new-order chime and auto-printed kitchen ticket (KOT), as on the web kitchen display.
-- ⬜ POS payment: discount, discount codes and split bill (web billing screen has all three).
-- ⬜ POS: GST/VAT breakdown on the order screen and a printable receipt after a table is paid.
-- ⬜ Per-item notes ("no nuts") and the delivery address when taking an order.
-- ⬜ Add and edit tables (the Maintenance button is a stub).
-- ⬜ Receipt identity (name, GSTIN, VAT TIN, address, phone) from settings instead of hard-coded. Blocked until the production settings hold Durigo's real details (they still have the setup placeholders).
+**Second pass (14 Oct 2026)**: iPhone, iPad and Mac all build after every change
+- ✅ The Mac app builds and runs again. The build had broken (iOS-only APIs, an Info.plist key macOS rejects), and the sandboxed Mac app had no network, print or microphone entitlement, so it couldn't even sign in. [Mac: signed in, tables grid and payment sheet]
+- ✅ Role-based screens: each role sees what the web gives it (waiters also keep Billing, the Bill Generator history); restaurant settings admin-only. [simulator: kitchen, waiter, cashier]
+- ✅ Per-item kitchen notes; delivery customer/phone/address go in the order note (the server has no customer fields, so they were dropped); kitchen cards show order and item notes in red. [simulator]
+- ✅ POS payment: GST/VAT breakdown, discount code or ₹ discount (cashier/admin), split bill, receipt after paying (print/share PDF). [UI test POSPaymentUITests + server record: QA10, ₹513 cash + ₹513 UPI]
+- ✅ Manage tables: add, renumber, seats, out of service and back, delete (admin). [UI test ManageTablesUITests]
+- ✅ Kitchen chime and kitchen-ticket printing (auto or per card; iPhone/iPad to a chosen printer, Mac to the default printer). [ticket rendered in a unit test; new-order trigger verified on the simulator] ⚠️ Not yet tried on the real kitchen printer or speaker.
+
+**Still to do**
+- ⬜ Receipt identity (name, GSTIN, VAT TIN, address, phone) from settings instead of hard-coded, once production settings hold Durigo's details.
+- ⬜ List each tender ("Paid by: ₹513 cash, ₹513 UPI") on the iOS receipt, as the web receipt does.
+- ⬜ `testShouldFilterMenuWithQuery` fails: decide how forgiving menu search should be.
+- ⬜ `AdminScreensUITests` still launch with the old `--autologin` arguments and admin/admin123; move them to `--auto-signin` with the QA password from TEST_RUNNER_QA_PASS.
 
 ## Phase order (revised)
 
