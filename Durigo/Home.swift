@@ -2235,6 +2235,8 @@ struct KitchenOrderItem: Codable, Identifiable, Hashable {
     /// the kitchen display. Distinct from `preparedBy` (history of who
     /// progressed it). Editable via PATCH /items/{id}/assign.
     var assignedTo: PreparedByRef?
+    /// Extras chosen when ordering ("Extra cheese", "No onion")
+    var modifiers: [OrderItemModifier]? = nil
 
     struct NamedRef: Codable, Hashable {
         let id: String?
@@ -2480,6 +2482,19 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
         }
     }
 
+    /// Cancel the whole order. The server refuses a paid one, and a served
+    /// one unless you're an admin; its reason shows here.
+    func cancel(_ order: KitchenOrder, reason: String?) async {
+        do {
+            var payload = ["status": "CANCELLED"]
+            if let reason, !reason.isEmpty { payload["reason"] = reason }
+            _ = try await api.patch("/api/orders/\(order.id)/status", body: try JSONEncoder().encode(payload))
+            orders.removeAll { $0.id == order.id }
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     func advance(_ order: KitchenOrder) async {
         let next: String
         switch order.status.uppercased() {
@@ -2573,6 +2588,9 @@ struct KitchenItemDetailSheet: View {
                     .font(.system(.title2, weight: .bold))
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
+            }
+            if let extras = item.modifiers?.summary {
+                Text(extras).font(.headline)
             }
             statusPill
         }
@@ -2718,6 +2736,9 @@ struct KitchenAdminView: View {
     @AppStorage("kitchen.chime") private var chime = true
     @AppStorage("kitchen.autoPrint") private var autoPrint = false
     @State private var printError: String?
+    /// The order being cancelled, and the optional reason for its log
+    @State private var cancellingOrder: KitchenOrder?
+    @State private var cancelReason = ""
 
     var body: some View {
         NavigationStack {
@@ -2773,6 +2794,18 @@ struct KitchenAdminView: View {
             } message: {
                 Text(printError ?? "")
             }
+            .alert("Cancel this whole order?", isPresented: Binding(
+                get: { cancellingOrder != nil }, set: { if !$0 { cancellingOrder = nil } }
+            ), presenting: cancellingOrder) { order in
+                TextField("Reason (optional)", text: $cancelReason)
+                Button("Cancel Order", role: .destructive) {
+                    let reason = cancelReason.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Task { await store?.cancel(order, reason: reason.isEmpty ? nil : reason) }
+                }
+                Button("Keep It", role: .cancel) { cancellingOrder = nil }
+            } message: { _ in
+                Text("It will be taken off the bill and the kitchen.")
+            }
             .onDisappear { store?.stop() }
             .refreshable { await store?.load() }
             .onReceive(Self.tick) { now = $0 }
@@ -2793,6 +2826,13 @@ struct KitchenAdminView: View {
                 printError = error.localizedDescription
             }
         }
+    }
+
+    /// Staff can cancel until food is served; after that only an admin can
+    /// (the server enforces the same rule)
+    private func canCancel(_ o: KitchenOrder) -> Bool {
+        if session.user?.role.uppercased() == "ADMIN" { return true }
+        return o.status.uppercased() != "SERVED" && !o.items.contains { $0.status.uppercased() == "SERVED" }
     }
 
     /// Minutes between order creation and `now`. Returns 0 if the timestamp
@@ -2993,13 +3033,36 @@ struct KitchenAdminView: View {
                 Spacer()
                 if let n = o.table?.number { Text("Table \(n)").font(.caption).foregroundStyle(.secondary) }
                 else { Text(o.type).font(.caption).foregroundStyle(.secondary) }
-                Button {
-                    printTicket(o, automatic: false)
-                } label: {
-                    Image(systemName: "printer").font(.caption)
+                if canCancel(o) {
+                    // One button for both, so the narrow kanban header keeps its room
+                    Menu {
+                        Button {
+                            printTicket(o, automatic: false)
+                        } label: {
+                            Label("Print ticket", systemImage: "printer")
+                        }
+                        Button(role: .destructive) {
+                            cancelReason = ""
+                            cancellingOrder = o
+                        } label: {
+                            Label("Cancel order…", systemImage: "xmark.circle")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle").font(.caption)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .accessibilityLabel("Print or cancel this order")
+                    .accessibilityIdentifier("kitchen-more-\(o.id)")
+                } else {
+                    Button {
+                        printTicket(o, automatic: false)
+                    } label: {
+                        Image(systemName: "printer").font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Print kitchen ticket")
                 }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Print kitchen ticket")
             }
             if let note = o.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
                 Label(note, systemImage: "exclamationmark.bubble.fill")
@@ -3025,21 +3088,33 @@ struct KitchenAdminView: View {
                 // Compact row. Tapping anywhere in the name area opens a
                 // detail popup — useful when names are long and truncate.
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .center, spacing: 6) {
-                        Text("\(it.quantity)×")
-                            .font(.caption.monospaced())
-                            .frame(width: 22, alignment: .leading)
-                            .foregroundStyle(.secondary)
-                        Text(it.displayName)
-                            .font(.subheadline)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                inspectingItem = KitchenItemContext(item: it, order: o)
+                    // One line when the column is wide enough to read the
+                    // name; otherwise the name gets its own line and the
+                    // controls sit under it (never a row of just pills)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .center, spacing: 6) {
+                            itemQuantity(it)
+                            itemName(it, order: o).frame(minWidth: 110, alignment: .leading)
+                            assignMenu(for: it, order: o, store: store)
+                            itemStatusControl(item: it, order: o, store: store)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                itemQuantity(it)
+                                itemName(it, order: o, wraps: true)
                             }
-                        assignMenu(for: it, order: o, store: store)
-                        itemStatusControl(item: it, order: o, store: store)
+                            HStack(spacing: 6) {
+                                Spacer(minLength: 0)
+                                assignMenu(for: it, order: o, store: store)
+                                itemStatusControl(item: it, order: o, store: store)
+                            }
+                        }
+                    }
+                    if let extras = it.modifiers?.summary {
+                        Text(extras)
+                            .font(.caption.weight(.semibold))
+                            .padding(.leading, 28)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     // Item notes are often allergies: red and never truncated
                     if let n = it.notes, !n.isEmpty {
@@ -3093,6 +3168,26 @@ struct KitchenAdminView: View {
     }
 
     // (no toggleExpanded — replaced by the detail popup approach.)
+
+    private func itemQuantity(_ it: KitchenOrderItem) -> some View {
+        Text("\(it.quantity)×")
+            .font(.caption.monospaced())
+            .frame(width: 22, alignment: .leading)
+            .foregroundStyle(.secondary)
+    }
+
+    /// Tapping the name opens the detail popup (full name, notes, who's on it)
+    private func itemName(_ it: KitchenOrderItem, order o: KitchenOrder, wraps: Bool = false) -> some View {
+        Text(it.displayName)
+            .font(.subheadline)
+            .lineLimit(wraps ? 3 : 1)
+            .fixedSize(horizontal: false, vertical: wraps)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                inspectingItem = KitchenItemContext(item: it, order: o)
+            }
+    }
 
     /// Per-item assignment Menu. Lists the kitchen-staff directory for
     /// the admin/expediter to pick from. Tapping a name PATCHes the item
@@ -3619,6 +3714,9 @@ struct KitchenTicketView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("\(item.quantity) × \(item.displayName)")
                         .font(.system(size: 14, weight: .bold))
+                    ForEach(item.modifiers ?? [], id: \.modifier.id) { m in
+                        Text("    + \(m.modifier.name)").font(.system(size: 12, weight: .semibold))
+                    }
                     if let n = item.notes, !n.isEmpty {
                         Text("  ** \(n.uppercased()) **").font(.system(size: 12, weight: .semibold))
                     }

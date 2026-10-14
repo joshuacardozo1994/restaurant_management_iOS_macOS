@@ -433,6 +433,7 @@ struct TableCardView: View {
                         .lineLimit(1)
                 }
                 .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("take-order-\(table.number)")
                 Button(action: onReserve) {
                     Image(systemName: "calendar")
                 }
@@ -461,6 +462,7 @@ struct TableCardView: View {
                         .lineLimit(1)
                 }
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("view-orders-\(table.number)")
                 Button(action: onTakeOrder) {
                     Label("Add", systemImage: "plus")
                         .frame(maxWidth: .infinity)

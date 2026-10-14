@@ -711,4 +711,120 @@ final class QAPlanUITests: XCTestCase {
         sleep(3)
         print("QA_BILL_STAMP=\(stamp)")
     }
+
+    // 3.x: extras add their price to a line and show on the order; a waiter
+    // can cancel the whole order before it's served, which frees the table
+    func testOrderWithExtrasThenCancelIt() throws {
+        try launch(as: "waiter", tab: "pos")
+        let takeOrder = element("take-order-6")
+        XCTAssertTrue(takeOrder.waitForExistence(timeout: 15), "Table 6 isn't free")
+        for _ in 0..<5 where !takeOrder.isHittable { app.swipeUp() }
+        takeOrder.tap()
+
+        let search = app.textFields["Search menu"]
+        XCTAssertTrue(search.waitForExistence(timeout: 8))
+        search.tap()
+        search.typeText("Veg. Soup")
+        // The menu row ("Veg. Soup, 2 variants, ₹240"), not a table card behind
+        // the sheet that also lists the soup (iPad)
+        let soupRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Veg. Soup,'")).firstMatch
+        XCTAssertTrue(soupRow.waitForExistence(timeout: 5))
+        soupRow.tap()
+        // The soup has portions: take the normal one (₹240)
+        let normal = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Normal'")).firstMatch
+        if normal.waitForExistence(timeout: 3) { normal.tap() }
+
+        let extras = element("cart-extras-Veg. Soup")
+        XCTAssertTrue(extras.waitForExistence(timeout: 5), "No extras button on the cart line")
+        extras.tap()
+        let cheese = element("extra-Extra cheese")
+        XCTAssertTrue(cheese.waitForExistence(timeout: 5))
+        cheese.tap()
+        app.buttons["Done"].tap()
+        // ₹240 soup + ₹50 cheese
+        XCTAssertTrue(app.staticTexts["+ Extra cheese"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["₹290"].exists, "Line price didn't include the extra")
+
+        // The waiter picker starts empty on a fresh install
+        let send = app.buttons["Send to Kitchen"]
+        if !send.isEnabled {
+            app.buttons.matching(NSPredicate(format: "label CONTAINS 'Select…'")).firstMatch.tap()
+            let qaWaiter = app.buttons["QA Waiter"]
+            XCTAssertTrue(qaWaiter.waitForExistence(timeout: 5), "QA Waiter not in the waiter list")
+            qaWaiter.tap()
+        }
+        XCTAssertTrue(send.isEnabled, "Send to Kitchen is still disabled")
+        send.tap()
+
+        let view = element("view-orders-6")
+        XCTAssertTrue(view.waitForExistence(timeout: 10), "Table 6 didn't become occupied")
+        for _ in 0..<5 where !view.isHittable { app.swipeUp() }
+        view.tap()
+        XCTAssertTrue(app.staticTexts["+ Extra cheese"].waitForExistence(timeout: 8), "Extras missing on the order")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "order-with-extras"
+        shot.lifetime = .keepAlways
+        add(shot)
+
+        let cancel = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'order-cancel-'")).firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        cancel.tap()
+        let reason = app.alerts.textFields.firstMatch
+        XCTAssertTrue(reason.waitForExistence(timeout: 5))
+        reason.typeText("QA: guest changed mind")
+        app.alerts.buttons["Cancel Order"].tap()
+
+        // The table's last order is gone, so it's free again
+        if app.buttons["Close"].waitForExistence(timeout: 3) { app.buttons["Close"].tap() }
+        XCTAssertTrue(element("take-order-6").waitForExistence(timeout: 10), "Table 6 wasn't freed")
+    }
+
+    // 6.9: the kitchen cancels a whole order from the card's ⋯ menu
+    func testKitchenCancelsAnOrder() throws {
+        let orderId = try placeTakeawayOrder()
+        try launch(as: "kitchen", tab: "kitchen")
+        let more = element("kitchen-more-\(orderId)")
+        XCTAssertTrue(more.waitForExistence(timeout: 15), "The new order isn't on the kitchen board")
+        for _ in 0..<6 where !more.isHittable { app.swipeUp() }
+        more.tap()
+        let cancel = app.buttons["Cancel order…"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5), "No Cancel order in the menu")
+        cancel.tap()
+        let reason = app.alerts.textFields.firstMatch
+        XCTAssertTrue(reason.waitForExistence(timeout: 5), "No confirmation")
+        reason.typeText("QA: out of soup")
+        app.alerts.buttons["Cancel Order"].tap()
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: more)
+        waitForExpectations(timeout: 10)
+    }
+
+    /// A takeaway Veg. Soup placed through the API as qa-waiter; returns its id
+    private func placeTakeawayOrder() throws -> String {
+        let password = try XCTUnwrap(ProcessInfo.processInfo.environment["QA_PASS"], "Set TEST_RUNNER_QA_PASS")
+        let base = URL(string: "http://localhost:3000")!
+        func call(_ path: String, _ body: [String: Any]?, token: String?) throws -> Any {
+            var req = URLRequest(url: base.appending(path: path))
+            req.httpMethod = body == nil ? "GET" : "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if let token { req.setValue("auth-token=\(token)", forHTTPHeaderField: "Cookie") }
+            if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body) }
+            var result: Data?
+            let done = XCTestExpectation()
+            URLSession.shared.dataTask(with: req) { data, _, _ in result = data; done.fulfill() }.resume()
+            _ = XCTWaiter.wait(for: [done], timeout: 10)
+            return try JSONSerialization.jsonObject(with: try XCTUnwrap(result))
+        }
+        let login = try XCTUnwrap(call("/api/auth/login", ["username": "qa-waiter", "password": password], token: nil) as? [String: Any])
+        let token = try XCTUnwrap(login["token"] as? String)
+        let menu = try XCTUnwrap(call("/api/admin/menu", nil, token: token) as? [[String: Any]])
+        let soup = try XCTUnwrap(menu.first { $0["name"] as? String == "Veg. Soup" }?["id"] as? String)
+        let placed = try XCTUnwrap(call("/api/pos/orders", [
+            "type": "TAKEAWAY", "idempotencyKey": UUID().uuidString,
+            "items": [["menuItemId": soup, "quantity": 1]],
+        ], token: token) as? [String: Any])
+        let order = (placed["order"] as? [String: Any]) ?? placed
+        return try XCTUnwrap(order["id"] as? String)
+    }
 }
+

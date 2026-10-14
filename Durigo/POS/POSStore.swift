@@ -41,13 +41,16 @@ struct CartLine: Identifiable {
     let variant: AdminVariantTemplate?
     var quantity: Int
     var notes: String?
+    /// Extras for this line ("Extra cheese +₹50"); each adds its price
+    var modifiers: [AdminModifier] = []
 
     var unitPrice: Double {
         let base = Double(menuItem.price)
+        let extras = Double(modifiers.reduce(0) { $0 + $1.price })
         if let variant {
-            return variant.price(forBase: base)
+            return variant.price(forBase: base) + extras
         }
-        return base
+        return base + extras
     }
 
     var lineTotal: Double { unitPrice * Double(quantity) }
@@ -61,6 +64,8 @@ final class POSStore {
     var tables: [POSTable] = []
     var menu: [AdminMenuItem] = []
     var categories: [AdminCategory] = []
+    /// Active modifiers offered on cart lines
+    var modifiers: [AdminModifier] = []
     var waiters: [WaiterRef] = []
     var tableGroups: [POSTableGroup] = []
     /// Upcoming reservations — surfaces the next-arriving party on each
@@ -205,6 +210,27 @@ final class POSStore {
         } catch {
             lastError = "Failed to load menu: \(error.localizedDescription)"
         }
+        // Optional: ordering works without extras if this fails
+        if let data = try? await api.get("/api/admin/modifiers", query: [URLQueryItem(name: "active", value: "true")]),
+           let decoded = try? JSONDecoder().decode([AdminModifier].self, from: data) {
+            self.modifiers = decoded.filter(\.active)
+        }
+    }
+
+    /// Modifiers for an item: those for every category plus its own
+    func modifiers(forCategory categoryId: String) -> [AdminModifier] {
+        modifiers.filter { $0.categoryId == nil || $0.categoryId == categoryId }
+    }
+
+    // MARK: Cancel
+
+    /// Cancel a whole order (kitchen or POS). The server refuses a paid one
+    /// and frees the table when nothing else is open on it.
+    func cancelOrder(_ orderId: String, reason: String?) async throws {
+        var payload = ["status": "CANCELLED"]
+        if let reason, !reason.isEmpty { payload["reason"] = reason }
+        _ = try await api.patch("/api/orders/\(orderId)/status", body: try JSONEncoder().encode(payload))
+        await loadTables()
     }
 
     // MARK: Place order
@@ -226,7 +252,8 @@ final class POSStore {
                     variantTemplateId: line.variant?.id,
                     quantity: line.quantity,
                     unitPrice: line.unitPrice,
-                    notes: line.notes
+                    notes: line.notes,
+                    modifierIds: line.modifiers.map(\.id)
                 )
             },
             notes: notes,

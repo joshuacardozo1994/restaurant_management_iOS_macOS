@@ -94,6 +94,8 @@ test's name is given.
 | 4.6 | Merge and unmerge tables; order at a merged table | Secondary tables route to the primary | |
 | 4.7 | Reservation from a table card; today's date | Saved; shown on the card | |
 | 4.8 | Manage tables: add, renumber, seats, out of service, delete | Works; can't take an occupied table out of service | ✅ 🤖 ManageTablesUITests |
+| 4.9 | Extras on a cart line (extras button, for that category) | Line price adds the extra; "+ Extra cheese" on the order, kitchen card, item details and ticket | ✅ 🤖 QAPlanUITests (iPhone and iPad) |
+| 4.10 | Cancel a whole order from the order screen, with a reason | Leaves the bill and the kitchen; table freed when nothing else is open; hidden for staff once food is served (admins still can) | ✅ 🤖 QAPlanUITests (iPhone and iPad) |
 
 ### 5. POS payment (P0, money)
 
@@ -119,6 +121,7 @@ test's name is given.
 | 6.6 | Change status: phases, per item, drag and drop on iPad | Saved; other screens update | |
 | 6.7 | Assign a cook | Saved | |
 | 6.8 | Elapsed time colours | Yellow after 15 minutes, red after 30 | |
+| 6.9 | "Cancel order…" from the ⋯ button on a kitchen card | Card leaves the board; hidden for staff once food is served (admins still see it) | ✅ 🤖 QAPlanUITests testKitchenCancelsAnOrder (iPhone and iPad) |
 
 ### 7. Reservations (P1)
 

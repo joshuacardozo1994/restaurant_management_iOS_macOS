@@ -135,6 +135,9 @@ struct POSOrderItem: Decodable, Identifiable, Hashable {
     /// Preferred over the snapshot fields when present.
     let menuItem: NamedRef?
     let variantTemplate: NamedRef?
+    /// Extras chosen when ordering ("Extra cheese"). Their price is already
+    /// in `unitPrice`; these are for display.
+    var modifiers: [OrderItemModifier]? = nil
 
     struct NamedRef: Decodable, Hashable {
         let id: String?
@@ -175,6 +178,26 @@ struct CreateOrderRequest: Encodable {
         let quantity: Int
         let unitPrice: Double
         let notes: String?
+        /// The server prices these and adds them to the line
+        let modifierIds: [String]
+    }
+}
+
+/// A modifier recorded on an order line, with its price when ordered
+struct OrderItemModifier: Codable, Hashable {
+    let price: Int
+    let modifier: Ref
+
+    struct Ref: Codable, Hashable {
+        let id: String
+        let name: String
+    }
+}
+
+extension Array where Element == OrderItemModifier {
+    /// "+ Extra cheese, No onion", or nil when there are none
+    var summary: String? {
+        isEmpty ? nil : "+ " + map(\.modifier.name).joined(separator: ", ")
     }
 }
 

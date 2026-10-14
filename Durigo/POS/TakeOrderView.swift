@@ -25,6 +25,8 @@ struct TakeOrderView: View {
     /// The cart line whose kitchen note is being edited
     @State private var noteLineId: UUID?
     @State private var noteDraft = ""
+    /// The cart line whose extras are being picked
+    @State private var extrasLineId: UUID?
     @State private var notes: String = ""
     @State private var variantPickerItem: AdminMenuItem?
     @State private var submitting = false
@@ -78,8 +80,20 @@ struct TakeOrderView: View {
                 Text(errorMessage ?? "")
             }
             // A changed cart is a different order, so it gets a new key
-            .onChange(of: cart.map { "\($0.id)x\($0.quantity)\($0.notes ?? "")" }) {
+            .onChange(of: cart.map { "\($0.id)x\($0.quantity)\($0.notes ?? "")\($0.modifiers.map(\.id))" }) {
                 idempotencyKey = UUID().uuidString
+            }
+            .sheet(isPresented: Binding(
+                get: { extrasLineId != nil },
+                set: { if !$0 { extrasLineId = nil } }
+            )) {
+                if let i = cart.firstIndex(where: { $0.id == extrasLineId }) {
+                    ModifierPickerSheet(
+                        itemName: cart[i].menuItem.name,
+                        options: store.modifiers(forCategory: cart[i].menuItem.categoryId),
+                        selected: $cart[i].modifiers
+                    )
+                }
             }
             .alert("Note for the kitchen", isPresented: Binding(
                 get: { noteLineId != nil },
@@ -313,11 +327,26 @@ struct TakeOrderView: View {
                 if let v = line.variant {
                     Text(v.name).font(.caption2).foregroundStyle(.secondary)
                 }
+                if let extras = line.modifiers.isEmpty ? nil : "+ " + line.modifiers.map(\.name).joined(separator: ", ") {
+                    Text(extras).font(.caption).foregroundStyle(.secondary)
+                }
                 if let note = line.notes {
                     Text(note).font(.caption).italic().foregroundStyle(.orange)
                 }
             }
             Spacer()
+            // Extras ("Extra cheese +₹50"), when any apply to this category
+            if !store.modifiers(forCategory: line.menuItem.categoryId).isEmpty {
+                Button {
+                    extrasLineId = line.id
+                } label: {
+                    Image(systemName: line.modifiers.isEmpty ? "plus.square.on.square" : "plus.square.fill.on.square.fill")
+                        .foregroundStyle(line.modifiers.isEmpty ? Color.secondary : Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Extras for \(line.menuItem.name)")
+                .accessibilityIdentifier("cart-extras-\(line.menuItem.name)")
+            }
             // Per-item note for the kitchen ("no nuts", "less spicy")
             Button {
                 noteDraft = line.notes ?? ""
@@ -390,8 +419,8 @@ struct TakeOrderView: View {
     // MARK: Cart mutations
 
     private func addToCart(_ item: AdminMenuItem, variant: AdminVariantTemplate?) {
-        // A line with its own note ("no onion") stays separate from plain ones
-        if let i = cart.firstIndex(where: { $0.menuItem.id == item.id && $0.variant?.id == variant?.id && $0.notes == nil }) {
+        // A line with its own note or extras stays separate from plain ones
+        if let i = cart.firstIndex(where: { $0.menuItem.id == item.id && $0.variant?.id == variant?.id && $0.notes == nil && $0.modifiers.isEmpty }) {
             cart[i].quantity += 1
         } else {
             cart.append(CartLine(menuItem: item, variant: variant, quantity: 1, notes: nil))
@@ -436,6 +465,56 @@ struct TakeOrderView: View {
     }
 }
 
+// MARK: - Extras picker
+
+/// Toggle the extras on one cart line. Each shows its price; the line's
+/// price updates as they're picked.
+private struct ModifierPickerSheet: View {
+    let itemName: String
+    let options: [AdminModifier]
+    @Binding var selected: [AdminModifier]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(options) { m in
+                    let isOn = selected.contains { $0.id == m.id }
+                    Button {
+                        if isOn {
+                            selected.removeAll { $0.id == m.id }
+                        } else if selected.count < 10 {   // the server's limit per line
+                            selected.append(m)
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(isOn ? Color.accentColor : Color.secondary)
+                            Text(m.name)
+                            Spacer()
+                            if m.price > 0 {
+                                Text("+₹\(m.price)").monospacedDigit().foregroundStyle(.secondary)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(isOn ? .isSelected : [])
+                    .accessibilityIdentifier("extra-\(m.name)")
+                }
+            }
+            .navigationTitle("Extras for \(itemName)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
 // MARK: - Variant picker
 
 private struct VariantPickerSheet: View {
@@ -463,6 +542,8 @@ private struct VariantPickerSheet: View {
                                 .font(.system(.body, weight: .semibold))
                                 .monospacedDigit()
                         }
+                        // The whole row is the button, not just its text
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

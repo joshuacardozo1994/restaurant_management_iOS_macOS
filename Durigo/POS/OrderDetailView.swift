@@ -34,6 +34,10 @@ struct OrderDetailView: View {
     /// Shown once the table is paid
     @State private var receipt: PaidReceipt?
 
+    /// The order being cancelled, and the optional reason for its log
+    @State private var cancelling: POSOrder?
+    @State private var cancelReason = ""
+
     struct AppliedCode: Equatable {
         let code: String
         let amount: Int
@@ -86,6 +90,16 @@ struct OrderDetailView: View {
             }
             // Categories decide GST vs VAT for the breakdown
             .task { if store.menu.isEmpty { await store.loadMenu() } }
+            .alert("Cancel this whole order?", isPresented: Binding(
+                get: { cancelling != nil },
+                set: { if !$0 { cancelling = nil } }
+            ), presenting: cancelling) { order in
+                TextField("Reason (optional)", text: $cancelReason)
+                Button("Cancel Order", role: .destructive) { Task { await doCancel(order) } }
+                Button("Keep It", role: .cancel) { cancelling = nil }
+            } message: { _ in
+                Text("It will be taken off the bill and the kitchen.")
+            }
             .sheet(item: $receipt, onDismiss: { dismiss() }) { paid in
                 PaidReceiptSheet(receipt: paid, config: menuLoader.billingConfig, identity: menuLoader.identity)
             }
@@ -178,6 +192,9 @@ struct OrderDetailView: View {
                         if let v = item.displayVariant, !v.isEmpty {
                             Text(v).font(.caption2).foregroundStyle(.secondary)
                         }
+                        if let extras = item.modifiers?.summary {
+                            Text(extras).font(.caption2).foregroundStyle(.secondary)
+                        }
                     }
                     Spacer()
                     Text("₹\(Int(item.unitPrice * Double(item.quantity)))")
@@ -186,10 +203,45 @@ struct OrderDetailView: View {
                     statusChip(item.status, small: true)
                 }
             }
+            if canCancel(order) {
+                Button(role: .destructive) {
+                    cancelReason = ""
+                    cancelling = order
+                } label: {
+                    Label("Cancel order", systemImage: "xmark.circle")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+                .disabled(submitting)
+                .accessibilityIdentifier("order-cancel-\(order.id)")
+            }
         }
         .padding(DesignTokens.spacingM)
         .frame(maxWidth: .infinity, alignment: .leading)
         .webCardBackground()
+    }
+
+    // MARK: Cancel
+
+    /// Staff can cancel until food is served; after that only an admin can
+    /// (the server enforces the same rule)
+    private func canCancel(_ order: POSOrder) -> Bool {
+        if session.user?.role.uppercased() == "ADMIN" { return true }
+        let served = order.status.uppercased() == "SERVED"
+            || (order.items ?? []).contains { $0.status.uppercased() == "SERVED" }
+        return !served
+    }
+
+    private func doCancel(_ order: POSOrder) async {
+        cancelling = nil
+        submitting = true
+        defer { submitting = false }
+        do {
+            let reason = cancelReason.trimmingCharacters(in: .whitespacesAndNewlines)
+            try await store.cancelOrder(order.id, reason: reason.isEmpty ? nil : reason)
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     // MARK: Bill
