@@ -42,6 +42,9 @@ struct BillHistoryList: View {
     @State private var lastSyncSummary: UploadSummary?
     @State private var selectedTable: Int?
     @State private var selectedWaiter: String?
+    @State private var selectedWaiterId: String?
+    /// Current staff for the waiter filter, from the server
+    @State private var filterStaff: [WaiterRef] = []
     @State private var selectedPaymentStatus: BillHistoryItemStatus?
     @State private var showTodaysBills = false
     @State private var selectedBill: BillHistoryItem?
@@ -62,10 +65,38 @@ struct BillHistoryList: View {
                 if !(bill.date >= startOfDay && bill.date < endOfDay) { return false }
             }
             if let selectedTable, bill.tableNumber != selectedTable { return false }
-            if let selectedWaiter, bill.waiter != selectedWaiter { return false }
+            if selectedWaiter != nil || selectedWaiterId != nil, !servedBySelectedWaiter(bill) { return false }
             if let selectedPaymentStatus, bill.paymentStatus != selectedPaymentStatus { return false }
             return true
         }
+    }
+
+    /// Bills since the app sent waiter ids match by id, so a renamed waiter's
+    /// bills still count; older bills match by name, ignoring case
+    private func servedBySelectedWaiter(_ bill: BillHistoryItem) -> Bool {
+        let name = selectedWaiter?.lowercased()
+        if let id = selectedWaiterId, !id.hasPrefix("name:"), let billId = bill.waiterId {
+            return billId == id
+        }
+        return bill.waiter.lowercased() == name
+    }
+
+    /// Current staff, then any other names that appear on bills
+    private var waiterFilterOptions: [WaiterRef] {
+        let staffNames = Set(filterStaff.map { $0.name.lowercased() })
+        var seen = Set<String>()
+        let others = allBills.map(\.waiter)
+            .filter { !$0.isEmpty && !staffNames.contains($0.lowercased()) && seen.insert($0.lowercased()).inserted }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            .map(WaiterRef.other(named:))
+        return filterStaff + others
+    }
+
+    private func loadFilterStaff() async {
+        guard filterStaff.isEmpty,
+              let data = try? await APIClient(session: session).get("/api/users/waiters"),
+              let staff = try? JSONDecoder().decode([WaiterRef].self, from: data) else { return }
+        filterStaff = staff
     }
 
     var body: some View {
@@ -94,6 +125,7 @@ struct BillHistoryList: View {
                     if uploader == nil {
                         uploader = BillUploader(session: session)
                     }
+                    Task { await loadFilterStaff() }  // don't hold up the bill load
                     // Run the initial-page load and the unsynced-bill push
                     // concurrently — they hit different endpoints and
                     // don't share state. On tab-return the page already
@@ -310,14 +342,8 @@ struct BillHistoryList: View {
                     Label("\(showTodaysBills ? "● " : "")Show today's bills", systemImage: "calendar")
                 }
                 TableDropdownSelector(showIfSelected: true, selectedOption: $selectedTable, options: Array(1...20))
-                WaiterDropdownSelector(showIfSelected: true, selectedOption: $selectedWaiter, selectedId: .constant(nil), staff: [
-                    WaiterRef(id: "fallback-1", name: "Alcin",   role: "WAITER"),
-                    WaiterRef(id: "fallback-2", name: "Anthony", role: "WAITER"),
-                    WaiterRef(id: "fallback-3", name: "Antone",  role: "WAITER"),
-                    WaiterRef(id: "fallback-4", name: "Amanda",  role: "WAITER"),
-                    WaiterRef(id: "fallback-5", name: "Monica",  role: "WAITER"),
-                    WaiterRef(id: "fallback-6", name: "Joshua",  role: "WAITER"),
-                ])
+                WaiterDropdownSelector(showIfSelected: true, selectedOption: $selectedWaiter,
+                                       selectedId: $selectedWaiterId, staff: waiterFilterOptions)
                 PaymentStatusDropdownSelector(showIfSelected: true, selectedOption: $selectedPaymentStatus)
 
                 Section {
@@ -325,6 +351,7 @@ struct BillHistoryList: View {
                         showTodaysBills = false
                         selectedTable = nil
                         selectedWaiter = nil
+                        selectedWaiterId = nil
                         selectedPaymentStatus = nil
                     } label: {
                         Label("Clear filters", systemImage: "xmark.circle")

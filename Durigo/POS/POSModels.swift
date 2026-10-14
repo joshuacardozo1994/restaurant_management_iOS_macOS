@@ -207,6 +207,13 @@ struct WaiterRef: Decodable, Identifiable, Hashable {
     let id: String
     let name: String
     let role: String
+
+    /// A name found on bills that isn't a current staff member (a former
+    /// waiter, "Unknown"). Its id is "name:<name>" since it has no user.
+    static let otherRole = "OTHER"
+    static func other(named name: String) -> WaiterRef {
+        WaiterRef(id: "name:\(name)", name: name, role: otherRole)
+    }
 }
 
 // MARK: - Table groups (merge feature)

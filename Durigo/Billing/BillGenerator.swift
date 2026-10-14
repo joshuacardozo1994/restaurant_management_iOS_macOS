@@ -86,6 +86,8 @@ struct WaiterDropdownSelector: View {
 
     private var waitersOnly: [WaiterRef] { staff.filter { $0.role == "WAITER" } }
     private var adminsOnly:  [WaiterRef] { staff.filter { $0.role == "ADMIN"  } }
+    /// Names on bills that aren't current staff (the bill history filter)
+    private var others: [WaiterRef] { staff.filter { $0.role == WaiterRef.otherRole } }
 
     var body: some View {
         Picker(selection: Binding(
@@ -109,6 +111,13 @@ struct WaiterDropdownSelector: View {
                 Section("Admins") {
                     ForEach(adminsOnly) { a in
                         Text(a.name).tag(a.id)
+                    }
+                }
+            }
+            if !others.isEmpty {
+                Section("Other names on bills") {
+                    ForEach(others) { o in
+                        Text(o.name).tag(o.id)
                     }
                 }
             }
