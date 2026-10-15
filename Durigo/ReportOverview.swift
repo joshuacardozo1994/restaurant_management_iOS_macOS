@@ -356,6 +356,8 @@ struct Reports: View {
     @State private var pickFrom = Calendar.current.date(byAdding: .day, value: -6, to: .now) ?? .now
     @State private var pickTo = Date.now
     @State private var picking = false
+    /// DEBUG launch args already gave the days to pick
+    @State private var presetPick = false
     @State private var selectedDay: String?
     @State private var path = NavigationPath()
 
@@ -389,7 +391,7 @@ struct Reports: View {
                 await load()
             }
             .onChange(of: range) { _, new in
-                if new == .pick { picking = true } else { Task { await load() } }
+                if new == .pick && !presetPick { picking = true } else { Task { await load() } }
             }
             .onChange(of: month) { _, _ in Task { await load() } }
             .sheet(isPresented: $picking) { pickSheet }
@@ -409,11 +411,13 @@ struct Reports: View {
         await store?.load(range: range, month: month, from: pickFrom, to: pickTo)
     }
 
-    /// `--report-range=month` and `--start-report=<name>` (DEBUG, for screenshots)
+    /// `--report-range=month` (with `--report-from=` / `--report-to=` for pick) and `--start-report=<name>` (DEBUG, for screenshots)
     private func applyDebugLaunchArgs() {
         #if DEBUG
         for arg in CommandLine.arguments {
             if arg.hasPrefix("--report-range="), let r = ReportRange(rawValue: String(arg.dropFirst("--report-range=".count))) { range = r }
+            if arg.hasPrefix("--report-from="), let d = ReportDate.date(String(arg.dropFirst("--report-from=".count))) { pickFrom = d }
+            if arg.hasPrefix("--report-to="), let d = ReportDate.date(String(arg.dropFirst("--report-to=".count))) { pickTo = d; presetPick = true }
             if path.isEmpty, arg.hasPrefix("--start-report="), let route = ReportBreakout(rawValue: String(arg.dropFirst("--start-report=".count))) { path.append(route) }
         }
         #endif
@@ -451,12 +455,8 @@ struct Reports: View {
     private func content(width: CGFloat) -> some View {
         let loading = store?.data == nil && (store?.isLoading ?? true)
         VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-            Picker("Period", selection: $range) {
-                ForEach(ReportRange.allCases) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 520)
+            RangeBar(range: $range, onPick: { picking = true })
+                .frame(maxWidth: 520)
 
             if let msg = store?.error {
                 Label(store?.data == nil ? "Couldn't load the report: \(msg)" : "Showing the last figures: \(msg)", systemImage: "wifi.exclamationmark")
@@ -723,7 +723,7 @@ private struct RangeLayout: View {
                 }
             }
 
-            let daysPanel = Panel(title: "Each day · teal this period, grey the one before") { DayBars(days: r.days, previous: r.previousDays) }
+            let daysPanel = Panel(title: "\(r.days.count > 62 ? "Each week" : "Each day") · teal this period, grey the one before") { DayBars(days: r.days, previous: r.previousDays) }
             let heatPanel = Panel(title: "Busiest times · bills by weekday and hour") { HeatGrid(heat: r.heat, days: r.days) }
             if r.days.count > 1 {
                 if width >= 1000 {
@@ -745,43 +745,76 @@ private struct RangeLayout: View {
     }
 }
 
+/// A bar a day up to two months; beyond that a bar a week, so a long range still fits
+private struct Bar: Identifiable {
+    let id: String
+    let takings: Double
+    let before: Double?
+    let label: String
+    let spoken: String
+
+    private static let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    static func of(_ days: [ReportOverview.Day], previous: [Double]) -> [Bar] {
+        guard days.count > 62 else {
+            return days.enumerated().map { i, d in
+                // Every day labelled up to a fortnight; beyond that, Mondays only
+                let show = days.count <= 14 || ReportDate.weekdayIndex(d.date) == 0
+                return Bar(id: d.date, takings: d.takings, before: i < previous.count ? previous[i] : nil,
+                           label: show ? (days.count <= 7 ? ReportDate.weekdayShort(d.date) : "\(ReportDate.dayOfMonth(d.date))") : "",
+                           spoken: "\(ReportDate.label(d.date)): \(d.takings.rupees), \(d.bills) bills")
+            }
+        }
+        return stride(from: 0, to: days.count, by: 7).map { i in
+            let week = days[i..<min(i + 7, days.count)]
+            let before = i < previous.count ? previous[i..<min(i + 7, previous.count)].reduce(0, +) : nil
+            let first = week.first!.date
+            let month = Int(first.dropFirst(5).prefix(2)) ?? 1
+            // The month's name under its first week
+            let newMonth = i == 0 || days[i - 7].date.prefix(7) != first.prefix(7)
+            let takings = week.map(\.takings).reduce(0, +)
+            return Bar(id: first, takings: takings, before: before, label: newMonth ? months[month - 1] : "",
+                       spoken: "Week of \(ReportDate.label(first)): \(takings.rupees)")
+        }
+    }
+}
+
 private struct DayBars: View {
     let days: [ReportOverview.Day]
     let previous: [Double]
     var body: some View {
-        let top = max(1, (days.map(\.takings) + previous).max() ?? 1)
-        let every = days.count <= 14
+        let bars = Bar.of(days, previous: previous)
+        let top = max(1, bars.map { max($0.takings, $0.before ?? 0) }.max() ?? 1)
+        let gap: CGFloat = bars.count > 31 ? 1 : 3
         VStack(spacing: 6) {
             GeometryReader { g in
-                HStack(alignment: .bottom, spacing: days.count > 31 ? 1 : 3) {
-                    ForEach(Array(days.enumerated()), id: \.element.id) { i, d in
+                HStack(alignment: .bottom, spacing: gap) {
+                    ForEach(bars) { b in
                         ZStack(alignment: .bottomTrailing) {
-                            if i < previous.count {
+                            if let before = b.before {
                                 RoundedRectangle(cornerRadius: 2).fill(SN.line)
-                                    .frame(height: g.size.height * previous[i] / top)
+                                    .frame(height: g.size.height * before / top)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.trailing, 4)
+                                    .padding(.trailing, bars.count > 31 ? 1 : 4)
                             }
                             RoundedRectangle(cornerRadius: 2).fill(SN.teal)
-                                .frame(height: g.size.height * d.takings / top)
-                                .padding(.leading, 4)
+                                .frame(height: g.size.height * b.takings / top)
+                                .padding(.leading, bars.count > 31 ? 1 : 4)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         .accessibilityElement()
-                        .accessibilityLabel("\(ReportDate.label(d.date)): \(d.takings.rupees), \(d.bills) bills")
+                        .accessibilityLabel(b.spoken)
                     }
                 }
             }
             .frame(height: 150)
-            HStack(spacing: days.count > 31 ? 1 : 3) {
-                ForEach(days) { d in
-                    let show = every || ReportDate.weekdayIndex(d.date) == 0
-                    Text(show ? (days.count <= 7 ? ReportDate.weekdayShort(d.date) : "\(ReportDate.dayOfMonth(d.date))") : "")
-                        .font(.system(size: 9).monospaced())
-                        .foregroundStyle(SN.mut)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .frame(maxWidth: .infinity)
+            // Labels overlay their bar without taking width, so they can't widen the row
+            HStack(spacing: gap) {
+                ForEach(bars) { b in
+                    Color.clear.frame(maxWidth: .infinity, maxHeight: 12)
+                        .overlay {
+                            Text(b.label).font(.system(size: 9).monospaced()).foregroundStyle(SN.mut).fixedSize()
+                        }
                 }
             }
             .accessibilityHidden(true)
@@ -800,9 +833,16 @@ private struct HeatGrid: View {
         Grid(horizontalSpacing: 2, verticalSpacing: 2) {
             GridRow {
                 Color.clear.frame(width: 1, height: 1)
+                // Hour labels overlay their column: a Grid makes its columns equal,
+                // so a label's own width would set every column's minimum
                 ForEach(Array(heat.hours.enumerated()), id: \.offset) { i, h in
-                    Text(i % step == 0 ? "\(h % 12 == 0 ? 12 : h % 12)\(h < 12 ? "a" : "p")" : "")
-                        .font(.system(size: 9).monospaced()).foregroundStyle(SN.mut).fixedSize()
+                    Color.clear.frame(maxWidth: .infinity).frame(height: 11)
+                        .overlay(alignment: .leading) {
+                            if i % step == 0 {
+                                Text("\(h % 12 == 0 ? 12 : h % 12)\(h < 12 ? "a" : "p")")
+                                    .font(.system(size: 9).monospaced()).foregroundStyle(SN.mut).fixedSize()
+                            }
+                        }
                 }
             }
             ForEach(0..<7, id: \.self) { d in
@@ -964,6 +1004,43 @@ private struct MonthLayout: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium, style: .continuous).fill(SN.panel))
         .overlay(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium, style: .continuous).stroke(SN.line, lineWidth: 1))
+    }
+}
+
+/// Today / 7 days / Month / Quarter / Pick…, as on the web. Segments share
+/// the width by their labels (a system segmented control makes each one as
+/// wide as "Quarter", which is wider than an iPhone)
+private struct RangeBar: View {
+    @Binding var range: ReportRange
+    /// Pick… again when it is already chosen: ask for the days again
+    let onPick: () -> Void
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(ReportRange.allCases) { r in
+                let on = r == range
+                Button {
+                    if r == .pick && on { onPick() } else { range = r }
+                } label: {
+                    Text(r.label)
+                        .font(.subheadline.weight(on ? .semibold : .regular))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 7)
+                        .frame(maxWidth: .infinity)
+                        .foregroundStyle(on ? SN.panel : SN.ink)
+                        .background(Capsule().fill(on ? SN.ink : Color.clear))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(SN.panel))
+        .overlay(Capsule().stroke(SN.line, lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Period")
     }
 }
 
