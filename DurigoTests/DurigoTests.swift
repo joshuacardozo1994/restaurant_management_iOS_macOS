@@ -228,18 +228,27 @@ final class DurigoTests: XCTestCase {
         XCTAssertEqual(page.nextCursor, "2026-10-14T21:00:00.000Z")
     }
 
-    /// The performance report as the server sends it (one-decimal
-    /// percentages; older servers without staff revenue) decodes
-    func testPerformanceReportDecodesTheServersShape() throws {
+    /// The Reports screen's data as the server sends it (a cashier's has no waiters)
+    func testReportOverviewDecodesTheServersShape() throws {
         let json = """
-        {"avgOrderTime":0.1,"kitchenEfficiency":0,"customerSatisfaction":0,"staffProductivity":100,
-         "tableUtilization":50,"orderAccuracy":26.6,
-         "staffPerformance":[{"id":"x","name":"QA Waiter","role":"WAITER","ordersHandled":478,"avgServiceTime":0,"rating":0}],
-         "busyHours":[],"kitchenMetrics":{"avgPrepTime":0},"alerts":[]}
+        {"period":{"range":"month","from":"2026-10-01","to":"2026-10-15","prevFrom":"2026-09-01","prevTo":"2026-09-15",
+          "label":"October 2026","prevLabel":"September at this point","month":"2026-10"},
+         "figures":{"takings":1700,"bills":2,"averageBill":850,"discounts":100,"cancelledDishes":2,"cancelledValue":1200},
+         "previous":{"takings":0,"bills":0,"averageBill":0,"discounts":0,"cancelledDishes":0,"cancelledValue":0},
+         "days":[{"date":"2026-10-15","takings":1700,"bills":2,"topDish":"Thali"}],"previousDays":[0],
+         "bestDay":{"date":"2026-10-15","takings":1700,"bills":2,"topDish":"Thali"},
+         "heat":{"hours":[13],"cells":[[0],[0],[0],[2],[0],[0],[0]]},
+         "dishes":[{"name":"Thali","quantity":3,"takings":1800}],"tenders":[{"method":"UPI","amount":1500}],
+         "splitBills":1,"codes":[{"code":"FENI10","uses":1}],"waiters":null,
+         "ca":{"year":2026,"month":10,"monthLabel":"October 2026","totalSales":1700,"totalItems":3,"totalBills":2,"totalGst":81,"totalVat":0,
+           "categories":[{"type":"FOOD","revenue":1700,"percentage":100}]}}
         """
-        let report = try JSONDecoder().decode(PerformanceReportData.self, from: Data(json.utf8))
-        XCTAssertEqual(report.orderAccuracy, 26.6)
-        XCTAssertEqual(report.staffPerformance.first?.revenue, 0)
+        let r = try JSONDecoder().decode(ReportOverview.self, from: Data(json.utf8))
+        XCTAssertNil(r.waiters)
+        XCTAssertEqual(r.figures.takings, 1700)
+        XCTAssertEqual(ReportDate.weekdayIndex(r.days[0].date), 3) // Thursday
+        XCTAssertTrue(CAText.text(r.ca).contains("Total Bills: 2"))
+        XCTAssertEqual(ReportCSV.cell("=SUM(A1)"), "'=SUM(A1)")
     }
 
     /// The sign-in screen, rendered offscreen (on the Mac this is the Mac
@@ -345,11 +354,8 @@ final class DurigoTests: XCTestCase {
     /// that drifted from the model would leave that skeleton empty)
     func testSkeletonSamplesDecode() {
         XCTAssertNotNil(ServiceNight.sample)
-        XCTAssertNotNil(ReportData.sample)
-        XCTAssertNotNil(SalesReportData.sample)
-        XCTAssertNotNil(PerformanceReportData.sample)
+        XCTAssertEqual(ReportOverview.sample(range: .week).days.count, 7)
         XCTAssertNotNil(CustomersReportData.sample)
-        XCTAssertNotNil(StaffReportData.sample)
         XCTAssertNotNil(InventoryReportData.sample)
         XCTAssertNotNil(CAReportData.sample)
         XCTAssertEqual(POSTable.sample.count, 12)

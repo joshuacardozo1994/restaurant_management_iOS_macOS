@@ -194,7 +194,7 @@ private extension Color {
 
 // MARK: - Formatting
 
-private enum Fmt {
+enum Fmt {
     static let iso: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -384,7 +384,7 @@ struct LiveBadge: View {
 
 /// A panel: label in small mono capitals, then its content. Fills the height
 /// its row gives it so side-by-side panels line up.
-private struct Panel<Content: View>: View {
+struct Panel<Content: View>: View {
     let title: String
     @ViewBuilder let content: () -> Content
     var body: some View {

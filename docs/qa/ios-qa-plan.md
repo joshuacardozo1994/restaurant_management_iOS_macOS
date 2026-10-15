@@ -150,9 +150,9 @@ test's name is given.
 
 | # | Check | Expected | Status |
 |---|---|---|---|
-| 8.1 | Overview for each period | Matches the web `/reports` | ✅ same numbers as the web /reports (₹1,08,814 / 110 orders / ₹1,067 for 7 days, 15 Oct) |
-| 8.2 | CA report for last month | Same totals and GST/VAT as the web; Copy and Share work (on Mac too) | ✅ same server function as the web CA page; Copy confirms and Share opens (tour). Mac ✅: Copy for CA confirms ("Copied"); Share opens the system share menu (Mail, Messages, Notes…) — 🤖 MacKeyboardUITests, 15 Oct |
-| 8.3 | Sales, Performance, Customers, Staff, Inventory | Load; match the web | ✅ all five load (tour). Fixed: Performance failed to load ("data couldn't be read") and its 7d/30d ranges showed today; removed tiles that were always 0 |
+| 8.1 | Reports (16 Oct redesign, as the web: Today / 7 days / Month / Quarter / Pick) | Same figures as the web `/reports` and the Bills ledger (`/api/reports/overview`); each range against the one before; Month is a calendar (Monday first, shaded by takings, tap a day for its takings, bills and top dish; ‹ previous month); Export shares the report CSV; cashier sees it without "Who served" and the More links | ✅ 16 Oct iPhone 17 (7 days light, Month light/dark, cashier Today dark), iPad Pro 13" (7 days dark, Month light/dark), Mac (Month): ₹4,97,004 / 371 bills for the month, same as the web. Fixed on the way: the calendar dropped the 1st and 2nd (repeated ids in a lazy grid) |
+| 8.2 | CA box on Reports, and the CA report by month | Same totals and GST/VAT as the web; Copy, CSV and PDF (A4) share (on Mac too) | ✅ same server function as the web CA page; Copy confirms and Share opens (tour). Mac ✅: Copy for CA confirms ("Copied"); Share opens the system share menu (Mail, Messages, Notes…) — 🤖 MacKeyboardUITests, 15 Oct |
+| 8.3 | Customers, Stock, CA report by month (owner, from "More" at the foot of Reports) | Load; match the web | ✅ load. Sales, Performance and Staff were merged into Reports (16 Oct), as on the web |
 
 ### 9. Admin (P1/P2)
 
@@ -210,7 +210,7 @@ test's name is given.
 | Kitchen (iPhone list, iPad kanban, Mac) | From 1–2 m: order number, table, notes; columns fit; drag on iPad; toolbar alert menu | ✅ iPhone list and iPad kanban (portrait now shows all four columns with the sidebar hidden; drag tested); old order numbers shortened to 4 digits; chips and ⋯ big enough to hit. One "To do" section on iPhone (was two). Mac ✅ 15 Oct. |
 | Kitchen ticket | Thermal-printer legibility | ✅ rendered |
 | Reservations | Today/upcoming; form; detail sheet | ✅ iPhone (🤖 create, refuse past, statuses). Time field gets the number keyboard. Mac ✅ 15 Oct. |
-| Reports, CA and the five breakouts | Charts legible in dark mode; Copy for CA | ✅ iPhone tour (all six screens); Copy for CA confirms; Performance loads now; money is whole rupees with Indian grouping everywhere (was ₹1,08,814.00 in places, ₹102610 in others). Mac ✅ 15 Oct. |
+| Reports, CA and the breakouts (Customers, Stock, CA by month since 16 Oct) | Charts legible in dark mode; Copy for CA | ✅ iPhone tour (all six screens); Copy for CA confirms; Performance loads now; money is whole rupees with Indian grouping everywhere (was ₹1,08,814.00 in places, ₹102610 in others). Mac ✅ 15 Oct. |
 | Menu editor (items, categories, variants) | Long lists; forms on iPhone | ✅ iPhone and iPad (🤖 new item test). Mac ✅ 15 Oct. |
 | Modifiers, Discounts, Inventory, Users | Forms; destructive confirmations | ✅ iPhone and iPad (🤖 AdminScreensUITests). Mac ✅ 15 Oct. |
 | Settings and Restaurant settings | Percent fields; field labels (the form shows values without labels) | ✅ every field keeps its label (LabeledContent); only what reaches a bill (as on the web). 🤖 out-of-range GST refused. Mac ✅ 15 Oct. |

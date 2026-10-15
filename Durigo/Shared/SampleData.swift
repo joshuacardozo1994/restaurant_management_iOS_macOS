@@ -173,52 +173,6 @@ extension LedgerSummary {
 
 // MARK: - Reports
 
-extension ReportData {
-    static let sample: ReportData? = SampleData.decode("""
-    {"period": "7d", "startDate": "\(SampleData.ago(7 * 24 * 60))", "totalRevenue": 312400, "totalOrders": 164,
-     "avgOrderValue": 1905,
-     "topSellingItems": [{"name": "Fish Curry Rice", "category": "Mains", "quantity": 88, "orders": 71},
-                         {"name": "Kingfisher Beer", "category": "Beer", "quantity": 120, "orders": 64},
-                         {"name": "Chicken Xacuti", "category": "Mains", "quantity": 52, "orders": 47},
-                         {"name": "Bebinca", "category": "Desserts", "quantity": 31, "orders": 29}],
-     "categoryBreakdown": [{"category": "Mains", "orders": 120, "itemsSold": 240, "revenue": 168000},
-                           {"category": "Beer", "orders": 64, "itemsSold": 120, "revenue": 21600},
-                           {"category": "Desserts", "orders": 29, "itemsSold": 31, "revenue": 5580}],
-     "hourlyDistribution": [{"hour": 12, "orders": 18}, {"hour": 13, "orders": 26}, {"hour": 19, "orders": 31},
-                            {"hour": 20, "orders": 40}, {"hour": 21, "orders": 22}],
-     "paymentMethods": [{"method": "UPI", "count": 92, "total": 176000}, {"method": "CASH", "count": 51, "total": 88400},
-                        {"method": "CARD", "count": 21, "total": 48000}],
-     "staffPerformance": [{"staffName": "Pedro", "role": "WAITER", "ordersHandled": 71, "revenueGenerated": 134000},
-                          {"staffName": "Maria", "role": "WAITER", "ordersHandled": 58, "revenueGenerated": 112000}]}
-    """)
-}
-
-extension SalesReportData {
-    static let sample: SalesReportData? = SampleData.decode("""
-    {"todayRevenue": 48250, "todayOrders": 23, "avgOrderValue": 2098, "totalCustomers": 61,
-     "revenueChange": 12.4, "ordersChange": 6.1,
-     "topItems": [{"id": "m1", "name": "Fish Curry Rice", "revenue": 4900, "orders": 14},
-                  {"id": "m2", "name": "Chicken Xacuti", "revenue": 3420, "orders": 9},
-                  {"id": "m3", "name": "Kingfisher Beer", "revenue": 3960, "orders": 22}],
-     "hourlyData": [{"hour": 12, "revenue": 6200, "orders": 4}, {"hour": 13, "revenue": 9800, "orders": 6},
-                    {"hour": 19, "revenue": 8700, "orders": 5}, {"hour": 20, "revenue": 11250, "orders": 7}],
-     "paymentMethods": [{"method": "UPI", "amount": 26400, "count": 12}, {"method": "CASH", "amount": 14100, "count": 7},
-                        {"method": "CARD", "amount": 7750, "count": 4}]}
-    """)
-}
-
-extension PerformanceReportData {
-    static let sample: PerformanceReportData? = SampleData.decode("""
-    {"avgOrderTime": 18.5, "kitchenEfficiency": 0, "customerSatisfaction": 0, "staffProductivity": 62.5,
-     "tableUtilization": 41.7, "orderAccuracy": 97.2,
-     "staffPerformance": [{"name": "Pedro", "role": "WAITER", "ordersHandled": 71, "revenue": 134000},
-                          {"name": "Maria", "role": "WAITER", "ordersHandled": 58, "revenue": 112000},
-                          {"name": "Anil", "role": "WAITER", "ordersHandled": 35, "revenue": 66400}],
-     "busyHours": [{"hour": 13, "orders": 26}, {"hour": 20, "orders": 40}, {"hour": 21, "orders": 22}],
-     "alerts": [{"type": "warning", "title": "Slow tickets at 8pm", "message": "Orders took 31 minutes on average"}]}
-    """)
-}
-
 extension CustomersReportData {
     static let sample: CustomersReportData? = SampleData.decode("""
     {"period": "30d", "totalCustomers": 214, "newCustomers": 61, "returningCustomers": 153, "avgCustomerValue": 1840,
@@ -230,20 +184,6 @@ extension CustomersReportData {
                                {"bucket": "4+ visits", "customerCount": 55}],
      "orderTypePreferences": [{"type": "DINE_IN", "uniqueCustomers": 180, "totalOrders": 410, "revenue": 742000},
                               {"type": "TAKEAWAY", "uniqueCustomers": 52, "totalOrders": 88, "revenue": 96400}]}
-    """)
-}
-
-extension StaffReportData {
-    static let sample: StaffReportData? = SampleData.decode("""
-    {"period": "30d", "activeStaffCount": 6, "totalRevenue": 838400, "totalOrders": 498, "avgRevenuePerStaff": 139733,
-     "staffPerformance": [
-       {"id": "u1", "name": "Pedro", "role": "WAITER", "ordersHandled": 171, "revenueGenerated": 312000, "avgOrder": 1825, "daysWorked": 26, "lastOrder": "\(SampleData.ago(30))"},
-       {"id": "u2", "name": "Maria", "role": "WAITER", "ordersHandled": 158, "revenueGenerated": 288000, "avgOrder": 1823, "daysWorked": 25, "lastOrder": "\(SampleData.ago(50))"},
-       {"id": "u3", "name": "Anil", "role": "WAITER", "ordersHandled": 112, "revenueGenerated": 196400, "avgOrder": 1754, "daysWorked": 20, "lastOrder": "\(SampleData.ago(90))"}],
-     "roleStats": [{"role": "WAITER", "staffCount": 3, "totalOrders": 441, "totalRevenue": 796400, "avgOrder": 1806},
-                   {"role": "CASHIER", "staffCount": 1, "totalOrders": 57, "totalRevenue": 42000, "avgOrder": 737}],
-     "topPerformers": [{"name": "Pedro", "role": "WAITER", "recentOrders": 41, "recentRevenue": 78000},
-                       {"name": "Maria", "role": "WAITER", "recentOrders": 37, "recentRevenue": 69000}]}
     """)
 }
 
@@ -387,4 +327,34 @@ extension AppSettings {
                        printReceipt: true),
         inventory: .init(lowStockThreshold: 0.2, autoReorder: false, trackExpiry: false)
     )
+}
+
+extension ReportOverview {
+    /// The Reports screen's sample, shaped to the period being loaded
+    static func sample(range: ReportRange) -> ReportOverview {
+        let today = ReportDate.today
+        let count: Int
+        let from: String
+        switch range {
+        case .today: count = 1; from = today
+        case .month, .quarter: count = ReportDate.dayOfMonth(today); from = String(today.prefix(8)) + "01"
+        case .week, .pick: count = 7; from = ReportDate.add(today, days: -6)
+        }
+        let takings = { (i: Int) in Double(28000 + (i * 7919) % 50000) }
+        let figures = Figures(takings: 330620, bills: 412, averageBill: 802, discounts: 6240, cancelledDishes: 9, cancelledValue: 3180)
+        let days = (0..<count).map { Day(date: ReportDate.add(from, days: $0), takings: takings($0), bills: 40 + ($0 % 9) * 3, topDish: "Fish Curry Rice") }
+        return ReportOverview(
+            period: Period(range: range == .pick ? "7d" : range.rawValue, from: from, to: today, prevFrom: from, prevTo: today,
+                           label: "Fri 9 – Thu 15 Oct", prevLabel: "the week before", month: String(today.prefix(7))),
+            figures: figures, previous: figures,
+            days: days, previousDays: (0..<count).map { takings($0 + 3) }, bestDay: days.first,
+            heat: Heat(hours: Array(12...23), cells: (0..<7).map { d in (0..<12).map { h in ((d + 1) * (h + 3)) % 11 } }),
+            dishes: ["Fish Curry Rice", "Kingfisher pint", "Prawn Balchão", "Chicken Xacuti", "Cashew Feni peg", "Pork Vindaloo"].enumerated()
+                .map { Dish(name: $1, quantity: Double(214 - $0 * 30), takings: Double(68480 - $0 * 10000)) },
+            tenders: [Tender(method: "UPI", amount: 191800), Tender(method: "CASH", amount: 102500), Tender(method: "CARD", amount: 36320)],
+            splitBills: 23, codes: [Code(code: "FENI10", uses: 14)],
+            waiters: [Waiter(name: "Pedro", bills: 118, takings: 112400), Waiter(name: "Maria", bills: 104, takings: 98600), Waiter(name: "Anthony", bills: 77, takings: 61900)],
+            ca: CAReportData.sample ?? CAReportData(year: 2026, month: 10, monthLabel: "October 2026", totalSales: 0, totalItems: 0, totalBills: 0, totalGst: 0, totalVat: 0, categories: [])
+        )
+    }
 }
