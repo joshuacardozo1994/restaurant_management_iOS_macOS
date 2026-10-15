@@ -515,6 +515,8 @@ struct PaidReceipt: Identifiable {
     let paidBy: String?
     /// A bill not paid yet (printed for the table to check)
     var preBill = false
+    /// When it was paid, so a receipt printed later carries the bill's date
+    var date: Date? = nil
 }
 
 extension SettledBill {
@@ -566,7 +568,7 @@ struct PaidReceiptSheet: View {
                     ForEach(pages.indices, id: \.self) { index in
                         BillRenderer.page(index, of: pages, tableNumber: receipt.tableNumber ?? 0,
                                           finalTotal: receipt.bill.total, taxes: taxes,
-                                          identity: identity, paidBy: receipt.paidBy)
+                                          identity: identity, paidBy: receipt.paidBy, date: receipt.date)
                             .shadow(radius: 2)
                     }
                 }
@@ -592,7 +594,7 @@ struct PaidReceiptSheet: View {
             .task {
                 pdfURL = await BillRenderer.renderPDF(items: receipt.items, tableNumber: receipt.tableNumber ?? 0,
                                                       finalTotal: receipt.bill.total, taxes: taxes,
-                                                      identity: identity, paidBy: receipt.paidBy,
+                                                      identity: identity, paidBy: receipt.paidBy, date: receipt.date,
                                                       fileName: fileName)
             }
         }

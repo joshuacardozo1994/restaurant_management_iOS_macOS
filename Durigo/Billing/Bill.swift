@@ -101,6 +101,8 @@ struct Bill: View {
     var identity: RestaurantIdentity = .durigos
     /// How it was paid ("₹513 cash, ₹513 UPI"), shown under the total
     var paidBy: String? = nil
+    /// The bill's date: when it was paid, for a receipt printed again later; today otherwise
+    var date: Date? = nil
     @State private var maxWidth: CGFloat = 0
     #if os(iOS)
     @State private var qrCodeImage: UIImage? = nil
@@ -153,7 +155,7 @@ struct Bill: View {
                         
                     }
                     .overlay(alignment: .topTrailing) {
-                        Text("Date: \(Date().getTimeInFormat(dateStyle: .short, timeStyle: .none))")
+                        Text("Date: \((date ?? Date()).getTimeInFormat(dateStyle: .short, timeStyle: .none))")
                             .font(.system(size: 11))
                     }
                     .overlay(alignment: .topLeading) {
@@ -342,18 +344,18 @@ enum BillRenderer {
     @MainActor
     static func page(_ index: Int, of pages: [[MenuItem]], tableNumber: Int?, finalTotal: Int,
                      taxes: ReceiptTaxes?, identity: RestaurantIdentity = .durigos,
-                     paidBy: String? = nil) -> some View {
+                     paidBy: String? = nil, date: Date? = nil) -> some View {
         let isLast = index == pages.count - 1
         return Bill(currentMenuItems: pages[index], tableNumber: tableNumber, first: index == 0,
                     finalTotal: isLast ? finalTotal : nil, taxes: isLast ? taxes : nil,
-                    identity: identity, paidBy: isLast ? paidBy : nil)
+                    identity: identity, paidBy: isLast ? paidBy : nil, date: date)
             .frame(width: pageSize.width, height: pageSize.height)
             .background(Color.white)
     }
 
     @MainActor
     static func renderPDF(items: [MenuItem], tableNumber: Int?, finalTotal: Int, taxes: ReceiptTaxes?,
-                          identity: RestaurantIdentity = .durigos, paidBy: String? = nil,
+                          identity: RestaurantIdentity = .durigos, paidBy: String? = nil, date: Date? = nil,
                           fileName: String = "Bill.pdf") async -> URL {
         let url = URL.documentsDirectory.appending(path: fileName)
         var box = CGRect(origin: .zero, size: pageSize)
@@ -363,7 +365,7 @@ enum BillRenderer {
             pdf.beginPDFPage(nil)
             let renderer = ImageRenderer(content: page(index, of: all, tableNumber: tableNumber,
                                                        finalTotal: finalTotal, taxes: taxes,
-                                                       identity: identity, paidBy: paidBy))
+                                                       identity: identity, paidBy: paidBy, date: date))
             renderer.scale = 1.0 // match PDF points exactly
             renderer.proposedSize = ProposedViewSize(pageSize)
             renderer.render { _, context in context(pdf) }

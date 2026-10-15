@@ -18,17 +18,28 @@ import SwiftData
 
 private enum RangeChoice: Hashable { case today, yesterday, pick }
 
-/// Finds the device's copy of a Bill Generator bill. The server keeps the
-/// bill's time to the millisecond (its paid or made time), so the times match.
+/// Finds the device's copy of a Bill Generator bill: by its id, which the
+/// server keeps as the bill's externalId. Older servers don't send it; then by
+/// the bill's time (kept to the millisecond) and table.
 struct LocalBillIndex {
     private var bySecond: [Int: [BillHistoryItem]] = [:]
+    private var byId: [UUID: BillHistoryItem] = [:]
 
     init(_ bills: [BillHistoryItem]) {
-        for b in bills { bySecond[Int(b.date.timeIntervalSince1970), default: []].append(b) }
+        for b in bills {
+            bySecond[Int(b.date.timeIntervalSince1970), default: []].append(b)
+            byId[b.id] = b
+        }
     }
 
     func bill(for ledger: LedgerBill) -> BillHistoryItem? {
-        guard ledger.fromApp, let date = ledger.date else { return nil }
+        guard ledger.fromApp else { return nil }
+        if let raw = ledger.externalId {
+            // An id that isn't on this device means the device has no copy:
+            // never guess another bill by its time
+            return UUID(uuidString: raw).flatMap { byId[$0] }
+        }
+        guard let date = ledger.date else { return nil }
         let s = Int(date.timeIntervalSince1970)
         let candidates = (s - 2...s + 2).flatMap { bySecond[$0] ?? [] }
             .filter { abs($0.date.timeIntervalSince(date)) < 2 }
@@ -872,7 +883,7 @@ struct LedgerDetailContent: View {
             let items: [MenuItem]
             if let local { items = local.items } else { items = try await store.receiptItems(for: bill) }
             receipt = PaidReceipt(items: items, tableNumber: bill.tableNumber, bill: SettledBill(bill.amounts),
-                                  paidBy: bill.paidBy)
+                                  paidBy: bill.paidBy, date: Self.paidDate(bill.at))
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
@@ -902,6 +913,13 @@ struct LedgerDetailContent: View {
             errorMessage = message
         }
         await store.loadLedger()
+    }
+
+    /// The server's ISO time (with milliseconds) as a Date
+    private static func paidDate(_ iso: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: iso)
     }
 }
 

@@ -127,6 +127,8 @@ struct LedgerBill: Decodable, Identifiable, Equatable, Hashable {
     let paid: Bool
     /// Made in the app's Bill Generator
     let fromApp: Bool
+    /// The Bill Generator bill's own id (its UUID); nil from older servers
+    let externalId: String?
     let tenders: [LedgerTender]
     let items: Int
     let dishes: String
