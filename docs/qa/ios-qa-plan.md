@@ -50,7 +50,7 @@ test's name is given.
 | 1.1 | Sign in as each role | Lands on that role's first screen | ✅ simulator |
 | 1.2 | Wrong password; 10 wrong in 15 minutes | Error; then locked for 5 minutes | ✅ 🤖 QAPlanUITests testWrongPasswordThenLockout (server's message; locked after 10, a throwaway username) |
 | 1.3 | iPhone tabs per role | Admin: Dashboard, POS, Billing, Reports. Cashier: POS, Billing, Reports. Waiter: POS, Billing. Kitchen: Kitchen. Everything else under More | ✅ simulator; 🤖 AdminScreensUITests |
-| 1.4 | iPad and Mac sidebar per role | Same screens as the iPhone tabs plus More, grouped | ✅ iPad simulator tour, each role (admin, waiter, cashier, kitchen); kitchen board hides the sidebar. Mac: ⏳ needs your input: unlock the Mac (it was locked all night, so screenshots and the Mac test runner were blocked; see "Mac pass" below) |
+| 1.4 | iPad and Mac sidebar per role | Same screens as the iPhone tabs plus More, grouped | ✅ iPad simulator tour, each role (admin, waiter, cashier, kitchen); kitchen board hides the sidebar. Mac ✅ 15 Oct (unlocked): admin, waiter (POS, Billing, Reservations, Settings), cashier (+ Reports) and kitchen (board with the sidebar folded away) |
 | 1.5 | Non-admin opens Settings | Account and Sign Out only; no Restaurant settings | ✅ 🤖 QAPlanUITests (waiter) |
 | 1.6 | Admin deactivates a user who is signed in on a phone | The phone's next request signs it out | ✅ 🤖 testDeactivatedUserIsSignedOut |
 | 1.7 | Sign out | Token revoked; Keychain cleared; back to login | ✅ 🤖 QAPlanUITests |
@@ -138,7 +138,7 @@ test's name is given.
 | # | Check | Expected | Status |
 |---|---|---|---|
 | 8.1 | Overview for each period | Matches the web `/reports` | ✅ same numbers as the web /reports (₹1,08,814 / 110 orders / ₹1,067 for 7 days, 15 Oct) |
-| 8.2 | CA report for last month | Same totals and GST/VAT as the web; Copy and Share work (on Mac too) | ✅ same server function as the web CA page; Copy confirms and Share opens (tour). Mac Copy/Share: ⏳ needs your input (unlock the Mac; see "Mac pass") |
+| 8.2 | CA report for last month | Same totals and GST/VAT as the web; Copy and Share work (on Mac too) | ✅ same server function as the web CA page; Copy confirms and Share opens (tour). Mac: Copy for CA confirms ("Copied") ✅; Share opens its picker only with the app in front, which needs your approval of full-screen control (not given) — ⏳ needs your input |
 | 8.3 | Sales, Performance, Customers, Staff, Inventory | Load; match the web | ✅ all five load (tour). Fixed: Performance failed to load ("data couldn't be read") and its 7d/30d ranges showed today; removed tiles that were always 0 |
 
 ### 9. Admin (P1/P2)
@@ -162,7 +162,7 @@ test's name is given.
 
 **Touch and input**
 - [x] Tap targets at least 44pt, and the main action reachable with a thumb. ✅ fixed the 14–20pt ones found (kitchen ⋯/print, item chips, cart +/−, unmerge); some secondary chips are ~32–36pt
-- [ ] Mac: keyboard (Return submits, Esc cancels) and pointer hover work. ⏳ needs your input: unlock the Mac (see "Mac pass")
+- [x] Mac: keyboard (Return submits, Esc cancels) and pointer hover work. ✅ in code: login Return moves to the password then signs in (`onSubmit`); every sheet's Cancel/Save are `.cancellationAction`/`.confirmationAction`, which the Mac binds to Esc/Return (24 and 16 of them). A live keypress needs the app in front (your approval of full-screen control, not given); background keys only insert text
 
 **States**
 - [x] Loading, empty and error states exist and offer a way out. ✅ ("No bills yet", "No upcoming reservations", errors in plain words)
@@ -183,24 +183,24 @@ test's name is given.
 
 | Screen | Review focus | Status |
 |---|---|---|
-| Login | Brand panel on iPad/Mac; keyboard Return to sign in; error placement | ✅ iPhone (lockout message, 🤖 login-locked-out screenshot). Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
-| Dashboard | Numbers match the web; refresh | ✅ iPhone and iPad, light and dark; same numbers as the web. Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
-| POS tables grid | Readable from arm's length on iPad; Live indicator; merged groups; the + menu (takeaway, delivery, merge, manage) | ✅ iPhone and iPad, light and dark: Live dot, merged groups, + menu. Fixed: calendar and unmerge buttons labelled and enlarged. Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
-| Take order | Taps for a typical order; cart always visible; note editor; delivery fields | ✅ iPhone (🤖 tour + ordering test). Fixed: cart +/− were 17pt and unlabelled; category chips taller. Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
+| Login | Brand panel on iPad/Mac; keyboard Return to sign in; error placement | ✅ iPhone (lockout message, 🤖 login-locked-out screenshot). Mac ✅ 15 Oct. |
+| Dashboard | Numbers match the web; refresh | ✅ iPhone and iPad, light and dark; same numbers as the web. Mac ✅ 15 Oct. |
+| POS tables grid | Readable from arm's length on iPad; Live indicator; merged groups; the + menu (takeaway, delivery, merge, manage) | ✅ iPhone and iPad, light and dark: Live dot, merged groups, + menu. Fixed: calendar and unmerge buttons labelled and enlarged. Mac ✅ 15 Oct. |
+| Take order | Taps for a typical order; cart always visible; note editor; delivery fields | ✅ iPhone (🤖 tour + ordering test). Fixed: cart +/− were 17pt and unlabelled; category chips taller. Mac ✅ 15 Oct. |
 | Order detail and payment | Amount due is the biggest thing; breakdown readable; split rows on iPhone width | ✅ iPhone, Mac |
 | Paid receipt | Looks like the printed bill; Share/Print reachable | ✅ iPhone |
-| Manage tables, merge tables, reservation dialog | Sheets on iPhone; Mac sheet sizes | ✅ iPhone (🤖 merge and reservation-from-card tests). Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
-| Bill Generator | Fast with one hand; table and waiter pickers; empty state | ✅ iPhone and iPad; works offline with the cached waiter list. Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
+| Manage tables, merge tables, reservation dialog | Sheets on iPhone; Mac sheet sizes | ✅ iPhone (🤖 merge and reservation-from-card tests). Mac ✅ 15 Oct. |
+| Bill Generator | Fast with one hand; table and waiter pickers; empty state | ✅ iPhone and iPad; works offline with the cached waiter list. Mac ✅ 15 Oct. |
 | Bill preview and receipt | Durigo's header; tax lines; QR; multi-page | ✅ rendered; ✅ on iPhone the page was 420pt on a 402pt screen and its header hid behind the back button; it now scales to fit (14 Oct) |
 | Voice ordering | Permission flow; match picker | ⏳ needs a real device (microphone) |
-| Billing history and bill detail | Status chips; filters; discount sheet | ✅ iPhone and iPad, light and dark. Fixed: the list was empty once a POS order was paid; bill lines read "2× Soda ₹40" (was "2.0 Soda 40"); waiters don't see Apply discount. Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
-| Kitchen (iPhone list, iPad kanban, Mac) | From 1–2 m: order number, table, notes; columns fit; drag on iPad; toolbar alert menu | ✅ iPhone list and iPad kanban (portrait now shows all four columns with the sidebar hidden; drag tested); old order numbers shortened to 4 digits; chips and ⋯ big enough to hit. One "To do" section on iPhone (was two). Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
+| Billing history and bill detail | Status chips; filters; discount sheet | ✅ iPhone and iPad, light and dark. Fixed: the list was empty once a POS order was paid; bill lines read "2× Soda ₹40" (was "2.0 Soda 40"); waiters don't see Apply discount. Mac ✅ 15 Oct. |
+| Kitchen (iPhone list, iPad kanban, Mac) | From 1–2 m: order number, table, notes; columns fit; drag on iPad; toolbar alert menu | ✅ iPhone list and iPad kanban (portrait now shows all four columns with the sidebar hidden; drag tested); old order numbers shortened to 4 digits; chips and ⋯ big enough to hit. One "To do" section on iPhone (was two). Mac ✅ 15 Oct. |
 | Kitchen ticket | Thermal-printer legibility | ✅ rendered |
-| Reservations | Today/upcoming; form; detail sheet | ✅ iPhone (🤖 create, refuse past, statuses). Time field gets the number keyboard. Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
-| Reports, CA and the five breakouts | Charts legible in dark mode; Copy for CA | ✅ iPhone tour (all six screens); Copy for CA confirms; Performance loads now; money is whole rupees with Indian grouping everywhere (was ₹1,08,814.00 in places, ₹102610 in others). Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
-| Menu editor (items, categories, variants) | Long lists; forms on iPhone | ✅ iPhone and iPad (🤖 new item test). Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
-| Modifiers, Discounts, Inventory, Users | Forms; destructive confirmations | ✅ iPhone and iPad (🤖 AdminScreensUITests). Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
-| Settings and Restaurant settings | Percent fields; field labels (the form shows values without labels) | ✅ every field keeps its label (LabeledContent); only what reaches a bill (as on the web). 🤖 out-of-range GST refused. Mac: ⏳ needs your input (unlock the Mac; see "Mac pass"). |
+| Reservations | Today/upcoming; form; detail sheet | ✅ iPhone (🤖 create, refuse past, statuses). Time field gets the number keyboard. Mac ✅ 15 Oct. |
+| Reports, CA and the five breakouts | Charts legible in dark mode; Copy for CA | ✅ iPhone tour (all six screens); Copy for CA confirms; Performance loads now; money is whole rupees with Indian grouping everywhere (was ₹1,08,814.00 in places, ₹102610 in others). Mac ✅ 15 Oct. |
+| Menu editor (items, categories, variants) | Long lists; forms on iPhone | ✅ iPhone and iPad (🤖 new item test). Mac ✅ 15 Oct. |
+| Modifiers, Discounts, Inventory, Users | Forms; destructive confirmations | ✅ iPhone and iPad (🤖 AdminScreensUITests). Mac ✅ 15 Oct. |
+| Settings and Restaurant settings | Percent fields; field labels (the form shows values without labels) | ✅ every field keeps its label (LabeledContent); only what reaches a bill (as on the web). 🤖 out-of-range GST refused. Mac ✅ 15 Oct. |
 
 ### Order of work
 
@@ -253,11 +253,24 @@ render screens offscreen with the Mac's own layout and fonts:
 | Long bill, two pages | ✅ |
 | Kitchen ticket (80mm) | ✅ |
 | Bill detail | ✅ header, discount and total; found and fixed: totals cut paise instead of rounding (₹1,017.50 showed ₹1,017, not ₹1,018) here and in 14 other places |
-| Every other screen | ⏳ needs your input: lists, scroll views and text fields are native Mac views that offscreen rendering can't draw (the tables grid renders blank), so they need the running app on an unlocked Mac (steps below) |
+| Every other screen | ✅ on the running app once the Mac was unlocked (below) |
 
 All 15 unit tests pass on the Mac as well as on the iPhone simulator.
 
-## Mac pass (needs you, about 10 minutes)
+## Mac review, 15 Oct (unlocked, running app)
+
+Screenshots of the running Mac app, window maximised, every sidebar screen as the
+admin, plus waiter, cashier and kitchen: Dashboard, POS tables (6 columns), Kitchen
+board (4 columns, Live), Billing (whole rupees), Reservations and its sheet, Menu,
+Modifiers, Discounts, Inventory, Users, Reports, CA report (Copy confirms),
+Settings and Restaurant settings, Login. Fixed on the way:
+- **Forms** used the Mac's default style (labels right-aligned in a narrow column,
+  section titles as plain text, floating mid-window): every form is now grouped,
+  as on iOS (`.formStyle(.grouped)` on the window)
+- **Labels printed twice** on Mac fields ("Name Name Durigo's", "0 5 %"): 16
+  fields hide their own label where a row label is already shown
+
+## Mac pass (only the bits that need you)
 
 Why it's open: the Mac was locked (`IOConsoleLocked = Yes`) for the whole run,
 so window screenshots failed and the Mac test runner hung at the keychain

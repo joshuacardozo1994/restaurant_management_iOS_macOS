@@ -428,7 +428,7 @@ struct OrderDetailView: View {
             }
             HStack {
                 Text("or amount ₹").font(.subheadline).foregroundStyle(.secondary)
-                TextField("0", text: $discountText)
+                TextField("0", text: $discountText).labelsHidden()
                     .accessibilityIdentifier("pay-discount-amount")
                     .keyboardType(.numberPad)
                     .textFieldStyle(.roundedBorder)

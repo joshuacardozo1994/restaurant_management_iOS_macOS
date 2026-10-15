@@ -282,7 +282,7 @@ struct BillItem: View {
                 Text("₹")
                     .font(.system(.body, weight: .semibold))
                     .foregroundStyle(.secondary)
-                TextField("0", value: $item.price, format: .number)
+                TextField("0", value: $item.price, format: .number).labelsHidden()
                     .multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("menu-item-price-TextField-\(item.id.uuidString)")
                 #if os(iOS)

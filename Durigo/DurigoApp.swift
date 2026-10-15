@@ -55,6 +55,9 @@ struct DurigoApp: App {
                 }
             }
             .environment(session)
+            // Every form (settings, sheets) as grouped sections, as on iOS; the
+            // Mac's default form style right-aligns labels in a narrow column
+            .formStyle(.grouped)
             .task { await session.attemptDebugAutoSignIn() }
         }
         .modelContainer(container)

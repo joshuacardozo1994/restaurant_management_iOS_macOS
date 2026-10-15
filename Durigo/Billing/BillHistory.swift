@@ -338,7 +338,7 @@ struct DiscountSheet: View {
                             Text("Amount")
                             Spacer()
                             Text("₹")
-                            TextField("0", value: $fixedValue, format: .number)
+                            TextField("0", value: $fixedValue, format: .number).labelsHidden()
                                 .multilineTextAlignment(.trailing)
                                 .frame(width: 100)
                             #if os(iOS)

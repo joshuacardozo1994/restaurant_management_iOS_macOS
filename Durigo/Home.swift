@@ -508,7 +508,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Configuration")
                     } footer: {
-                        Text("Restaurant info, business hours, tax rate, billing methods, inventory thresholds.")
+                        Text("The restaurant details and GST/VAT rates printed on every bill.")
                             .font(.caption)
                     }
                 }
@@ -1193,7 +1193,7 @@ private struct DiscountFormSheet: View {
                     HStack {
                         Text(type == "PERCENTAGE" ? "Value (%)" : "Value (₹)")
                         Spacer()
-                        TextField("0", value: $value, format: .number)
+                        TextField("0", value: $value, format: .number).labelsHidden()
                             .multilineTextAlignment(.trailing).frame(width: 80)
                         #if os(iOS)
                             .keyboardType(.numberPad)
@@ -1203,7 +1203,7 @@ private struct DiscountFormSheet: View {
                 Section("Limits") {
                     Toggle("Minimum order value", isOn: $hasMin)
                     if hasMin {
-                        HStack { Text("Min ₹"); Spacer(); TextField("0", value: $minOrderValue, format: .number).multilineTextAlignment(.trailing).frame(width: 80)
+                        HStack { Text("Min ₹"); Spacer(); TextField("0", value: $minOrderValue, format: .number).labelsHidden().multilineTextAlignment(.trailing).frame(width: 80)
                         #if os(iOS)
                             .keyboardType(.numberPad)
                         #endif
@@ -1211,7 +1211,7 @@ private struct DiscountFormSheet: View {
                     }
                     Toggle("Cap discount", isOn: $hasMax)
                     if hasMax {
-                        HStack { Text("Max ₹"); Spacer(); TextField("0", value: $maxDiscount, format: .number).multilineTextAlignment(.trailing).frame(width: 80)
+                        HStack { Text("Max ₹"); Spacer(); TextField("0", value: $maxDiscount, format: .number).labelsHidden().multilineTextAlignment(.trailing).frame(width: 80)
                         #if os(iOS)
                             .keyboardType(.numberPad)
                         #endif
@@ -1219,7 +1219,7 @@ private struct DiscountFormSheet: View {
                     }
                     Toggle("Limit total uses", isOn: $hasLimit)
                     if hasLimit {
-                        HStack { Text("Total uses"); Spacer(); TextField("0", value: $usageLimit, format: .number).multilineTextAlignment(.trailing).frame(width: 80)
+                        HStack { Text("Total uses"); Spacer(); TextField("0", value: $usageLimit, format: .number).labelsHidden().multilineTextAlignment(.trailing).frame(width: 80)
                         #if os(iOS)
                             .keyboardType(.numberPad)
                         #endif
@@ -1566,7 +1566,7 @@ private struct ModifierFormSheet: View {
                         Text("Price")
                         Spacer()
                         Text("₹")
-                        TextField("0", value: $price, format: .number).multilineTextAlignment(.trailing).frame(width: 80)
+                        TextField("0", value: $price, format: .number).labelsHidden().multilineTextAlignment(.trailing).frame(width: 80)
                         #if os(iOS)
                             .keyboardType(.numberPad)
                         #endif
@@ -1585,7 +1585,7 @@ private struct ModifierFormSheet: View {
                     Toggle("Active", isOn: $active)
                     HStack {
                         Text("Sort order"); Spacer()
-                        TextField("0", value: $sortOrder, format: .number).multilineTextAlignment(.trailing).frame(width: 80)
+                        TextField("0", value: $sortOrder, format: .number).labelsHidden().multilineTextAlignment(.trailing).frame(width: 80)
                         #if os(iOS)
                             .keyboardType(.numberPad)
                         #endif
@@ -1800,6 +1800,7 @@ struct AppSettingsForm: View {
         LabeledContent(label) {
             TextField(label, text: text, prompt: Text("Not set"))
                 .multilineTextAlignment(.trailing)
+                .labelsHidden() // the Mac would print the label twice
         }
     }
 
@@ -1812,6 +1813,8 @@ struct AppSettingsForm: View {
                                           set: { rate.wrappedValue = $0 / 100 }),
                       format: .number)
                 .multilineTextAlignment(.trailing)
+                .labelsHidden()
+                .accessibilityLabel(label)
                 .frame(width: 70)
                 #if os(iOS)
                 .keyboardType(.decimalPad)
@@ -2093,7 +2096,7 @@ private struct ReservationFormSheet: View {
                     DatePicker("Date", selection: $date, in: Date()..., displayedComponents: .date)
                     HStack {
                         Text("Time"); Spacer()
-                        TextField("HH:MM", text: $time).multilineTextAlignment(.trailing).frame(width: 80)
+                        TextField("HH:MM", text: $time).labelsHidden().multilineTextAlignment(.trailing).frame(width: 80)
                             .keyboardType(.numbersAndPunctuation)
                             .accessibilityIdentifier("reservation-form-time")
                     }
@@ -3610,13 +3613,13 @@ private struct IngredientFormSheet: View {
                 }
                 Section("Stock") {
                     HStack { Text("Current"); Spacer()
-                        TextField("0", value: $currentStock, format: .number).multilineTextAlignment(.trailing).frame(width: 100)
+                        TextField("0", value: $currentStock, format: .number).labelsHidden().multilineTextAlignment(.trailing).frame(width: 100)
                         #if os(iOS)
                             .keyboardType(.decimalPad)
                         #endif
                     }
                     HStack { Text("Minimum"); Spacer()
-                        TextField("0", value: $minimumStock, format: .number).multilineTextAlignment(.trailing).frame(width: 100)
+                        TextField("0", value: $minimumStock, format: .number).labelsHidden().multilineTextAlignment(.trailing).frame(width: 100)
                         #if os(iOS)
                             .keyboardType(.decimalPad)
                         #endif
@@ -3624,7 +3627,7 @@ private struct IngredientFormSheet: View {
                     Toggle("Has max", isOn: $hasMax)
                     if hasMax {
                         HStack { Text("Maximum"); Spacer()
-                            TextField("0", value: $maximumStock, format: .number).multilineTextAlignment(.trailing).frame(width: 100)
+                            TextField("0", value: $maximumStock, format: .number).labelsHidden().multilineTextAlignment(.trailing).frame(width: 100)
                             #if os(iOS)
                                 .keyboardType(.decimalPad)
                             #endif
@@ -3635,7 +3638,7 @@ private struct IngredientFormSheet: View {
                     Toggle("Track cost", isOn: $hasCost)
                     if hasCost {
                         HStack { Text("Cost per unit (₹)"); Spacer()
-                            TextField("0", value: $costPerUnit, format: .number).multilineTextAlignment(.trailing).frame(width: 100)
+                            TextField("0", value: $costPerUnit, format: .number).labelsHidden().multilineTextAlignment(.trailing).frame(width: 100)
                             #if os(iOS)
                                 .keyboardType(.numberPad)
                             #endif

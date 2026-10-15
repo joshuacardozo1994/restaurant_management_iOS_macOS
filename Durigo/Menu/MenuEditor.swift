@@ -569,7 +569,7 @@ private struct MenuItemFormSheet: View {
                         Text("Price")
                         Spacer()
                         Text("₹")
-                        TextField("0", value: $price, format: .number)
+                        TextField("0", value: $price, format: .number).labelsHidden()
                             .multilineTextAlignment(.trailing)
                             .frame(width: 80)
                         #if os(iOS)
@@ -1134,7 +1134,7 @@ private struct VariantFormSheet: View {
                     HStack {
                         Text("Sort order")
                         Spacer()
-                        TextField("0", value: $sortOrder, format: .number)
+                        TextField("0", value: $sortOrder, format: .number).labelsHidden()
                             .multilineTextAlignment(.trailing)
                             .frame(width: 80)
                         #if os(iOS)
