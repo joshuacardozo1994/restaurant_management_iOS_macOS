@@ -1522,3 +1522,48 @@ final class ScreenTourUITests: XCTestCase {
         }
     }
 }
+
+// MARK: - Mac only: Share on the CA report, Esc closes a sheet
+
+#if os(macOS)
+final class MacKeyboardUITests: XCTestCase {
+    let app = XCUIApplication()
+
+    private func launch(tab: String) throws {
+        let password = try XCTUnwrap(ProcessInfo.processInfo.environment["QA_PASS"], "Set TEST_RUNNER_QA_PASS")
+        app.launchArguments = ["--signed-out", "--auto-signin=qa-admin:\(password)", "--start-tab=\(tab)"]
+        app.launch()
+    }
+
+    // 8.2 on the Mac: Share opens the system share menu
+    func testCAReportShareOpensOnMac() throws {
+        try launch(tab: "reports")
+        let ca = app.buttons["CA report (monthly)"]
+        XCTAssertTrue(ca.waitForExistence(timeout: 15))
+        ca.click()
+        let share = app.buttons["Share"].firstMatch
+        XCTAssertTrue(share.waitForExistence(timeout: 15), "No Share button")
+        share.click()
+        // NSSharingServicePicker shows a menu of services
+        let picker = app.menuItems.firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 5), "Share didn't open a share menu")
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "mac-share-menu"; shot.lifetime = .keepAlways; add(shot)
+        app.typeKey(.escape, modifierFlags: [])
+    }
+
+    // Keyboard row on the Mac: Esc closes a sheet (its Cancel is .cancellationAction)
+    func testEscClosesASheetOnMac() throws {
+        try launch(tab: "reservations")
+        let add = app.descendants(matching: .any).matching(identifier: "admin-reservations-new").firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 15))
+        add.click()
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "No sheet")
+        app.typeKey(.escape, modifierFlags: [])
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: sheet)
+        waitForExpectations(timeout: 5)
+    }
+}
+#endif

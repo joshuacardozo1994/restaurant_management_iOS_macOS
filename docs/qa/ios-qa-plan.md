@@ -277,6 +277,15 @@ Settings and Restaurant settings, Login. Fixed on the way:
 
 ## Mac pass (only the bits that need you)
 
+Share on the CA report (8.2) and Esc closing a sheet are covered by
+`MacKeyboardUITests`. macOS asks for your Touch ID or password once before UI
+tests can drive the Mac (it was not answered on 15 Oct), so run it at the Mac:
+
+```bash
+TEST_RUNNER_QA_PASS=… xcodebuild -project Durigo.xcodeproj -scheme "Durigo (Local)" -configuration "Debug Local" -destination 'platform=macOS,arch=arm64' CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= -only-testing:DurigoUITests/MacKeyboardUITests test
+```
+
+
 Why it's open: the Mac was locked (`IOConsoleLocked = Yes`) for the whole run,
 so window screenshots failed and the Mac test runner hung at the keychain
 prompt a locally signed test build raises. The Mac build itself succeeds, and
