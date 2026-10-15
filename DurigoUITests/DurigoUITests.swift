@@ -1547,7 +1547,9 @@ final class MacKeyboardUITests: XCTestCase {
         // NSSharingServicePicker shows a menu of services
         let picker = app.menuItems.firstMatch
         XCTAssertTrue(picker.waitForExistence(timeout: 5), "Share didn't open a share menu")
-        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        // The app's window only: a whole-screen shot would capture whatever
+        // else is open on the Mac
+        let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
         shot.name = "mac-share-menu"; shot.lifetime = .keepAlways; add(shot)
         app.typeKey(.escape, modifierFlags: [])
     }

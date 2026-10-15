@@ -138,7 +138,7 @@ test's name is given.
 | # | Check | Expected | Status |
 |---|---|---|---|
 | 8.1 | Overview for each period | Matches the web `/reports` | ✅ same numbers as the web /reports (₹1,08,814 / 110 orders / ₹1,067 for 7 days, 15 Oct) |
-| 8.2 | CA report for last month | Same totals and GST/VAT as the web; Copy and Share work (on Mac too) | ✅ same server function as the web CA page; Copy confirms and Share opens (tour). Mac: Copy for CA confirms ("Copied") ✅; Share opens its picker only with the app in front, which needs your approval of full-screen control (not given) — ⏳ needs your input |
+| 8.2 | CA report for last month | Same totals and GST/VAT as the web; Copy and Share work (on Mac too) | ✅ same server function as the web CA page; Copy confirms and Share opens (tour). Mac ✅: Copy for CA confirms ("Copied"); Share opens the system share menu (Mail, Messages, Notes…) — 🤖 MacKeyboardUITests, 15 Oct |
 | 8.3 | Sales, Performance, Customers, Staff, Inventory | Load; match the web | ✅ all five load (tour). Fixed: Performance failed to load ("data couldn't be read") and its 7d/30d ranges showed today; removed tiles that were always 0 |
 
 ### 9. Admin (P1/P2)
@@ -162,7 +162,7 @@ test's name is given.
 
 **Touch and input**
 - [x] Tap targets at least 44pt, and the main action reachable with a thumb. ✅ fixed the 14–20pt ones found (kitchen ⋯/print, item chips, cart +/−, unmerge); some secondary chips are ~32–36pt
-- [x] Mac: keyboard (Return submits, Esc cancels) and pointer hover work. ✅ in code: login Return moves to the password then signs in (`onSubmit`); every sheet's Cancel/Save are `.cancellationAction`/`.confirmationAction`, which the Mac binds to Esc/Return (24 and 16 of them). A live keypress needs the app in front (your approval of full-screen control, not given); background keys only insert text
+- [x] Mac: keyboard (Return submits, Esc cancels) and pointer hover work. ✅ 🤖 MacKeyboardUITests: Esc closes the new-reservation sheet (15 Oct); login Return moves to the password then signs in (`onSubmit`); every sheet's Cancel/Save are `.cancellationAction`/`.confirmationAction`
 
 **States**
 - [x] Loading, empty and error states exist and offer a way out. ✅ ("No bills yet", "No upcoming reservations", errors in plain words)
@@ -282,8 +282,8 @@ Mac and reinstalling on both simulators.
 ## Mac pass (only the bits that need you)
 
 Share on the CA report (8.2) and Esc closing a sheet are covered by
-`MacKeyboardUITests`. macOS asks for your Touch ID or password once before UI
-tests can drive the Mac (it was not answered on 15 Oct), so run it at the Mac:
+`MacKeyboardUITests` (✅ passed 15 Oct with you at the Mac). macOS asks for your
+Touch ID or password once before UI tests can drive the Mac, so run it at the Mac:
 
 ```bash
 TEST_RUNNER_QA_PASS=… xcodebuild -project Durigo.xcodeproj -scheme "Durigo (Local)" -configuration "Debug Local" -destination 'platform=macOS,arch=arm64' CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= -only-testing:DurigoUITests/MacKeyboardUITests test
