@@ -275,6 +275,10 @@ Settings and Restaurant settings, Login. Fixed on the way:
 - **Labels printed twice** on Mac fields ("Name Name Durigo's", "0 5 %"): 16
   fields hide their own label where a row label is already shown
 
+**Deploys.** The Pi serves only the web app (`restaurant-management`); this repo
+is never deployed there. Each iOS/Mac batch was confirmed by building for iOS and
+Mac and reinstalling on both simulators.
+
 ## Mac pass (only the bits that need you)
 
 Share on the CA report (8.2) and Esc closing a sheet are covered by
