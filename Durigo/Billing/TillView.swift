@@ -98,7 +98,7 @@ struct BillingView: View {
             .navigationTitle(mode == .waiting ? "Till" : mode == .bills ? "Bills" : "Bill Generator")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) { LiveBadge(isLive: store?.isLive ?? false) }
+                LiveBadgeItem(isLive: store?.isLive ?? false)
             }
             .navigationDestination(for: BillingRoute.self) { route in
                 if let store { destination(route, store: store) }

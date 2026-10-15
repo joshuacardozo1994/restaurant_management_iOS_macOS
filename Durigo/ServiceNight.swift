@@ -268,7 +268,7 @@ struct ServiceNightDashboard: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .primaryAction) { LiveBadge(isLive: store?.isLive ?? false) }
+                LiveBadgeItem(isLive: store?.isLive ?? false)
             }
             .task {
                 if store == nil { store = ServiceNightStore(session: session) }
@@ -375,6 +375,7 @@ struct LiveBadge: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .fixedSize()
+        .accessibilityAddTraits(.isStaticText)
         .foregroundStyle(isLive ? SN.teal : SN.mut)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isLive ? "Live" : "Reconnecting")
@@ -846,6 +847,20 @@ struct FlowLayout: Layout {
             s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
             x += size.width + spacing
             lineHeight = max(lineHeight, size.height)
+        }
+    }
+}
+
+/// The Live badge in a toolbar: a status, not a button, so no glass capsule
+/// behind it on iOS 26 and macOS 26 (which would make it look tappable)
+struct LiveBadgeItem: ToolbarContent {
+    let isLive: Bool
+    var body: some ToolbarContent {
+        if #available(iOS 26, macOS 26, *) {
+            ToolbarItem(placement: .primaryAction) { LiveBadge(isLive: isLive) }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .primaryAction) { LiveBadge(isLive: isLive) }
         }
     }
 }
