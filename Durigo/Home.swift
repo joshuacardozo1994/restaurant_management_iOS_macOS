@@ -2740,6 +2740,7 @@ struct KitchenItemDetailSheet: View {
 struct KitchenAdminView: View {
     @Environment(Session.self) private var session
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var store: KitchenStore?
     /// Re-published every 30s so elapsed-time chips on each order card
     /// stay fresh without needing per-card state. Mirrors the web's
@@ -2865,6 +2866,14 @@ struct KitchenAdminView: View {
             ?? ISO8601DateFormatter().date(from: createdAt)
         guard let date else { return 0 }
         return max(0, Int(now.timeIntervalSince(date) / 60))
+    }
+
+    private var tableOnOwnLine: Bool { dynamicTypeSize >= .xxLarge }
+
+    /// "Table 10", or "Takeaway" / "Delivery"
+    private func whereLabel(_ o: KitchenOrder) -> String {
+        if let n = o.table?.number { return "Table \(n)" }
+        return o.type.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     /// Mirrors web's `formatDuration`: 12m, 1h 5m, 2d 4h.
@@ -3063,17 +3072,24 @@ struct KitchenAdminView: View {
         // densely. Header → items: 4pt; items → footer: 4pt.
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
+                // Number and time never wrap (they did in narrow columns at
+                // large text sizes); the table label shrinks a little instead
                 Text("#\(shortNum)").font(.system(.caption, design: .monospaced, weight: .bold))
+                    .fixedSize()
                 // Elapsed-time chip — colored at 15/30 min thresholds.
                 Text(formatElapsed(elapsed))
                     .font(.caption.weight(.semibold))
                     .monospacedDigit()
+                    .fixedSize()
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Capsule().fill(color.opacity(0.15)))
                     .foregroundStyle(color)
-                Spacer()
-                if let n = o.table?.number { Text("Table \(n)").font(.caption).foregroundStyle(.secondary) }
-                else { Text(o.type).font(.caption).foregroundStyle(.secondary) }
+                Spacer(minLength: 4)
+                if !tableOnOwnLine {
+                    Text(whereLabel(o))
+                        .font(.caption).foregroundStyle(.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
                 if canCancel(o) {
                     // One button for both, so the narrow kanban header keeps its room
                     Menu {
@@ -3109,6 +3125,11 @@ struct KitchenAdminView: View {
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Print kitchen ticket")
                 }
+            }
+            // At large text sizes the header has no room left for the table,
+            // and the kitchen must never lose it: its own line instead
+            if tableOnOwnLine {
+                Text(whereLabel(o)).font(.subheadline.weight(.semibold))
             }
             if let note = o.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
                 Label(note, systemImage: "exclamationmark.bubble.fill")

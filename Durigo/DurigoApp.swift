@@ -58,6 +58,10 @@ struct DurigoApp: App {
             // Every form (settings, sheets) as grouped sections, as on iOS; the
             // Mac's default form style right-aligns labels in a narrow column
             .formStyle(.grouped)
+            // Text grows up to the largest standard size; beyond that (the
+            // accessibility sizes) the table cards, kitchen columns and bill
+            // rows split words, so they stop growing there
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             .task { await session.attemptDebugAutoSignIn() }
         }
         .modelContainer(container)

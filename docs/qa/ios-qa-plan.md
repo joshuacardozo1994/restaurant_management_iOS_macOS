@@ -173,7 +173,7 @@ test's name is given.
 - [x] Wording matches the web (Bill, Table, Served…). ✅
 
 **Theme and accessibility**
-- [x] Dark mode, and the largest Dynamic Type size, still readable. ✅ dark mode on iPhone and iPad; largest Dynamic Type: not checked (*assumption:* staff use default text size)
+- [x] Dark mode, and the largest Dynamic Type size, still readable. ✅ dark mode on iPhone and iPad. Text size checked 15 Oct up to the largest accessibility size: the login screen now wraps and scrolls at every size; the working screens grow up to xxxLarge (the largest standard size) and stop there, because at accessibility sizes the table cards, kitchen columns and bill rows split words (*assumption:* that cap is right for dense staff screens). At xxxLarge the kitchen card shows the table on its own bold line instead of dropping it
 - [x] VoiceOver: icon buttons have labels; order makes sense. ✅ labels added where missing (reserve, unmerge, cart +/−)
 
 **Safety**

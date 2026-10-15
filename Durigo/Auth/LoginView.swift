@@ -28,22 +28,32 @@ struct LoginView: View {
         ZStack {
             Color(.systemBackground).ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Top brand
-                HStack(spacing: 8) {
-                    BrandMarkSquare(size: 24)
-                    Text("Durigo's")
-                        .font(.system(.subheadline, weight: .semibold))
+            // Scrolls when the text is large or the keyboard is up, so the
+            // titles wrap instead of truncating and Sign in stays reachable;
+            // centred as before when everything fits
+            GeometryReader { geo in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Top brand
+                        HStack(spacing: 8) {
+                            BrandMarkSquare(size: 24)
+                            Text("Durigo's")
+                                .font(.system(.subheadline, weight: .semibold))
+                        }
+                        .padding(.top, 16)
+
+                        Spacer(minLength: 24)
+
+                        LoginFormCard(maxWidth: 360)
+                            .padding(.horizontal, 24)
+
+                        Spacer(minLength: 24)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: geo.size.height)
                 }
-                .padding(.top, 16)
-
-                Spacer()
-
-                LoginFormCard(maxWidth: 360)
-                    .padding(.horizontal, 24)
-
-                Spacer()
-                Spacer()
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDismissesKeyboard(.interactively)
             }
         }
     }
@@ -66,8 +76,14 @@ struct LoginView: View {
                 }
                 .padding([.top, .trailing], 32)
 
-                LoginFormCard(maxWidth: 360)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                GeometryReader { geo in
+                    ScrollView {
+                        LoginFormCard(maxWidth: 360)
+                            .padding(.horizontal, 24)
+                            .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -94,6 +110,8 @@ private struct BrandMarkSquare: View {
 // MARK: - Brand panel (left side on iPad — mirrors web's `bg-primary` panel)
 
 private struct BrandPanel: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         ZStack {
             // On the web this is `bg-primary` which is light/off-white in dark mode.
@@ -122,8 +140,11 @@ private struct BrandPanel: View {
                     .frame(maxWidth: 480)
 
                 LazyVGrid(
-                    columns: [GridItem(.flexible(), alignment: .leading),
-                              GridItem(.flexible(), alignment: .leading)],
+                    // One column at accessibility text sizes, so words don't split
+                    columns: dynamicTypeSize.isAccessibilitySize
+                        ? [GridItem(.flexible(), alignment: .leading)]
+                        : [GridItem(.flexible(), alignment: .leading),
+                           GridItem(.flexible(), alignment: .leading)],
                     alignment: .leading,
                     spacing: 14
                 ) {
@@ -199,9 +220,13 @@ private struct LoginFormCard: View {
             VStack(spacing: 6) {
                 Text("Welcome back")
                     .font(.system(.largeTitle, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Sign in to your account to continue")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: 16) {
