@@ -184,7 +184,7 @@ test's name is given.
 | Screen | Review focus | Status |
 |---|---|---|
 | Login | Brand panel on iPad/Mac; keyboard Return to sign in; error placement | ✅ iPhone (lockout message, 🤖 login-locked-out screenshot). Mac ✅ 15 Oct. |
-| Dashboard | Numbers match the web; refresh | ✅ iPhone and iPad, light and dark; same numbers as the web. Mac ✅ 15 Oct. |
+| Dashboard | Numbers match the web; refresh | ✅ iPhone and iPad, light and dark; same numbers as the web. Mac ✅ 15 Oct. **Redesigned 15 Oct ("Service night"):** same figures as the web dashboard from `/api/admin/dashboard/service`, reloads on live events and every minute; one column on iPhone, two beside the iPad sidebar, three when wide. ✅ iPhone 17 and iPad Pro 13", light and dark (table numbers ungrouped, e.g. 1043). ⏳ Mac: builds, but needs you at the Mac. With the display asleep the app opens no window, so neither `MacKeyboardUITests/testDashboardOnMacLightAndDark` nor a window capture could run (the earlier Mac tests fail the same way right now). |
 | POS tables grid | Readable from arm's length on iPad; Live indicator; merged groups; the + menu (takeaway, delivery, merge, manage) | ✅ iPhone and iPad, light and dark: Live dot, merged groups, + menu. Fixed: calendar and unmerge buttons labelled and enlarged. Mac ✅ 15 Oct. |
 | Take order | Taps for a typical order; cart always visible; note editor; delivery fields | ✅ iPhone (🤖 tour + ordering test). Fixed: cart +/− were 17pt and unlabelled; category chips taller. Mac ✅ 15 Oct. |
 | Order detail and payment | Amount due is the biggest thing; breakdown readable; split rows on iPhone width | ✅ iPhone, Mac |

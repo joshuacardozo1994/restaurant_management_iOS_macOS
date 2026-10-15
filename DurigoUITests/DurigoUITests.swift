@@ -1535,6 +1535,22 @@ final class MacKeyboardUITests: XCTestCase {
         app.launch()
     }
 
+    // The dashboard in both themes: panels load, then a shot of the app's window
+    func testDashboardOnMacLightAndDark() throws {
+        let password = try XCTUnwrap(ProcessInfo.processInfo.environment["QA_PASS"], "Set TEST_RUNNER_QA_PASS")
+        for appearance in ["light", "dark"] {
+            app.launchArguments = ["--signed-out", "--auto-signin=qa-admin:\(password)", "--start-tab=dashboard", "--appearance=\(appearance)"]
+            app.launch()
+            XCTAssertTrue(app.staticTexts["TAKINGS TODAY"].waitForExistence(timeout: 20), "Dashboard didn't load (\(appearance))")
+            XCTAssertTrue(app.staticTexts["KITCHEN"].exists)
+            XCTAssertTrue(app.staticTexts["NEEDS YOU"].exists)
+            sleep(2)
+            let shot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+            shot.name = "mac-dashboard-\(appearance)"; shot.lifetime = .keepAlways; add(shot)
+            app.terminate()
+        }
+    }
+
     // 8.2 on the Mac: Share opens the system share menu
     func testCAReportShareOpensOnMac() throws {
         try launch(tab: "reports")

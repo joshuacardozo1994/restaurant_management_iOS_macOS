@@ -45,6 +45,18 @@ struct DurigoApp: App {
         }
     }
 
+    /// Debug-only: `--appearance=light|dark` fixes the appearance so UI tests
+    /// can check both themes without changing the Mac's system setting.
+    /// Otherwise nil, which follows the system.
+    private static var debugColorScheme: ColorScheme? {
+        #if DEBUG
+        let args = CommandLine.arguments
+        if args.contains("--appearance=dark") { return .dark }
+        if args.contains("--appearance=light") { return .light }
+        #endif
+        return nil
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
@@ -62,6 +74,7 @@ struct DurigoApp: App {
             // accessibility sizes) the table cards, kitchen columns and bill
             // rows split words, so they stop growing there
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            .preferredColorScheme(Self.debugColorScheme)
             .task { await session.attemptDebugAutoSignIn() }
         }
         .modelContainer(container)

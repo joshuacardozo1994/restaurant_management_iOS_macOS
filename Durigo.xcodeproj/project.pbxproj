@@ -18,6 +18,7 @@
 		868EA903F59768AB15DA8EC5 /* TablesGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A472EBD9E097D5FA29E2B8 /* TablesGridView.swift */; };
 		9C25AD807EAAB09B6B8FB8DF /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77500D2BEDB2E4CAA74265B /* APIClient.swift */; };
 		9E508451D78A3B0C932F9551 /* TableMergeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C86B1511273C77B53B37B28B /* TableMergeView.swift */; };
+		CC46FCCC5EC600C1CF8BE3CB /* ServiceNight.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B126C893B1B768C94D3BD4 /* ServiceNight.swift */; };
 		D00558BC5C079702E7D6873A /* ReservationDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401779939A1442A2825368C7 /* ReservationDialogView.swift */; };
 		DA18F49353BC4963B3B1DCD0 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2D94297F97D6EC67F3EFB9 /* KeychainHelper.swift */; };
 		E42E2246E5C10AA011C94E20 /* TakeOrderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFFB9A60E671038E38D67EE /* TakeOrderView.swift */; };
@@ -104,6 +105,7 @@
 		8DFFB9A60E671038E38D67EE /* TakeOrderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TakeOrderView.swift; sourceTree = "<group>"; };
 		A2D652368E81B50888B000AA /* OrderDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OrderDetailView.swift; sourceTree = "<group>"; };
 		B3A472EBD9E097D5FA29E2B8 /* TablesGridView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TablesGridView.swift; sourceTree = "<group>"; };
+		C2B126C893B1B768C94D3BD4 /* ServiceNight.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ServiceNight.swift; sourceTree = "<group>"; };
 		C86B1511273C77B53B37B28B /* TableMergeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TableMergeView.swift; sourceTree = "<group>"; };
 		CA6923AAF27C492339848EE9 /* POSContainer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = POSContainer.swift; sourceTree = "<group>"; };
 		D77500D2BEDB2E4CAA74265B /* APIClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -306,6 +308,7 @@
 				E71F1E252F4A4B3A005080A1 /* Reports.swift */,
 				C856767684E1F6459C82C2ED /* Auth */,
 				433021DA50C7723A1C0C556B /* POS */,
+				C2B126C893B1B768C94D3BD4 /* ServiceNight.swift */,
 			);
 			path = Durigo;
 			sourceTree = "<group>";
@@ -598,6 +601,7 @@
 				6715E4FF5D8C151ED5968976 /* OrderDetailView.swift in Sources */,
 				9E508451D78A3B0C932F9551 /* TableMergeView.swift in Sources */,
 				D00558BC5C079702E7D6873A /* ReservationDialogView.swift in Sources */,
+				CC46FCCC5EC600C1CF8BE3CB /* ServiceNight.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
