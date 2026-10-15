@@ -531,7 +531,7 @@ final class POSPaymentUITests: XCTestCase {
         XCTAssertTrue(total.waitForExistence(timeout: 5))
         let before = Int(total.label.filter(\.isNumber)) ?? 0
 
-        let code = app.textFields["pay-code-field"]
+        let code = app.textFields["pay-discount-field"]
         XCTAssertTrue(code.waitForExistence(timeout: 5))
         code.tap()
         code.typeText("QA10")
@@ -541,14 +541,18 @@ final class POSPaymentUITests: XCTestCase {
         let expected = before - Int((Double(before) * 0.10).rounded())
         XCTAssertTrue(waitFor { amount(total.label) == expected }, "Total \(total.label), expected ₹\(expected)")
 
-        // Split in two: the parts must add up before Pay is enabled
-        let split = app.switches["pay-split-toggle"]
+        // Split in two (the split editor is a sheet): the parts must add up
+        // before Done and Pay are enabled
+        let split = app.buttons["pay-method-SPLIT"]
         XCTAssertTrue(split.waitForExistence(timeout: 5))
         if !split.isHittable { app.swipeUp() }
         split.tap()
         let twoWays = app.buttons["pay-split-2"]
         XCTAssertTrue(twoWays.waitForExistence(timeout: 5))
         twoWays.tap()
+        let done = app.buttons["pay-split-done"]
+        XCTAssertTrue(done.isEnabled, "Split parts don't add up")
+        done.tap()
         let pay = app.buttons["pay-button"]
         if !pay.isHittable { app.swipeUp() }
         XCTAssertTrue(pay.isEnabled)
@@ -649,6 +653,24 @@ final class QAPlanUITests: XCTestCase {
     /// The first element with this identifier, whatever SwiftUI exposes it as
     private func element(_ id: String) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: id).firstMatch
+    }
+
+    /// Billing opens on the Till; switch to Bills (the ledger)
+    private func openBills() {
+        let bills = app.buttons["Bills"].firstMatch
+        XCTAssertTrue(bills.waitForExistence(timeout: 15), "No Bills on the Billing screen")
+        bills.tap()
+    }
+
+    /// A Bill Generator bill in Bills: its row, then "Open bill" (the Bill
+    /// Generator's own detail, with payment, discount and Regenerate)
+    private func openAppBill(_ id: String, timeout: TimeInterval = 20) {
+        let row = element("BillHistoryList-Item-\(id)")
+        XCTAssertTrue(row.waitForExistence(timeout: timeout), "The bill isn't listed")
+        row.tap()
+        let open = element("ledger-open-app-bill")
+        XCTAssertTrue(open.waitForExistence(timeout: 8), "No Open bill on the bill")
+        open.tap()
     }
 
     // 1.5 + 1.7: a waiter's Settings has no restaurant settings; Sign Out works
@@ -1004,14 +1026,13 @@ extension QAPlanUITests {
     // cashier gives 10% off and marks it paid by UPI; the server has both
     func testBillAppearsLiveThenDiscountedAndPaid() throws {
         try launch(as: "cashier", tab: "billing")
-        XCTAssertTrue(app.navigationBars["Billing"].waitForExistence(timeout: 15) || app.staticTexts["Billing"].waitForExistence(timeout: 5))
+        openBills()
         sleep(3) // let the live stream connect
         let stamp = Int(Date().timeIntervalSince1970) % 100000
         let id = try uploadPendingBill(name: "QA live bill \(stamp)", price: 1000)
 
-        let row = element("BillHistoryList-Item-\(id)")
-        XCTAssertTrue(row.waitForExistence(timeout: 20), "The uploaded bill didn't appear live")
-        row.tap()
+        // Appears live, then opens in the Bill Generator's detail
+        openAppBill(id)
 
         let discount = element("bill-detail-apply-discount")
         XCTAssertTrue(discount.waitForExistence(timeout: 8), "No discount button for the cashier")
@@ -1038,6 +1059,10 @@ extension QAPlanUITests {
     func testWaiterSeesNoDiscountOnABill() throws {
         let id = try uploadPendingBill(name: "QA waiter bill", price: 500)
         try launch(as: "waiter", tab: "billing")
+        // Waiters don't see the day's bills (the ledger), only the Bill Generator's
+        XCTAssertTrue(app.buttons["Bill Generator"].firstMatch.waitForExistence(timeout: 15), "No Bill Generator bills for the waiter")
+        XCTAssertFalse(app.buttons["Bills"].exists, "A waiter can see the day's bills")
+        app.buttons["Bill Generator"].firstMatch.tap()
         let row = element("BillHistoryList-Item-\(id)")
         XCTAssertTrue(row.waitForExistence(timeout: 20), "The bill isn't listed")
         row.tap()
@@ -1307,7 +1332,7 @@ extension QAPlanUITests {
         let total = app.staticTexts["pay-total"]
         XCTAssertTrue(total.waitForExistence(timeout: 8))
         let before = Int(total.label.filter(\.isNumber)) ?? 0
-        let amount = app.textFields["pay-discount-amount"]
+        let amount = app.textFields["pay-discount-field"]
         XCTAssertTrue(amount.waitForExistence(timeout: 5), "No ₹ discount field for the cashier")
         amount.tap()
         amount.typeText("10")
@@ -1316,6 +1341,65 @@ extension QAPlanUITests {
         while Date() < deadline, Int(total.label.filter(\.isNumber)) != after { RunLoop.current.run(until: Date().addingTimeInterval(0.25)) }
         XCTAssertEqual(Int(total.label.filter(\.isNumber)), after, "₹10 off didn't come off the total")
         screenshot("cashier-rupee-discount")
+    }
+
+    // 3.6 + 5.x: the Till pays a table's whole bill (two orders) by UPI with
+    // ₹ off, and the receipt lists both orders' dishes
+    func testTillPaysATableAndShowsTheReceipt() throws {
+        let admin = try apiToken("admin"), waiter = try apiToken("waiter")
+        let number = try freeTableNumber()
+        let tables = try XCTUnwrap(call("/api/tables", token: admin) as? [[String: Any]])
+        let tableId = try XCTUnwrap(tables.first { $0["number"] as? Int == number }?["id"] as? String)
+        let menu = try XCTUnwrap(call("/api/admin/menu", token: waiter) as? [[String: Any]])
+        let soup = try XCTUnwrap(menu.first { $0["name"] as? String == "Veg. Soup" }?["id"] as? String)
+        var orderIds: [String] = []
+        for quantity in [2, 1] {
+            let placed = try XCTUnwrap(call("/api/pos/orders", [
+                "type": "DINE_IN", "tableId": tableId, "idempotencyKey": UUID().uuidString,
+                "items": [["menuItemId": soup, "quantity": quantity]],
+            ], token: waiter) as? [String: Any])
+            orderIds.append(try XCTUnwrap(((placed["order"] as? [String: Any]) ?? placed)["id"] as? String))
+        }
+        _ = try call("/api/admin/tables/\(tableId)", ["status": "BILL_REQUESTED"], token: admin, method: "PUT")
+        addTeardownBlock { [self] in
+            // Only left over if the payment failed
+            for id in orderIds {
+                _ = try? call("/api/orders/\(id)/status", ["status": "CANCELLED", "reason": "QA clean-up"], token: admin, method: "PATCH")
+            }
+        }
+
+        try launch(as: "cashier", tab: "billing")
+        let row = element("till-row-\(number)")
+        XCTAssertTrue(row.waitForExistence(timeout: 15), "Table \(number) isn't waiting to pay")
+        XCTAssertTrue(row.label.contains("asked for the bill"), row.label)
+        for _ in 0..<6 where !row.isHittable { app.swipeUp() }
+        row.tap()
+
+        let total = app.staticTexts["pay-total"]
+        XCTAssertTrue(total.waitForExistence(timeout: 8))
+        let before = Int(total.label.filter(\.isNumber)) ?? 0
+        let discount = app.textFields["pay-discount-field"]
+        XCTAssertTrue(discount.waitForExistence(timeout: 5), "No discount for the cashier")
+        discount.tap()
+        discount.typeText("20")
+        let deadline = Date().addingTimeInterval(8)
+        while Date() < deadline, Int(total.label.filter(\.isNumber)) != before - 20 { RunLoop.current.run(until: Date().addingTimeInterval(0.25)) }
+        XCTAssertEqual(Int(total.label.filter(\.isNumber)), before - 20, "₹20 off didn't come off the total")
+
+        app.buttons["pay-method-UPI"].tap()
+        let pay = app.buttons["pay-button"]
+        XCTAssertTrue(pay.isEnabled)
+        XCTAssertTrue(pay.label.contains("by UPI"), pay.label)
+        pay.tap()
+
+        let paid = app.staticTexts["receipt-paid"]
+        XCTAssertTrue(paid.waitForExistence(timeout: 10), "No receipt after paying")
+        XCTAssertEqual(Int(paid.label.filter(\.isNumber)), before - 20)
+        // Both orders' soups are on the receipt
+        let soups = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Veg. Soup'"))
+        XCTAssertGreaterThanOrEqual(soups.count, 2, "The receipt doesn't list both orders")
+        screenshot("till-receipt")
+        orderIds = []
     }
 
     // 9.1: a menu item made in the app is offered in POS straight away
@@ -1400,9 +1484,8 @@ extension QAPlanUITests {
         let stamp = Int(Date().timeIntervalSince1970) % 100000
         let id = try uploadPendingBill(name: "QA reprint \(stamp)", price: 260)
         try launch(as: "admin", tab: "billing")
-        let row = element("BillHistoryList-Item-\(id)")
-        XCTAssertTrue(row.waitForExistence(timeout: 20), "The bill isn't listed")
-        row.tap()
+        openBills()
+        openAppBill(id)
         // The secondary toolbar action sits behind "More" on iPhone
         let regenerate = app.buttons["Regenerate"].firstMatch
         if !regenerate.waitForExistence(timeout: 3) {
@@ -1510,7 +1593,9 @@ final class ScreenTourUITests: XCTestCase {
         let billing = app.tabBars.buttons["Billing"].exists ? app.tabBars.buttons["Billing"] : app.buttons["Billing"].firstMatch
         billing.tap(); sleep(4)
         shot("08-billing")
-        let bill = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH 'BillHistoryList-Item-'")).firstMatch
+        let bills = app.buttons["Bills"].firstMatch
+        if bills.waitForExistence(timeout: 5) { bills.tap(); sleep(3); shot("08b-bills") }
+        let bill = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'ledger-row-' OR identifier BEGINSWITH 'BillHistoryList-Item-'")).firstMatch
         if bill.waitForExistence(timeout: 5) { bill.tap(); sleep(3); shot("09-bill-detail"); goBack() }
 
         // Reports and each breakout

@@ -17,19 +17,11 @@ struct OrderDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(Session.self) private var session
     @EnvironmentObject private var menuLoader: MenuLoader
-    @State private var selectedMethod: String?
     @State private var submitting = false
     @State private var errorMessage: String?
 
-    // Discount: a manual amount in ₹, or a code checked with the server
-    @State private var discountText = ""
-    @State private var codeText = ""
-    @State private var appliedCode: AppliedCode?
-    @State private var checkingCode = false
-
-    // Split bill: the tenders must add up to the bill
-    @State private var splitting = false
-    @State private var splits: [SplitPart] = []
+    /// Method, discount, split and cash given, shared with the Till's pay pad
+    @State private var draft = PayDraft()
 
     /// Shown once the table is paid
     @State private var receipt: PaidReceipt?
@@ -37,28 +29,6 @@ struct OrderDetailView: View {
     /// The order being cancelled, and the optional reason for its log
     @State private var cancelling: POSOrder?
     @State private var cancelReason = ""
-
-    struct AppliedCode: Equatable {
-        let code: String
-        let amount: Int
-    }
-
-    struct SplitPart: Identifiable, Equatable {
-        let id = UUID()
-        var amount: Int?
-        var method: String
-    }
-
-    struct PaidReceipt: Identifiable {
-        let id = UUID()
-        let items: [MenuItem]
-        let tableNumber: Int
-        let bill: SettledBill
-        /// "₹513 cash, ₹513 UPI" for a split bill, "cash" otherwise
-        let paidBy: String
-    }
-
-    private static let paymentMethods = ["CASH", "CARD", "UPI", "WALLET"]
 
     private var table: POSTable? {
         store.tables.first(where: { $0.id == tableId })
@@ -251,62 +221,22 @@ struct OrderDetailView: View {
         ["ADMIN", "CASHIER"].contains(session.user?.role.uppercased() ?? "")
     }
 
-    private func discount(for table: POSTable) -> Int {
-        if let appliedCode { return appliedCode.amount }
-        guard canDiscount, let amount = Int(discountText.trimmingCharacters(in: .whitespaces)) else { return 0 }
-        return max(amount, 0)
-    }
-
     /// The bill as the server will record it: GST on food, VAT on liquor
     private func bill(for table: POSTable) -> BillAmounts {
         let gross = store.grossByTax(for: table)
-        return BillMath.computeBill(gst: gross.gst, vat: gross.vat, discount: discount(for: table),
-                                    config: menuLoader.billingConfig)
+        return draft.amounts(gst: gross.gst, vat: gross.vat, config: menuLoader.billingConfig,
+                             discountAllowed: canDiscount && table.effectiveStatus == .billRequested)
     }
 
     private func totalCard(table: POSTable) -> some View {
-        let amounts = bill(for: table)
-        let taxes = ReceiptTaxes(amounts: amounts, config: menuLoader.billingConfig)
-        return VStack(spacing: 6) {
-            if amounts.discount > 0 {
-                billRow("Items", amounts.gross)
-                billRow("Discount\(appliedCode.map { " (\($0.code))" } ?? "")", -amounts.discount)
-                    .foregroundStyle(.green)
-            }
-            billRow("Taxable value", amounts.subtotal)
-            if amounts.gstTax > 0 {
-                billRow("CGST @ \(taxes.halfGstRate)\(taxes.inclusive)", taxes.cgst)
-                billRow("SGST @ \(taxes.halfGstRate)\(taxes.inclusive)", taxes.sgst)
-            }
-            if amounts.vatTax > 0 {
-                billRow("VAT on liquor @ \(taxes.vatRate)\(taxes.inclusive)", amounts.vatTax)
-            }
-            Divider()
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Total").font(.system(.headline, weight: .semibold))
-                    Text("\(table.liveOrders.count) order\(table.liveOrders.count == 1 ? "" : "s")")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text("\((amounts.total).rupees)")
-                    .font(.system(.title2, weight: .bold))
-                    .monospacedDigit()
-                    .accessibilityIdentifier("pay-total")
-            }
+        VStack(alignment: .leading, spacing: 6) {
+            PayBillTotals(amounts: bill(for: table), config: menuLoader.billingConfig,
+                          discountLabel: draft.discountLabel)
+            Text("\(table.liveOrders.count) order\(table.liveOrders.count == 1 ? "" : "s")")
+                .font(.caption).foregroundStyle(.secondary)
         }
         .padding(DesignTokens.spacingL)
         .webCardBackground()
-    }
-
-    private func billRow(_ label: String, _ amount: Int) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(amount < 0 ? "−\((-amount).rupees)" : "\((amount).rupees)").monospacedDigit()
-        }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
     }
 
     @ViewBuilder
@@ -335,175 +265,19 @@ struct OrderDetailView: View {
         }
     }
 
+    /// The same pay pad as the Till
     private func paymentPicker(table: POSTable) -> some View {
-        let total = bill(for: table).total
-        return VStack(alignment: .leading, spacing: DesignTokens.spacingM) {
-            if canDiscount {
-                discountSection(table: table)
-                Divider()
+        let amounts = bill(for: table)
+        return VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
+            PayPadControls(draft: draft, amounts: amounts, canDiscount: canDiscount) { code in
+                Task { await applyCode(code, table: table) }
             }
-
-            Toggle("Split the bill", isOn: $splitting.animation())
-                .font(.system(.subheadline, weight: .semibold))
-                .accessibilityIdentifier("pay-split-toggle")
-                .onChange(of: splitting) {
-                    if splitting && splits.isEmpty { splitEqually(total: total, ways: 2) }
-                }
-
-            if splitting {
-                splitSection(total: total)
-            } else {
-                Text("Payment Method")
-                    .font(.system(.subheadline, weight: .semibold))
-                // Two-column grid of payment methods, matching the web's button row.
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                    ForEach(Self.paymentMethods, id: \.self) { method in
-                        Button {
-                            selectedMethod = method
-                        } label: {
-                            HStack {
-                                Image(systemName: methodIcon(method))
-                                Text(methodName(method))
-                                Spacer()
-                                if selectedMethod == method {
-                                    Image(systemName: "checkmark.circle.fill")
-                                }
-                            }
-                            .padding(.horizontal, 12).padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(selectedMethod == method ? Color.accentColor.opacity(0.15) : Color(.tertiarySystemBackground))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(selectedMethod == method ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            Button {
+            PayButton(draft: draft, total: amounts.total, submitting: submitting) {
                 Task { await doPayment(table: table) }
-            } label: {
-                if submitting {
-                    ProgressView().frame(maxWidth: .infinity)
-                } else {
-                    Text(payButtonTitle(total: total))
-                        .frame(maxWidth: .infinity)
-                }
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(!canPay(total: total) || submitting)
-            .accessibilityIdentifier("pay-button")
         }
         .padding(DesignTokens.spacingL)
-        .webCardBackground()
-    }
-
-    @ViewBuilder
-    private func discountSection(table: POSTable) -> some View {
-        Text("Discount").font(.system(.subheadline, weight: .semibold))
-        if let appliedCode {
-            HStack {
-                Label("\(appliedCode.code): −\((appliedCode.amount).rupees)", systemImage: "ticket.fill")
-                    .foregroundStyle(.green)
-                Spacer()
-                Button("Remove", role: .destructive) { self.appliedCode = nil }
-            }
-            .font(.subheadline)
-        } else {
-            HStack {
-                TextField("Code", text: $codeText)
-                    .accessibilityIdentifier("pay-code-field")
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
-                    .textFieldStyle(.roundedBorder)
-                Button(checkingCode ? "Checking…" : "Apply") {
-                    Task { await applyCode(table: table) }
-                }
-                .disabled(codeText.trimmingCharacters(in: .whitespaces).isEmpty || checkingCode)
-                .accessibilityIdentifier("pay-code-apply")
-            }
-            HStack {
-                Text("or amount ₹").font(.subheadline).foregroundStyle(.secondary)
-                TextField("0", text: $discountText).labelsHidden()
-                    .accessibilityIdentifier("pay-discount-amount")
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 120)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func splitSection(total: Int) -> some View {
-        let paid = splits.compactMap(\.amount).reduce(0, +)
-        HStack {
-            Text("Split equally").font(.subheadline)
-            Spacer()
-            ForEach(2...4, id: \.self) { ways in
-                Button("\(ways)") { splitEqually(total: total, ways: ways) }
-                    .buttonStyle(.bordered)
-                    .accessibilityIdentifier("pay-split-\(ways)")
-            }
-        }
-        ForEach($splits) { $part in
-            HStack {
-                Text("₹").foregroundStyle(.secondary)
-                TextField("Amount", value: $part.amount, format: .number)
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 110)
-                Picker("Method", selection: $part.method) {
-                    ForEach(Self.paymentMethods, id: \.self) { Text(methodName($0)).tag($0) }
-                }
-                .pickerStyle(.menu)
-                Spacer()
-                if splits.count > 1 {
-                    Button(role: .destructive) {
-                        splits.removeAll { $0.id == part.id }
-                    } label: { Image(systemName: "minus.circle") }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        HStack {
-            Button {
-                splits.append(SplitPart(amount: max(total - paid, 0), method: "UPI"))
-            } label: { Label("Add a payment", systemImage: "plus.circle") }
-            Spacer()
-            let remaining = total - paid
-            Text(remaining == 0 ? "Adds up" : remaining > 0 ? "\((remaining).rupees) left" : "\((-remaining).rupees) too much")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(remaining == 0 ? .green : .red)
-        }
-    }
-
-    /// Equal parts in whole rupees; the first person pays any odd rupees
-    private func splitEqually(total: Int, ways: Int) {
-        let share = total / ways
-        splits = (0..<ways).map { i in
-            SplitPart(amount: share + (i == 0 ? total - share * ways : 0), method: i == 0 ? "CASH" : "UPI")
-        }
-    }
-
-    private func canPay(total: Int) -> Bool {
-        if splitting {
-            return !splits.isEmpty && splits.allSatisfy { ($0.amount ?? 0) > 0 }
-                && splits.compactMap(\.amount).reduce(0, +) == total
-        }
-        return selectedMethod != nil
-    }
-
-    private func payButtonTitle(total: Int) -> String {
-        if splitting { return "Pay \((total).rupees) in \(splits.count) parts" }
-        return selectedMethod.map { "Pay \((total).rupees) via \(methodName($0))" } ?? "Select Payment Method"
-    }
-
-    private func methodName(_ method: String) -> String {
-        method == "UPI" ? "UPI" : method.capitalized
+        .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium, style: .continuous).fill(SN.page))
     }
 
     private var emptyState: some View {
@@ -516,16 +290,6 @@ struct OrderDetailView: View {
     }
 
     // MARK: Helpers
-
-    private func methodIcon(_ method: String) -> String {
-        switch method {
-        case "CASH":   return "banknote"
-        case "CARD":   return "creditcard"
-        case "UPI":    return "qrcode"
-        case "WALLET": return "wallet.pass"
-        default:       return "circle"
-        }
-    }
 
     private func orderTotalString(_ order: POSOrder) -> String {
         let total = (order.items ?? [])
@@ -568,10 +332,9 @@ struct OrderDetailView: View {
 
     private func doPayment(table: POSTable) async {
         let amounts = bill(for: table)
-        let tenders = splitting ? splits.map { POSStore.Tender(amount: $0.amount ?? 0, method: $0.method) } : nil
-        // A split payment is filed under the tender that covered most of it
-        guard let method = tenders?.max(by: { $0.amount < $1.amount })?.method ?? selectedMethod else { return }
-        // What's being paid for, for the receipt (captured before the table clears)
+        guard let method = draft.filedMethod else { return }
+        // What's being paid for, for the receipt (captured before the table
+        // clears): every order on the table
         let items = table.liveOrders.flatMap { $0.items ?? [] }
             .filter { $0.status != "CANCELLED" }
             .map { item in
@@ -587,12 +350,8 @@ struct OrderDetailView: View {
             let settled = try await store.processPayment(
                 table: table, expectedTotal: amounts.total, method: method,
                 discount: amounts.discount > 0 ? amounts.discount : nil,
-                discountCode: appliedCode?.code, tenders: tenders)
-            // "₹513 cash, ₹513 UPI" (as the web receipt lists split tenders)
-            let spoken = { (m: String) in m == "UPI" ? "UPI" : m.lowercased() }
-            let paidBy = tenders.map { $0.map { "\(($0.amount).rupees) \(spoken($0.method))" }.joined(separator: ", ") }
-                ?? spoken(method)
-            receipt = PaidReceipt(items: items, tableNumber: table.number, bill: settled, paidBy: paidBy)
+                discountCode: draft.appliedCode?.code, tenders: draft.tenders)
+            receipt = PaidReceipt(items: items, tableNumber: table.number, bill: settled, paidBy: draft.paidBy)
         } catch let APIError.server(code, body) where code == 409 {
             await store.loadTables()  // show the current bill
             errorMessage = APIError.server(code: code, body: body).localizedDescription
@@ -601,78 +360,17 @@ struct OrderDetailView: View {
         }
     }
 
-    private func applyCode(table: POSTable) async {
-        let code = codeText.trimmingCharacters(in: .whitespaces).uppercased()
+    private func applyCode(_ text: String, table: POSTable) async {
+        let code = text.trimmingCharacters(in: .whitespaces).uppercased()
         let gross = store.grossByTax(for: table)
-        checkingCode = true
-        defer { checkingCode = false }
+        draft.checkingCode = true
+        defer { draft.checkingCode = false }
         do {
             let amount = try await store.discountCodeValue(code: code, orderTotal: gross.gst + gross.vat)
-            appliedCode = AppliedCode(code: code, amount: amount)
-            discountText = ""
+            draft.appliedCode = .init(code: code, amount: amount)
+            draft.discountText = ""
         } catch {
             errorMessage = error.localizedDescription
-        }
-    }
-}
-
-// MARK: - Receipt after a table is paid
-
-/// The bill the server recorded, laid out like a Bill Generator bill, ready to
-/// print or share as a PDF
-private struct PaidReceiptSheet: View {
-    let receipt: OrderDetailView.PaidReceipt
-    let config: BillingConfig
-    let identity: RestaurantIdentity
-    @Environment(\.dismiss) private var dismiss
-    @State private var pdfURL: URL?
-
-    private var taxes: ReceiptTaxes {
-        let b = receipt.bill
-        return ReceiptTaxes(amounts: BillAmounts(gross: b.gross, discount: b.discount, subtotal: b.subtotal,
-                                                 tax: b.tax, gstTax: b.gstTax, vatTax: b.vatTax, total: b.total),
-                            config: config)
-    }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                let pages = BillRenderer.pages(receipt.items)
-                VStack(spacing: DesignTokens.spacingL) {
-                    Label("Paid \((receipt.bill.total).rupees)", systemImage: "checkmark.seal.fill")
-                        .font(.headline)
-                        .foregroundStyle(.green)
-                        .accessibilityIdentifier("receipt-paid")
-                    ForEach(pages.indices, id: \.self) { index in
-                        BillRenderer.page(index, of: pages, tableNumber: receipt.tableNumber,
-                                          finalTotal: receipt.bill.total, taxes: taxes,
-                                          identity: identity, paidBy: receipt.paidBy)
-                            .shadow(radius: 2)
-                    }
-                }
-                .padding()
-            }
-            .background(Color.gray.opacity(0.15))
-            .navigationTitle("Receipt")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    if let pdfURL {
-                        ShareLink(item: pdfURL) { Label("Print or share", systemImage: "printer") }
-                    } else {
-                        ProgressView()
-                    }
-                }
-            }
-            .task {
-                pdfURL = await BillRenderer.renderPDF(items: receipt.items, tableNumber: receipt.tableNumber,
-                                                      finalTotal: receipt.bill.total, taxes: taxes,
-                                                      identity: identity, paidBy: receipt.paidBy,
-                                                      fileName: "Receipt-Table-\(receipt.tableNumber).pdf")
-            }
         }
     }
 }

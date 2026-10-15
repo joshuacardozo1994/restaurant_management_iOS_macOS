@@ -245,7 +245,7 @@ struct Home: View {
         case .dashboard:    ServiceNightDashboard()
         case .pos:          POSContainerView()
         case .kitchen:      KitchenAdminView()
-        case .billing:      BillHistoryList()
+        case .billing:      BillingView()
         case .reservations: ReservationsAdminView()
         case .menu:         MenuEditor()
         case .modifiers:    ModifiersAdminView()

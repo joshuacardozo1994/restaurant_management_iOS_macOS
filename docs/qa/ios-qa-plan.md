@@ -74,7 +74,9 @@ test's name is given.
 | 2.11 | Customer phone and name on a bill; the waiter picked | Server links the bill to the waiter by id and to the customer by phone ("+91 …", spaces ignored); both show in the staff and customer reports | ✅ 🤖 QAPlanUITests (Bill Generator test checks the server) |
 | 2.12 | Update over an existing install (bills saved before) | App opens; old bills still listed (store upgraded V4 → V5) | ✅ simulator (iPhone and iPad upgrade, iPad fresh install) |
 
-### 3. Billing history (P0)
+### 3. Billing: Till and Bills (P0)
+
+15 Oct redesign ("A · Till" with "B · Ledger" as Bills). The Billing tab opens on the Till (Waiting to pay); a segment switches to Bills (admins and cashiers; the ledger API refuses waiters) or, for waiters, to the Bill Generator's bills. The old bill history list is gone; its sync, filters and Regenerate live on in Bills and the Bill Generator detail.
 
 | # | Check | Expected | Status |
 |---|---|---|---|
@@ -82,7 +84,13 @@ test's name is given.
 | 3.2 | Mark a bill paid by cash, UPI or card | Saved; the server updates | ✅ 🤖 testBillAppearsLiveThenDiscountedAndPaid (UPI, checked on the server) |
 | 3.3 | Discount on a bill (cashier/admin), percent or ₹ | Total updates; a waiter can't upload a discounted bill (the server refuses) | ✅ 🤖 same test (10% off, saved on the server); testWaiterSeesNoDiscountOnABill. Fixed: waiters no longer see Apply discount |
 | 3.4 | Bill uploaded from another device | Appears live | ✅ 🤖 same test: appears within seconds of the upload |
-| 3.5 | Duplicate a bill; reprint an old bill | Works | ✅ 🤖 testRegenerateAnOldBill. Fixed: Regenerate now opens the Bill Generator holding the bill (it used to leave you on the table grid) |
+| 3.5 | Duplicate a bill; reprint an old bill | Works | ✅ 🤖 testRegenerateAnOldBill (now Bills → the bill → Open bill → Regenerate). Fixed: Regenerate now opens the Bill Generator holding the bill (it used to leave you on the table grid) |
+| 3.6 | Till: Waiting to pay | Tables asked for the bill first (amber tile, "Pedro · asked 6m ago"), then all served (blue), then cooking ("2 dishes cooking"), takeaways as P; live (SSE, debounced) and pull to refresh; "Nothing waiting to be paid" when empty. VoiceOver: "Table 12, ₹1,770, all served, Pedro" | ✅ iPhone 17 and iPad Pro 13" (portrait with sidebar: queue + bill-and-pad; sidebar hidden: three columns), light and dark, 15 Oct; 🤖 testTillPaysATableAndShowsTheReceipt checks the row's label |
+| 3.7 | Till: pay a table | Bill header (Bill no · waiter · seated · N orders), lines, Items / Discount / Taxable value / CGST / SGST / VAT / To pay; pad: Cash · UPI · Card · Split (sheet) · other ways (Wallet); discount code or ₹ / % (cashier, admin); cash given Exact / next ₹100 / ₹500 / ₹2,000 with change; "Pay ₹x by UPI"; receipt with every order of the table, Print or share | ✅ iPad: own order on table 118 (2 orders' worth: Veg. Soup ×2 + Kingfisher), 10% off (−₹58), ₹600 cash given → change ₹78, paid ₹522, receipt listed both lines with VAT; server ledger matched (discount 58, total 522). 🤖 testTillPaysATableAndShowsTheReceipt (two orders on one table, ₹20 off, UPI, receipt lists both) |
+| 3.8 | Bills (ledger) | Today / Yesterday / Pick dates (sheet); search (bill no, table, waiter, customer, dish); Filter menu (waiter, method, unpaid only, from the Bill Generator); cards Takings · N bills, Cash · UPI · Card, GST · VAT, Discounts (Unpaid on iPhone); "N waiting" strip opens the bill in the Till; rows with method pills (Unpaid in red, "Cash + UPI" for splits); iPad: table + detail side by side; iPhone: push | ✅ iPhone 17 and iPad Pro 13", light and dark; search "7659" found the split bill |
+| 3.9 | Bill detail | Totals, tenders, Print / share receipt (orders fetched), Change method (admin, cashier); a split bill shows the server's refusal; Bill Generator bills: Mark paid (Cash / UPI / Card, never silently Cash) and Open bill (discount, Regenerate) | ✅ #7658 Cash → UPI from the iPhone (server ledger shows UPI); #7659 (split) → "A split bill was paid in parts; its methods can't be changed"; receipt printed from the ledger |
+| 3.10 | Waiter | Billing shows Waiting and Bill Generator only (no Bills); app bills open their detail without discount | ✅ iPhone 17 as qa-waiter; 🤖 testWaiterSeesNoDiscountOnABill (also asserts no Bills segment) |
+| 3.11 | Bill Generator bills not uploaded | Listed in Bills under "On this device, not uploaded" with Upload and Upload all; Sync All Unsynced in the toolbar's cloud menu; a changed but unsynced bill has a cloud mark on its row; totals are the bill's total after discount everywhere | ✅ code path; 🤖 testBillGeneratorBillShowsGSTAndVATAndUploads |
 
 ### 4. POS tables and ordering (P0)
 
@@ -112,7 +120,7 @@ test's name is given.
 | 5.1 | Breakdown for food + liquor | GST and VAT match the web for the same table | ✅ simulator (₹1,140 → GST ₹24, VAT ₹115) |
 | 5.2 | Discount code QA10; invalid code | 10% off and taxes recomputed; invalid code shows the server's reason | ✅ 🤖 POSPaymentUITests |
 | 5.3 | ₹ discount as cashier; waiter sees no discount controls | As described | ✅ 🤖 testCashierRupeeDiscount (₹10 off the total) + testWaiterSeesNoDiscountOnABill |
-| 5.4 | Split 2/3/4 ways and by hand; parts don't add up | Pay disabled until they add up | ✅ 🤖 POSPaymentUITests |
+| 5.4 | Split 2/3/4 ways and by hand; parts don't add up | Done and Pay disabled until they add up | ✅ 🤖 POSPaymentUITests (15 Oct: the floor's Pay uses the Till's pay pad; Split opens the split editor as a sheet) |
 | 5.5 | Bill changed on another device before paying | Refused with "The bill changed from ₹X to ₹Y"; screen reloads | ✅ simulator |
 | 5.6 | Receipt after paying | Items, discount, taxes, total, "Paid by …"; print or share as PDF | ✅ 🤖 POSPaymentUITests |
 | 5.7 | Server record | Payment, discount code, split tenders and GST/VAT stored | ✅ checked in the database |
