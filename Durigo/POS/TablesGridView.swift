@@ -33,6 +33,7 @@ enum FloorFilter: String, CaseIterable, Identifiable {
 }
 
 struct TablesGridView: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Bindable var store: POSStore
     var onOpenBillGenerator: () -> Void = {}
 
@@ -188,9 +189,11 @@ struct TablesGridView: View {
     }
 
     private func columns(fourAcross: Bool) -> [GridItem] {
-        fourAcross
-            ? Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
-            : [GridItem(.adaptive(minimum: 100), spacing: 8)]
+        // Big text needs wider tiles: 3 across on a phone, wider tiles elsewhere
+        let big = typeSize >= .xxLarge
+        return fourAcross
+            ? Array(repeating: GridItem(.flexible(), spacing: 8), count: big ? 3 : 4)
+            : [GridItem(.adaptive(minimum: big ? 128 : 100), spacing: 8)]
     }
 
     private var seatedCount: Int { store.tables.filter(\.isSeated).count }
@@ -534,7 +537,11 @@ struct FloorTableTile: View {
     let now: Date
     let action: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     private var status: TableStatus { table.effectiveStatus }
+    /// Big text: the time goes on its own line so the number never has to squeeze
+    private var stacked: Bool { typeSize >= .xLarge }
 
     private var cornerNote: String? {
         if table.isSeated, let since = table.seatedSince { return POSTime.elapsed(since: since, now: now) }
@@ -550,19 +557,28 @@ struct FloorTableTile: View {
                     Text(verbatim: String(table.number))
                         .font(.subheadline.monospaced().weight(.semibold))
                         .foregroundStyle(status == .reserved || status == .maintenance ? SN.mut : SN.ink)
+                        .lineLimit(1)
+                        .fixedSize()
                     if isMerged {
                         Image(systemName: "link")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(SN.mut)
                     }
                     Spacer(minLength: 2)
-                    if let cornerNote {
+                    if !stacked, let cornerNote {
                         Text(cornerNote)
                             .font(.caption2.monospaced())
                             .foregroundStyle(SN.mut)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
+                }
+                if stacked, let cornerNote {
+                    Text(cornerNote)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(SN.mut)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 detail
                 Spacer(minLength: 0)
@@ -597,6 +613,7 @@ struct FloorTableTile: View {
                 .font(.caption2)
                 .foregroundStyle(SN.mut)
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
         } else if table.isSeated {
             Text(table.unpaidTotal.rupees)
                 .font(.footnote.monospacedDigit().weight(.semibold))

@@ -197,7 +197,7 @@ test's name is given.
 | Screen | Review focus | Status |
 |---|---|---|
 | Login | Brand panel on iPad/Mac; keyboard Return to sign in; error placement | ✅ iPhone (lockout message, 🤖 login-locked-out screenshot). Mac ✅ 15 Oct. |
-| Dashboard | Numbers match the web; refresh | ✅ iPhone and iPad, light and dark; same numbers as the web. Mac ✅ 15 Oct. **Redesigned 15 Oct ("Service night"):** same figures as the web dashboard from `/api/admin/dashboard/service`, reloads on live events and every minute; one column on iPhone, two beside the iPad sidebar, three when wide. ✅ iPhone 17 and iPad Pro 13", light and dark (table numbers ungrouped, e.g. 1043). Oldest ticket card: table, wait, dishes still to come, cook ("Not assigned" when nobody), waiter ✅ iPad. ⏳ Mac: builds, but needs you at the Mac. With the display asleep the app opens no window, so neither `MacKeyboardUITests/testDashboardOnMacLightAndDark` nor a window capture could run (the earlier Mac tests fail the same way right now). |
+| Dashboard | Numbers match the web; refresh | ✅ iPhone and iPad, light and dark; same numbers as the web. Mac ✅ 15 Oct. **Redesigned 15 Oct ("Service night"):** same figures as the web dashboard from `/api/admin/dashboard/service`, reloads on live events and every minute; one column on iPhone, two beside the iPad sidebar, three when wide. ✅ iPhone 17 and iPad Pro 13", light and dark (table numbers ungrouped, e.g. 1043). Oldest ticket card: table, wait, dishes still to come, cook ("Not assigned" when nobody), waiter ✅ iPad. ✅ Mac 15 Oct evening: dashboard, POS floor, Till and Bills checked in light and dark (window screenshots). `MacKeyboardUITests/testDashboardOnMacLightAndDark` still can't open a window when run from the agent's shell (the app opens one normally when launched with `open`), so that test needs running from Xcode. |
 | POS floor (redesigned 15 Oct) | Readable from arm's length on iPad; Live indicator; merged groups; the ⋯ menu (takeaway, delivery, merge, manage); bill beside the floor | ✅ iPhone 17 and iPad Pro 13", light and dark: compact tiles, filter chips, section labels, bill panel / bottom card. Mac: builds; see 4.12 |
 | Take order | Taps for a typical order; cart always visible; note editor; delivery fields | ✅ iPhone (🤖 tour + ordering test). Fixed: cart +/− were 17pt and unlabelled; category chips taller. Redesigned 15 Oct: three columns on iPad/Mac (4.14), summary bar on iPhone ✅ iPhone 17 and iPad Pro 13", light and dark |
 | Order detail and payment | Amount due is the biggest thing; breakdown readable; split rows on iPhone width | ✅ iPhone, Mac |
@@ -315,3 +315,11 @@ With the Mac unlocked:
    Share), the keyboard row (Return signs in and saves, Esc closes sheets) and
    the screen-by-screen table's Mac column. A signed release build won't show the
    keychain prompt.
+
+### Largest text (xxxLarge, the app's cap), 15 Oct evening
+
+| Screen | Result |
+|---|---|
+| Dashboard (iPhone, iPad) | ✅ fits; the pace chart's hour labels now sit under the line instead of over it |
+| POS floor (iPhone, iPad) | ✅ after a fix: tiles are 3 across on iPhone (4 at normal sizes) and wider on iPad, and the seated time moves to its own line so table numbers, times and "→ Table N" are never cut off |
+| Billing Till (iPhone, iPad) | ✅ fits; rows wrap to two lines |

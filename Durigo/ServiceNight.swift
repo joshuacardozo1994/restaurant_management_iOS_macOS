@@ -496,9 +496,8 @@ private struct PaceChart: View {
         .chartXAxis(.hidden)
         .chartXScale(domain: hours.first!.hour...hours.last!.hour)
         .frame(height: 58)
-        // First and last hour under the ends of the line (axis labels clip at the edges)
-        .padding(.bottom, 14)
-        .overlay(alignment: .bottom) {
+        // First and last hour under the ends of the line, below it (not over it), at any text size
+        .safeAreaInset(edge: .bottom, spacing: 2) {
             HStack {
                 Text(Fmt.hour(hours.first!.hour))
                 Spacer()
