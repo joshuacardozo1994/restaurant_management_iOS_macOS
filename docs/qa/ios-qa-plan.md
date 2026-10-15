@@ -230,6 +230,11 @@ On the iPhone 17 and iPad Pro 13" simulators against the local QA server.
   for offline use.
 - **Restaurant settings** keep their field labels and show only what reaches a bill.
 
+**Before a full UI test run**, cancel leftover test orders on the local QA
+server (dozens of open QA orders make the kitchen board re-render constantly and
+the kitchen cancel test then loses its alert), and put one table in "bill
+requested" for `POSPaymentUITests`.
+
 **Re-running the screen review.** `ScreenTourUITests` opens every screen as the
 admin on iPhone and attaches screenshots (`xcrun xcresulttool export attachments`);
 on iPad, launch each screen with `--auto-signin=qa-<role>:… --start-tab=<screen>`

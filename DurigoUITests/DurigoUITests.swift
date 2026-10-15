@@ -817,7 +817,12 @@ final class QAPlanUITests: XCTestCase {
         let reason = app.alerts.textFields.firstMatch
         XCTAssertTrue(reason.waitForExistence(timeout: 5), "No confirmation")
         reason.typeText("QA: out of soup")
-        app.alerts.buttons["Cancel Order"].tap()
+        // The alert moves while the keyboard settles: wait until it can be tapped
+        let confirm = app.alerts.firstMatch.buttons["Cancel Order"]
+        for _ in 0..<20 where !confirm.isHittable { RunLoop.current.run(until: Date().addingTimeInterval(0.25)) }
+        // Tapped by position: with the reason field focused, XCUITest can't
+        // compute the button's hit point and treats its own alert as interrupting
+        confirm.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let gone = NSPredicate(format: "exists == false")
         expectation(for: gone, evaluatedWith: more)
         waitForExpectations(timeout: 10)
