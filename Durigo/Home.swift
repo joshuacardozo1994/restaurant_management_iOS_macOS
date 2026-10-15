@@ -152,23 +152,21 @@ struct Home: View {
             NavigationStack {
                 destination(for: navigation.selection)
                     .toolbar {
-                        // Explicit sidebar toggle — `.balanced` style does
-                        // not always surface one in the toolbar on iPad,
-                        // so we add it ourselves so staff can collapse the
-                        // sidebar to free up screen space (esp. for the
-                        // kitchen kanban which wants the full width).
-                        ToolbarItem(placement: .navigation) {
-                            Button {
-                                withAnimation {
-                                    columnVisibility = (columnVisibility == .all)
-                                        ? .detailOnly : .all
+                        // One sidebar button, never two: the system shows its
+                        // own on the Mac, and on iPad once the sidebar is
+                        // folded away; this one covers iPad with it open
+                        #if os(iOS)
+                        if columnVisibility != .detailOnly {
+                            ToolbarItem(placement: .navigation) {
+                                Button {
+                                    withAnimation { columnVisibility = .detailOnly }
+                                } label: {
+                                    Image(systemName: "sidebar.left")
                                 }
-                            } label: {
-                                Image(systemName: columnVisibility == .all
-                                    ? "sidebar.left"
-                                    : "sidebar.leading")
+                                .accessibilityLabel("Hide sidebar")
                             }
                         }
+                        #endif
                     }
             }
         }
