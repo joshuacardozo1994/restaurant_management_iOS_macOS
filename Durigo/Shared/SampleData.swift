@@ -266,30 +266,23 @@ extension AdminReservation {
     ]
 }
 
-extension KitchenOrder {
-    static let sample: [KitchenOrder] = SampleData.decode("""
-    [
-      \(order("k1", "0142", table: 4, status: "PENDING", minutes: 4, item: "PENDING")),
-      \(order("k2", "0141", table: 9, status: "PENDING", minutes: 7, item: "PENDING")),
-      \(order("k3", "0139", table: 1, status: "PREPARING", minutes: 16, item: "PREPARING")),
-      \(order("k4", "0137", table: 7, status: "PREPARING", minutes: 22, item: "PREPARING")),
-      \(order("k5", "0135", table: 3, status: "READY", minutes: 31, item: "READY"))
-    ]
-    """) ?? []
-
-    private static func order(_ id: String, _ no: String, table: Int, status: String, minutes: Int, item: String) -> String {
-        """
-        {"id": "\(id)", "orderNumber": "ORD-\(no)", "status": "\(status)", "type": "DINE_IN",
-         "createdAt": "\(SampleData.ago(minutes))", "table": {"number": \(table)}, "waiter": {"id": "w1", "name": "Pedro"},
-         "items": [
-           {"id": "\(id)-a", "quantity": 2, "status": "\(item)", "itemName": "Fish Curry Rice"},
-           {"id": "\(id)-b", "quantity": 1, "status": "\(item)", "itemName": "Chicken Xacuti"},
-           {"id": "\(id)-c", "quantity": 1, "status": "\(item)", "itemName": "Prawn Rava Fry"}]}
-        """
-    }
+extension KitchenBoard {
+    /// The rail's sample: food and drinks, a note, dishes at each stage
+    static let sample: KitchenBoard = {
+        let dishes = ["Fish Curry Rice", "Sanna", "Chicken Xacuti", "Prawn Balchão", "Pork Vindaloo", "Bombil Fry", "Kingfisher pint", "Fresh lime soda"]
+        let states = ["PENDING", "PREPARING", "READY"]
+        let tickets = [4, 9, 12, 7, 15, 2].enumerated().map { i, table in
+            Ticket(id: "k\(i)", number: String(4812 + i), where: i == 2 ? "Takeaway" : "T\(table)", createdAt: "2026-01-01T13:00:00.000Z",
+                   waiter: "Pedro", note: i == 1 ? "Birthday, bring a candle with the dessert" : nil,
+                   lines: (0..<(2 + i % 3)).map { j in
+                       Line(id: "k\(i)-\(j)", quantity: 1 + j % 2, name: dishes[(i + j) % 6], status: states[(i + j) % 3],
+                            station: "kitchen", notes: nil, extras: [], cook: j == 0 ? "Rosa" : nil, assigned: false)
+                   } + (i % 2 == 0 ? [Line(id: "k\(i)-b", quantity: 2, name: dishes[6 + i % 2], status: "PENDING", station: "bar", notes: nil, extras: [], cook: nil, assigned: false)] : []),
+                   sentAt: nil)
+        }
+        return KitchenBoard(tickets: tickets, recent: [], barCategoryIds: nil, categories: [], generatedAt: "2026-01-01T13:00:00.000Z")
+    }()
 }
-
-// MARK: - Menu
 
 extension AdminCategory {
     static let sample: [AdminCategory] = [

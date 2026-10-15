@@ -23,6 +23,7 @@
 		9C25AD807EAAB09B6B8FB8DF /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77500D2BEDB2E4CAA74265B /* APIClient.swift */; };
 		9E508451D78A3B0C932F9551 /* TableMergeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C86B1511273C77B53B37B28B /* TableMergeView.swift */; };
 		AE69CEDC321A21D86317EA4C /* ReportOverview.swift in Sources */ = {isa = PBXBuildFile; fileRef = E87DFAB125A998C0EBAFDB61 /* ReportOverview.swift */; };
+		BADC56C07AE03B861E36A571 /* KitchenRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A39980F0A5268A096FBABE /* KitchenRail.swift */; };
 		BDB4A614BB434CAB92B71102 /* SampleData.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6177ACDDB038E8ADBB987C7 /* SampleData.swift */; };
 		C482AFBDB0A9BC1312AAF054 /* PayPad.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACF6E1D6138A5A0CCAFA0BC6 /* PayPad.swift */; };
 		CC46FCCC5EC600C1CF8BE3CB /* ServiceNight.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B126C893B1B768C94D3BD4 /* ServiceNight.swift */; };
@@ -182,6 +183,7 @@
 		E7ED3A662AEAEB7E00F2DDA8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E87DFAB125A998C0EBAFDB61 /* ReportOverview.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReportOverview.swift; sourceTree = "<group>"; };
 		F6656768D52BBC46ED43CA87 /* POSModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = POSModels.swift; sourceTree = "<group>"; };
+		F6A39980F0A5268A096FBABE /* KitchenRail.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KitchenRail.swift; sourceTree = "<group>"; };
 		FF74CE34F1194601AB64C9A7 /* Session.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -224,6 +226,15 @@
 			);
 			name = POS;
 			path = POS;
+			sourceTree = "<group>";
+		};
+		BAD5C9094AF86577FF48EDEB /* Kitchen */ = {
+			isa = PBXGroup;
+			children = (
+				F6A39980F0A5268A096FBABE /* KitchenRail.swift */,
+			);
+			name = Kitchen;
+			path = Kitchen;
 			sourceTree = "<group>";
 		};
 		C856767684E1F6459C82C2ED /* Auth */ = {
@@ -322,6 +333,7 @@
 				433021DA50C7723A1C0C556B /* POS */,
 				C2B126C893B1B768C94D3BD4 /* ServiceNight.swift */,
 				E87DFAB125A998C0EBAFDB61 /* ReportOverview.swift */,
+				BAD5C9094AF86577FF48EDEB /* Kitchen */,
 			);
 			path = Durigo;
 			sourceTree = "<group>";
@@ -626,6 +638,7 @@
 				1540C6D510C672B24B418C06 /* Skeleton.swift in Sources */,
 				BDB4A614BB434CAB92B71102 /* SampleData.swift in Sources */,
 				AE69CEDC321A21D86317EA4C /* ReportOverview.swift in Sources */,
+				BADC56C07AE03B861E36A571 /* KitchenRail.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -362,7 +362,7 @@ final class DurigoTests: XCTestCase {
         XCTAssertFalse(POSTable.sample[0].liveOrders.isEmpty)
         XCTAssertEqual(TillBill.sample.count, 4)
         XCTAssertEqual(LedgerBill.sample.count, 6)
-        XCTAssertEqual(KitchenOrder.sample.count, 5)
+        XCTAssertEqual(KitchenBoard.sample.tickets.count, 6)
         XCTAssertEqual(AdminDiscount.sample.count, 3)
     }
 

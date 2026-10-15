@@ -132,12 +132,13 @@ test's name is given.
 | 6.1 | New order arrives | Appears live; chime plays | ✅ trigger on simulator; ⚠️ chime not yet heard on a device |
 | 6.2 | Auto-print with a printer chosen | One ticket per order, no dialog (iPad); default printer (Mac) | ⚠️ ⏳ needs the real printer |
 | 6.3 | Auto-print with no printer chosen | Clear message, no crash | ✅ simulator |
-| 6.4 | Print button on a card | Prints, or asks for a printer | ✅ 🤖 testKitchenCardPrint (print sheet on the simulator). Fixed: the card's ⋯ and print buttons were 14pt |
+| 6.4 | Print ticket (ticket ⋯, 16 Oct rail) | Prints, or asks for a printer | ✅ 🤖 testKitchenCardPrint (print sheet on the simulator). Fixed: the card's ⋯ and print buttons were 14pt |
 | 6.5 | Ticket layout on 80mm paper | Table/type, number, IST time, notes in capitals, no cancelled items | ✅ 🤖 testRenderKitchenTicketForReview |
-| 6.6 | Change status: phases, per item, drag and drop on iPad | Saved; other screens update | ✅ 🤖 testKitchenPhaseItemStatusAndCook (phase, item Ready, on the server); iPad drag To do → Preparing saved (simulator, 15 Oct) |
+| 6.6 | Tap a dish: to do → cooking → ready (16 Oct rail) | Saved with who moved it; other screens update; dishes keep their order | ✅ simulator 16 Oct: iPhone tap → cooking, QA Kitchen shown. ⏳ testKitchenPhaseItemStatusAndCook rewritten for the rail; the simulator test runner stalled before starting tests on 16 Oct, so not yet run |
 | 6.7 | Assign a cook | Saved | ✅ 🤖 same test (cook saved) |
-| 6.8 | Elapsed time colours | Yellow after 15 minutes, red after 30 | ✅ simulator: 20m and 28m yellow, over 30m red. Fixed: confirmed orders made a second "To do" section on iPhone |
-| 6.9 | "Cancel order…" from the ⋯ button on a kitchen card | Card leaves the board; hidden for staff once food is served (admins still see it) | ✅ 🤖 QAPlanUITests testKitchenCancelsAnOrder (iPhone and iPad) |
+| 6.8 | Ticket age (16 Oct) | Header amber at 10 minutes, red at 20 (was yellow 15 / red 30) | ✅ simulator: 20m and 28m yellow, over 30m red. Fixed: confirmed orders made a second "To do" section on iPhone |
+| 6.10 | The rail at a rush; Send; the bar | Tickets flow down then across (compact past 8, "+N newer"); Send serves a station's ready dishes; drinks on the bar strip or a Bar-only device (remembered); Recall; admins pick the bar's categories (settings menu → Bar dishes…) | ✅ iPad (22 tickets, dark and light) and iPhone 16 Oct. ⚠️ Mac: builds, not yet looked at (no window available to capture on 16 Oct) |
+| 6.9 | "Cancel order…" from a ticket's ⋯ | Card leaves the board; hidden for staff once food is served (admins still see it) | ✅ 🤖 QAPlanUITests testKitchenCancelsAnOrder (iPhone and iPad) |
 
 ### 7. Reservations (P1)
 

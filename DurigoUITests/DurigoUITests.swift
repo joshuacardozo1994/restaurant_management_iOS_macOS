@@ -462,7 +462,7 @@ final class AdminScreensUITests: XCTestCase {
     /// against the real localhost backend.
     func testKitchenSSELiveIndicatorAppears() throws {
         launch(startTab: "kitchen", expectedNavBar: "Kitchen")
-        let live = app.staticTexts["Live"].firstMatch
+        let live = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Live'")).firstMatch
         XCTAssertTrue(live.waitForExistence(timeout: 6),
                       "SSE Live indicator never appeared — the stream isn't connecting")
     }
@@ -1122,8 +1122,8 @@ extension QAPlanUITests {
         screenshot("reservation-statuses")
     }
 
-    // 6.6 + 6.7: on the kitchen board, move an order to Preparing, mark an item
-    // Ready, and assign a cook; the server has all three
+    // 6.6 + 6.7: on the kitchen rail, tap a dish to cooking and again to
+    // ready, and pick its cook from the ticket's ⋯; the server has both
     func testKitchenPhaseItemStatusAndCook() throws {
         let orderId = try placeTakeawayOrder()
         let admin = try apiToken("admin")
@@ -1132,20 +1132,22 @@ extension QAPlanUITests {
 
         try launch(as: "admin", tab: "kitchen")
         open("Kitchen")
-        let status = element("kitchen-item-status-\(itemId)")
-        XCTAssertTrue(status.waitForExistence(timeout: 15), "The new order isn't on the board")
-        for _ in 0..<6 where !status.isHittable { app.swipeUp() }
+        let line = element("kitchen-line-\(itemId)")
+        XCTAssertTrue(line.waitForExistence(timeout: 15), "The new order isn't on the rail")
+        for _ in 0..<6 where !line.isHittable { app.swipeUp() }
+        line.tap()
+        let cooking = NSPredicate(format: "label ENDSWITH 'cooking'")
+        expectation(for: cooking, evaluatedWith: line)
+        waitForExpectations(timeout: 10)
+        line.tap()
 
-        let assign = element("kitchen-item-assign-\(itemId)")
-        assign.tap()
+        element("kitchen-more-\(orderId)").tap()
+        let cookPicker = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Cook'")).firstMatch
+        XCTAssertTrue(cookPicker.waitForExistence(timeout: 5), "No cook picker on the ticket")
+        cookPicker.tap()
         let cook = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'QA Kitchen'")).firstMatch
         XCTAssertTrue(cook.waitForExistence(timeout: 5), "QA Kitchen isn't offered as a cook")
         cook.tap()
-
-        status.tap()
-        let ready = app.buttons["Ready"].firstMatch
-        XCTAssertTrue(ready.waitForExistence(timeout: 5))
-        ready.tap()
         screenshot("kitchen-item-ready-assigned")
 
         var item: [String: Any]?
