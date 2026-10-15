@@ -173,11 +173,16 @@ struct TablesGridView: View {
             Spacer(minLength: 8)
             HStack(spacing: compact ? 10 : 8) {
                 LiveBadge(isLive: store.sseConnected)
+                    .fixedSize()
                 if !compact {
                     Button("Takeaway") { ordering = OrderTarget(tableId: nil, type: .takeaway) }
                         .buttonStyle(QuietButtonStyle())
+                        .lineLimit(1)
+                        .fixedSize()
                     Button("Delivery") { ordering = OrderTarget(tableId: nil, type: .delivery) }
                         .buttonStyle(QuietButtonStyle())
+                        .lineLimit(1)
+                        .fixedSize()
                 }
                 Menu {
                     Button {

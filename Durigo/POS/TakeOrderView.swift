@@ -29,6 +29,8 @@ struct TakeOrderView: View {
     @State private var target: OrderTarget
     /// A cart per table (or takeaway / delivery) while switching between them
     @State private var carts: [String: [CartLine]] = [:]
+    @State private var confirmingLeave = false
+    @State private var leaveSelecting: String?
     @State private var query: String = ""
     @State private var selectedCategoryId: String? = nil
     @State private var customerName: String = ""
@@ -156,9 +158,28 @@ struct TakeOrderView: View {
         } message: {
             Text(cart.first(where: { $0.id == noteLineId })?.menuItem.name ?? "")
         }
+        // Leaving drops the carts, so dishes nobody has sent need a yes first
+        .confirmationDialog("Leave without sending?", isPresented: $confirmingLeave, titleVisibility: .visible) {
+            Button("Leave without sending", role: .destructive) { performClose(selecting: leaveSelecting) }
+            Button("Keep adding", role: .cancel) {}
+        } message: {
+            Text(unsentCount == 1 ? "1 dish hasn't been sent to the kitchen." : "\(unsentCount) dishes haven't been sent to the kitchen.")
+        }
     }
 
+    /// Dishes in any table's cart that haven't gone to the kitchen
+    private var unsentCount: Int { carts.values.joined().reduce(0) { $0 + $1.quantity } }
+
     private func close(selecting tableId: String?) {
+        if unsentCount > 0 {
+            leaveSelecting = tableId
+            confirmingLeave = true
+        } else {
+            performClose(selecting: tableId)
+        }
+    }
+
+    private func performClose(selecting tableId: String?) {
         if let onClose { onClose(tableId) } else { dismiss() }
     }
 
