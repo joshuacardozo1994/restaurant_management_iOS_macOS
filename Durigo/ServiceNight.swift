@@ -349,7 +349,7 @@ struct ServiceNightDashboard: View {
 
 // MARK: - Pieces
 
-private struct LiveBadge: View {
+struct LiveBadge: View {
     let isLive: Bool
     var body: some View {
         HStack(spacing: 6) {
@@ -384,7 +384,7 @@ private struct Panel<Content: View>: View {
     }
 }
 
-private struct PanelLabel: View {
+struct PanelLabel: View {
     let text: String
     var body: some View {
         Text(text.uppercased())

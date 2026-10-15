@@ -517,8 +517,14 @@ final class POSPaymentUITests: XCTestCase {
         app.launchArguments = ["--auto-signin=qa-cashier:\(password)", "--start-tab=pos"]
         app.launch()
 
-        let process = app.buttons["Process Payment"].firstMatch
-        XCTAssertTrue(process.waitForExistence(timeout: 15), "No table with a bill requested")
+        // A table with the bill asked for: select it on the floor, then Pay
+        let tile = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'table-tile-' AND label CONTAINS ', bill asked'")).firstMatch
+        XCTAssertTrue(tile.waitForExistence(timeout: 15), "No table with a bill requested")
+        for _ in 0..<8 where !tile.isHittable { app.swipeUp() }
+        let number = tile.identifier.replacingOccurrences(of: "table-tile-", with: "")
+        tile.tap()
+        let process = app.descendants(matching: .any).matching(identifier: "view-orders-\(number)").firstMatch
+        XCTAssertTrue(process.waitForExistence(timeout: 5), "No Pay on the table's bill")
         process.tap()
 
         let total = app.staticTexts["pay-total"]
@@ -584,8 +590,8 @@ final class ManageTablesUITests: XCTestCase {
         app.launchArguments = ["--auto-signin=qa-admin:\(password)", "--start-tab=pos"]
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Tables"].waitForExistence(timeout: 15))
-        // The + menu in the Tables header (not a table card's "Add" button)
+        XCTAssertTrue(app.staticTexts["Floor"].waitForExistence(timeout: 15))
+        // The ⋯ menu in the floor's header
         let menu = app.descendants(matching: .any).matching(identifier: "pos-new-menu").firstMatch
         XCTAssertTrue(menu.waitForExistence(timeout: 5))
         menu.tap()
@@ -738,9 +744,9 @@ final class QAPlanUITests: XCTestCase {
     // can cancel the whole order before it's served, which frees the table
     func testOrderWithExtrasThenCancelIt() throws {
         try launch(as: "waiter", tab: "pos")
+        selectTable(6)
         let takeOrder = element("take-order-6")
-        XCTAssertTrue(takeOrder.waitForExistence(timeout: 15), "Table 6 isn't free")
-        for _ in 0..<5 where !takeOrder.isHittable { app.swipeUp() }
+        XCTAssertTrue(takeOrder.waitForExistence(timeout: 5), "Table 6 isn't free")
         takeOrder.tap()
 
         let search = app.textFields["Search menu"]
@@ -759,7 +765,8 @@ final class QAPlanUITests: XCTestCase {
         let extras = element("cart-extras-Veg. Soup")
         XCTAssertTrue(extras.waitForExistence(timeout: 5), "No extras button on the cart line")
         // The search keyboard can cover the cart
-        if app.keyboards.count > 0 { app.keyboards.buttons.matching(NSPredicate(format: "label IN {'search', 'Search', 'return', 'Return', 'done', 'Done'}")).firstMatch.tap() }
+        let returnKey = app.keyboards.buttons.matching(NSPredicate(format: "label IN {'search', 'Search', 'return', 'Return', 'done', 'Done'}")).firstMatch
+        if returnKey.exists && returnKey.isHittable { returnKey.tap() }
         extras.tap()
         let cheese = element("extra-Extra cheese")
         XCTAssertTrue(cheese.waitForExistence(timeout: 5))
@@ -770,7 +777,7 @@ final class QAPlanUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["₹290"].exists, "Line price didn't include the extra")
 
         // The waiter picker starts empty on a fresh install
-        let send = app.buttons["Send to Kitchen"]
+        let send = element("send-to-kitchen")
         if !send.isEnabled {
             app.buttons.matching(NSPredicate(format: "label CONTAINS 'Select…'")).firstMatch.tap()
             let qaWaiter = app.buttons["QA Waiter"]
@@ -798,7 +805,7 @@ final class QAPlanUITests: XCTestCase {
         reason.typeText("QA: guest changed mind")
         app.alerts.buttons["Cancel Order"].tap()
 
-        // The table's last order is gone, so it's free again
+        // The table's last order is gone, so it's free again (and still selected)
         if app.buttons["Close"].waitForExistence(timeout: 3) { app.buttons["Close"].tap() }
         XCTAssertTrue(element("take-order-6").waitForExistence(timeout: 10), "Table 6 wasn't freed")
     }
@@ -855,7 +862,7 @@ final class QAPlanUITests: XCTestCase {
         let normal = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Normal'")).firstMatch
         if normal.waitForExistence(timeout: 3) { normal.tap() }
 
-        let send = app.buttons["Send to Kitchen"]
+        let send = element("send-to-kitchen")
         XCTAssertTrue(send.waitForExistence(timeout: 5))
         XCTAssertTrue(send.isEnabled, "Takeaway with a customer can't be sent")
         send.tap()
@@ -1162,11 +1169,22 @@ extension QAPlanUITests {
         return el.exists && el.isHittable
     }
 
-    /// The first table card that offers Take Order, scrolling to find one
+    /// Selects the first free table on the floor (its bill then offers Take
+    /// order and Reserve), scrolling to find one
     private func firstFreeTableOnScreen() throws -> Int {
-        let take = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'take-order-'")).firstMatch
-        XCTAssertTrue(reveal(take), "No free table")
-        return try XCTUnwrap(Int(take.identifier.replacingOccurrences(of: "take-order-", with: "")))
+        let tile = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'table-tile-' AND label CONTAINS ', free'")).firstMatch
+        XCTAssertTrue(reveal(tile), "No free table")
+        let number = try XCTUnwrap(Int(tile.identifier.replacingOccurrences(of: "table-tile-", with: "")))
+        tile.tap()
+        XCTAssertTrue(element("take-order-\(number)").waitForExistence(timeout: 5), "Table \(number)'s bill didn't open")
+        return number
+    }
+
+    /// Taps a table's tile on the floor, which opens its bill
+    private func selectTable(_ number: Int) {
+        let tile = element("table-tile-\(number)")
+        XCTAssertTrue(reveal(tile), "Table \(number) isn't on the floor")
+        tile.tap()
     }
 
     /// The number of a table with no orders and no reservation
@@ -1204,14 +1222,15 @@ extension QAPlanUITests {
         let plus = element("cart-plus-Soda")
         XCTAssertTrue(plus.waitForExistence(timeout: 5), "No + on the cart line")
         // The search keyboard can cover the cart
-        if app.keyboards.count > 0 { app.keyboards.buttons.matching(NSPredicate(format: "label IN {'search', 'Search', 'return', 'Return', 'done', 'Done'}")).firstMatch.tap() }
+        let returnKey = app.keyboards.buttons.matching(NSPredicate(format: "label IN {'search', 'Search', 'return', 'Return', 'done', 'Done'}")).firstMatch
+        if returnKey.exists && returnKey.isHittable { returnKey.tap() }
         reveal(plus)
         plus.tap(); plus.tap()
         element("cart-minus-Soda").tap()
         // ₹20 × 2
         XCTAssertTrue(app.staticTexts["₹40"].waitForExistence(timeout: 5), "Cart line isn't ₹40 for 2 sodas")
 
-        let send = app.buttons["Send to Kitchen"]
+        let send = element("send-to-kitchen")
         if !send.isEnabled {
             app.buttons.matching(NSPredicate(format: "label CONTAINS 'Select…'")).firstMatch.tap()
             app.buttons["QA Waiter"].firstMatch.tap()
@@ -1281,9 +1300,9 @@ extension QAPlanUITests {
             _ = try? call("/api/orders/\(orderId)/status", ["status": "CANCELLED", "reason": "QA clean-up"], token: admin, method: "PATCH")
         }
         try launch(as: "cashier", tab: "pos")
-        let process = app.buttons["Process Payment"].firstMatch
-        XCTAssertTrue(process.waitForExistence(timeout: 15), "No table with a bill requested")
-        for _ in 0..<8 where !process.isHittable { app.swipeUp() }
+        selectTable(number)
+        let process = element("view-orders-\(number)")
+        XCTAssertTrue(process.waitForExistence(timeout: 15), "Table \(number) has no Pay")
         process.tap()
         let total = app.staticTexts["pay-total"]
         XCTAssertTrue(total.waitForExistence(timeout: 8))
@@ -1327,9 +1346,8 @@ extension QAPlanUITests {
 
         let pos = app.tabBars.buttons["POS"].exists ? app.tabBars.buttons["POS"] : app.buttons["POS"].firstMatch
         pos.tap()
-        let take = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'take-order-'")).firstMatch
-        XCTAssertTrue(reveal(take))
-        take.tap()
+        let number = try firstFreeTableOnScreen()
+        element("take-order-\(number)").tap()
         let search = app.textFields["Search menu"]
         XCTAssertTrue(search.waitForExistence(timeout: 8))
         search.tap(); search.typeText("QA Menu \(stamp)")
@@ -1467,17 +1485,19 @@ final class ScreenTourUITests: XCTestCase {
         let pos = app.tabBars.buttons["POS"].exists ? app.tabBars.buttons["POS"] : app.buttons["POS"].firstMatch
         pos.tap(); sleep(3)
         shot("04-pos-tables")
+        let free = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'table-tile-' AND label CONTAINS ', free'")).firstMatch
+        if free.waitForExistence(timeout: 5) { free.tap(); sleep(1); shot("04b-pos-free-table") }
         let take = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'take-order-'")).firstMatch
         if take.waitForExistence(timeout: 5) {
-            for _ in 0..<4 where !take.isHittable { app.swipeUp() }
             take.tap(); sleep(3); shot("05-take-order")
             let cancel = app.buttons["Cancel"].firstMatch
             if cancel.exists { cancel.tap() } else { app.swipeDown(velocity: .fast) }
             sleep(1)
         }
+        let seated = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'table-tile-' AND label CONTAINS ', seated'")).firstMatch
+        if seated.waitForExistence(timeout: 5) { seated.tap(); sleep(1); shot("05b-pos-table-bill") }
         let view = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'view-orders-'")).firstMatch
         if view.waitForExistence(timeout: 5) {
-            for _ in 0..<4 where !view.isHittable { app.swipeUp() }
             view.tap(); sleep(3); shot("06-order-details")
             let close = app.buttons["Close"].firstMatch
             if close.exists { close.tap() } else { app.swipeDown(velocity: .fast) }

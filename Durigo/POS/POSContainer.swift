@@ -2,56 +2,49 @@
 //  POSContainer.swift
 //  Durigo
 //
-//  Top-level POS view. Hosts a 2-tab segmented switcher between the new
-//  POS (table grid + take order) and the existing Bill Generator.
+//  Top-level POS view: the floor (tables and the selected table's bill),
+//  with the Bill Generator one quiet button away in the floor's header.
 //
 //  This view is what `Home.swift` routes `.pos` to.
 //
 
 import SwiftUI
 
-enum POSTab: String, CaseIterable, Identifiable {
-    case pos = "POS"
-    case billGenerator = "Bill Generator"
-
-    var id: String { rawValue }
-}
-
 struct POSContainerView: View {
     @Environment(Session.self) private var session
     @EnvironmentObject private var navigation: Navigation
-    @State private var tab: POSTab = .pos
+    /// The Bill Generator in place of the floor
+    @State private var showingGenerator = false
     @State private var store: POSStore?
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("View", selection: $tab) {
-                ForEach(POSTab.allCases) { t in
-                    Text(t.rawValue).tag(t)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, DesignTokens.spacingL)
-            .padding(.top, DesignTokens.spacingM)
-            .padding(.bottom, DesignTokens.spacingS)
-
-            Divider().opacity(0.4)
-                .onAppear { openBillGeneratorIfAsked() }
-                .onChange(of: navigation.showBillGenerator) { openBillGeneratorIfAsked() }
-
-            Group {
-                switch tab {
-                case .pos:
-                    if let store {
-                        TablesGridView(store: store)
-                    } else {
-                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        Group {
+            if showingGenerator {
+                VStack(spacing: 0) {
+                    HStack {
+                        Button {
+                            showingGenerator = false
+                        } label: {
+                            Label("Floor", systemImage: "chevron.left")
+                                .font(.subheadline.weight(.medium))
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("pos-back-to-floor")
+                        Spacer()
                     }
-                case .billGenerator:
+                    .padding(.horizontal, DesignTokens.spacingL)
+                    .padding(.vertical, DesignTokens.spacingS)
+                    Divider().opacity(0.4)
                     BillGenerator()
                 }
+            } else if let store {
+                TablesGridView(store: store, onOpenBillGenerator: { showingGenerator = true })
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .onAppear { openBillGeneratorIfAsked() }
+        .onChange(of: navigation.showBillGenerator) { openBillGeneratorIfAsked() }
         .task {
             // First-time setup: build the store + load the static-ish
             // data (menu, waiters) that won't change during a service.
@@ -93,6 +86,6 @@ extension POSContainerView {
     fileprivate func openBillGeneratorIfAsked() {
         guard navigation.showBillGenerator else { return }
         navigation.showBillGenerator = false
-        tab = .billGenerator
+        showingGenerator = true
     }
 }

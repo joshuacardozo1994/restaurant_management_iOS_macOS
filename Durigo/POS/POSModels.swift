@@ -58,6 +58,8 @@ struct POSTable: Decodable, Identifiable, Hashable {
     let capacity: Int
     let status: String
     let orders: [POSOrder]?
+    /// Part of the floor ("Inside", "Garden"); the floor groups tiles by it
+    var section: String? = nil
 
     var statusEnum: TableStatus { TableStatus.from(status) }
 
@@ -154,6 +156,88 @@ struct POSOrderItem: Decodable, Identifiable, Hashable {
     var displayVariant: String? {
         servingSizeName ?? variantTemplate?.name
     }
+}
+
+// MARK: - Floor helpers
+
+/// Where a dish is on its way to the table, as the floor and the bill show it
+enum DishStage: Int, CaseIterable, Identifiable {
+    case todo, cooking, ready, served
+
+    var id: Int { rawValue }
+
+    init(itemStatus: String) {
+        switch itemStatus.uppercased() {
+        case "PREPARING": self = .cooking
+        case "READY": self = .ready
+        case "SERVED", "COMPLETED": self = .served
+        default: self = .todo   // PENDING, CONFIRMED
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .todo: "To do"
+        case .cooking: "Cooking"
+        case .ready: "Ready"
+        case .served: "Served"
+        }
+    }
+}
+
+enum POSTime {
+    private static let fractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let plain = ISO8601DateFormatter()
+
+    static func date(_ iso: String?) -> Date? {
+        guard let iso else { return nil }
+        return fractional.date(from: iso) ?? plain.date(from: iso)
+    }
+
+    /// "7m", "1h 4m", "3d"
+    static func elapsed(since: Date, now: Date) -> String {
+        let mins = max(0, Int(now.timeIntervalSince(since) / 60))
+        if mins < 60 { return "\(mins)m" }
+        if mins < 24 * 60 { return "\(mins / 60)h \(mins % 60)m" }
+        return "\(mins / (24 * 60))d"
+    }
+
+    /// "20:30" → "8:30"
+    static func clock(_ hhmm: String) -> String {
+        let p = hhmm.split(separator: ":").compactMap { Int($0) }
+        guard p.count >= 2 else { return hhmm }
+        return "\(p[0] % 12 == 0 ? 12 : p[0] % 12):\(String(format: "%02d", p[1]))"
+    }
+
+    /// Today's date in the restaurant's time zone, "2026-10-15"
+    static var todayIST: String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "Asia/Kolkata")
+        return f.string(from: Date())
+    }
+}
+
+extension POSTable {
+    /// Every dish still on the table's bill (not cancelled), oldest order first
+    var liveItems: [POSOrderItem] {
+        liveOrders.flatMap { ($0.items ?? []).filter { $0.status != "CANCELLED" } }
+    }
+
+    /// When the table's oldest unpaid order was placed
+    var seatedSince: Date? {
+        liveOrders.compactMap { POSTime.date($0.createdAt) }.min()
+    }
+
+    /// Seated or waiting for the bill
+    var isSeated: Bool { effectiveStatus == .occupied || effectiveStatus == .billRequested }
+
+    /// One entry per dish line, in order, for the tile's progress line
+    var dishStages: [DishStage] { liveItems.map { DishStage(itemStatus: $0.status) } }
 }
 
 // MARK: - Menu DTO (POS uses /api/menu/full which is the same shape as

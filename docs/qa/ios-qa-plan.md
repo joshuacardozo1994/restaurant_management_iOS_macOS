@@ -88,17 +88,21 @@ test's name is given.
 
 | # | Check | Expected | Status |
 |---|---|---|---|
-| 4.1 | An order placed on another device | Table card updates live | ✅ simulator |
+| 4.1 | An order placed on another device | Table tile (total, seated time, dish progress) and the open bill update live | ✅ simulator |
 | 4.2 | Take an order: categories, search, variants, quantity | Cart right; Send to Kitchen | ✅ 🤖 testTakeOrderWithCategorySearchAndQuantity (2 × Soda reached the server) |
 | 4.3 | Per-item note | Shows on the cart line and in red on the kitchen card | ✅ simulator |
 | 4.4 | Takeaway; delivery with name, phone and address | Delivery details reach the kitchen in the order note | ✅ simulator |
 | 4.5 | Retry Send after the network drops | Exactly one order (idempotency key) | ✅ the key survives retries (only a changed cart gets a new one); the server side is API check 2.x |
-| 4.6 | Merge and unmerge tables; order at a merged table | Secondary tables route to the primary | ✅ 🤖 testMergeAndUnmergeTables; secondary tables show "Order at Table 2" (tour). Fixed: unmerge buttons were 20×10pt and unlabelled |
-| 4.7 | Reservation from a table card; today's date | Saved; shown on the card | ✅ 🤖 testReservationFromATableCard. Fixed: the booking now shows on the card straight away |
+| 4.6 | Merge and unmerge tables; order at a merged table | Secondary tables route to the primary | ✅ 🤖 testMergeAndUnmergeTables; merged tiles carry a link mark, a secondary tile with no orders of its own reads "→ Table 2" and opens the primary's bill; "Merged tables" under the floor lists each group with Unmerge (15 Oct floor redesign, iPhone 17 and iPad Pro 13", light and dark) |
+| 4.7 | Reservation from a table's bill (Reserve on a free table); today's date | Saved; shown on the table's bill, and its time on the tile | ✅ 🤖 testReservationFromATableCard. Fixed: the booking now shows straight away |
 | 4.8 | Manage tables: add, renumber, seats, out of service, delete | Works; can't take an occupied table out of service | ✅ 🤖 ManageTablesUITests |
 | 4.9 | Extras on a cart line (extras button, for that category) | Line price adds the extra; "+ Extra cheese" on the order, kitchen card, item details and ticket | ✅ 🤖 QAPlanUITests (iPhone and iPad) |
 | 4.10 | Cancel a whole order from the order screen, with a reason | Leaves the bill and the kitchen; table freed when nothing else is open; hidden for staff once food is served (admins still can) | ✅ 🤖 QAPlanUITests (iPhone and iPad) |
 | 4.11 | Takeaway with an optional customer phone and name; delivery customer and address | Order linked to the customer found or created by phone; delivery address saved on the customer | ✅ 🤖 QAPlanUITests testTakeawayWithCustomer (link checked in the database) |
+| 4.12 | Floor (15 Oct redesign, "Floor + Counter"): tiles by section, filter chips All / Seated / Bill asked / Free, summary "N of M seated · ₹ open", Live, ⋯ menu (Takeaway, Delivery, Merge, Manage), Parcel tile | 4 tiles across on iPhone, about 100pt tiles on iPad and Mac; tile shows seated time, total, waiter (not on iPhone) and one progress segment per dish (to do amber, cooking blue, ready teal, served grey); tap selects with a teal ring | ✅ iPhone 17 and iPad Pro 13", light and dark (screenshots) |
+| 4.13 | The selected table's bill | iPad/Mac: a 380pt panel beside the floor ("Tap a table to see its bill" when none); iPhone: a card at the bottom, pulled up (or grabber tapped) for every line. Lines grouped To do / Cooking / Ready / Served, totals by BillMath (food + GST, liquor + VAT, total tax included); + Items, Bill (asks for the bill), Pay (payment screen); free: Take order, Reserve; reserved: Seat & take order; out of service: Back in service | ✅ iPhone 17 (card collapsed and expanded, dark) and iPad Pro 13" (panel, light and dark) |
+| 4.14 | Adding items on iPad/Mac | Table strip to switch tables (a dot marks a table with lines not sent), categories with counts, menu cards with variant chips and an in-cart count, live bill with "Not sent" lines, totals, Send N to kitchen and Bill · Pay. iPhone keeps the list with a bar "₹total · N items · N not sent" and Send N to kitchen | ✅ iPad Pro 13" (light and dark, variant chip added Smirnoff · Peg, VAT line appeared), iPhone 17 (dark, two items added, bar showed ₹440 · 12 items · 2 not sent) |
+| 4.15 | Bill Generator from POS | Quiet document button top right of the floor opens it; "Floor" goes back; Regenerate still lands on it | ✅ 🤖 testBillGeneratorBillShowsGSTAndVATAndUploads |
 
 ### 5. POS payment (P0, money)
 
@@ -185,8 +189,8 @@ test's name is given.
 |---|---|---|
 | Login | Brand panel on iPad/Mac; keyboard Return to sign in; error placement | ✅ iPhone (lockout message, 🤖 login-locked-out screenshot). Mac ✅ 15 Oct. |
 | Dashboard | Numbers match the web; refresh | ✅ iPhone and iPad, light and dark; same numbers as the web. Mac ✅ 15 Oct. **Redesigned 15 Oct ("Service night"):** same figures as the web dashboard from `/api/admin/dashboard/service`, reloads on live events and every minute; one column on iPhone, two beside the iPad sidebar, three when wide. ✅ iPhone 17 and iPad Pro 13", light and dark (table numbers ungrouped, e.g. 1043). Oldest ticket card: table, wait, dishes still to come, cook ("Not assigned" when nobody), waiter ✅ iPad. ⏳ Mac: builds, but needs you at the Mac. With the display asleep the app opens no window, so neither `MacKeyboardUITests/testDashboardOnMacLightAndDark` nor a window capture could run (the earlier Mac tests fail the same way right now). |
-| POS tables grid | Readable from arm's length on iPad; Live indicator; merged groups; the + menu (takeaway, delivery, merge, manage) | ✅ iPhone and iPad, light and dark: Live dot, merged groups, + menu. Fixed: calendar and unmerge buttons labelled and enlarged. Mac ✅ 15 Oct. |
-| Take order | Taps for a typical order; cart always visible; note editor; delivery fields | ✅ iPhone (🤖 tour + ordering test). Fixed: cart +/− were 17pt and unlabelled; category chips taller. Mac ✅ 15 Oct. |
+| POS floor (redesigned 15 Oct) | Readable from arm's length on iPad; Live indicator; merged groups; the ⋯ menu (takeaway, delivery, merge, manage); bill beside the floor | ✅ iPhone 17 and iPad Pro 13", light and dark: compact tiles, filter chips, section labels, bill panel / bottom card. Mac: builds; see 4.12 |
+| Take order | Taps for a typical order; cart always visible; note editor; delivery fields | ✅ iPhone (🤖 tour + ordering test). Fixed: cart +/− were 17pt and unlabelled; category chips taller. Redesigned 15 Oct: three columns on iPad/Mac (4.14), summary bar on iPhone ✅ iPhone 17 and iPad Pro 13", light and dark |
 | Order detail and payment | Amount due is the biggest thing; breakdown readable; split rows on iPhone width | ✅ iPhone, Mac |
 | Paid receipt | Looks like the printed bill; Share/Print reachable | ✅ iPhone |
 | Manage tables, merge tables, reservation dialog | Sheets on iPhone; Mac sheet sizes | ✅ iPhone (🤖 merge and reservation-from-card tests). Mac ✅ 15 Oct. |

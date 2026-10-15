@@ -281,7 +281,8 @@ final class POSStore {
                 number: existing.number,
                 capacity: existing.capacity,
                 status: "OCCUPIED",
-                orders: newOrders
+                orders: newOrders,
+                section: existing.section
             )
         }
         return order
@@ -299,7 +300,7 @@ final class POSStore {
         if let idx = tables.firstIndex(where: { $0.id == tableId }) {
             let t = tables[idx]
             tables[idx] = POSTable(id: t.id, number: t.number, capacity: t.capacity,
-                                    status: "BILL_REQUESTED", orders: t.orders)
+                                    status: "BILL_REQUESTED", orders: t.orders, section: t.section)
         }
     }
 
@@ -331,17 +332,26 @@ final class POSStore {
     /// drinks) and VAT part (liquor), by each item's menu category; custom
     /// items fall back to their name. Same rules the server bills by.
     func grossByTax(for table: POSTable) -> (gst: Int, vat: Int) {
+        grossByTax(table: table, cart: [])
+    }
+
+    /// The same split for a table's unpaid items plus a cart not yet sent
+    /// (either may be empty), for the live bill while adding items
+    func grossByTax(table: POSTable?, cart: [CartLine]) -> (gst: Int, vat: Int) {
         let typeByItem = Dictionary(menu.map { ($0.id, $0.category.type) }, uniquingKeysWith: { a, _ in a })
         var gst = 0.0, vat = 0.0
-        for order in table.liveOrders {
-            for item in order.items ?? [] where item.status != "CANCELLED" {
-                let value = item.unitPrice * Double(item.quantity)
-                let type = item.menuItemId.flatMap { typeByItem[$0] }
-                switch BillMath.taxClass(categoryType: type, name: item.displayName) {
-                case .gst: gst += value
-                case .vat: vat += value
-                }
+        func add(_ value: Double, menuItemId: String?, name: String) {
+            let type = menuItemId.flatMap { typeByItem[$0] }
+            switch BillMath.taxClass(categoryType: type, name: name) {
+            case .gst: gst += value
+            case .vat: vat += value
             }
+        }
+        for item in table?.liveItems ?? [] {
+            add(item.unitPrice * Double(item.quantity), menuItemId: item.menuItemId, name: item.displayName)
+        }
+        for line in cart {
+            add(line.lineTotal, menuItemId: line.menuItem.id, name: line.menuItem.name)
         }
         return (Int(gst.rounded()), Int(vat.rounded()))
     }

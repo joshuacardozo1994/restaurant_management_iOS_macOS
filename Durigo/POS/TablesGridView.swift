@@ -2,58 +2,92 @@
 //  TablesGridView.swift
 //  Durigo
 //
-//  Mirrors the web's /pos page (RealtimeTablesGrid.tsx): adaptive grid of
-//  table cards, status-coded background, capacity + unpaid total, list of
-//  active orders, primary "Take Order" action that presents TakeOrderView.
+//  The POS floor ("Floor + Counter"): compact table tiles grouped by
+//  section, filter chips, and the selected table's bill beside the floor
+//  (a side panel on iPad and Mac, a card at the bottom on iPhone). Adding
+//  items opens TakeOrderView: inline beside the floor on a wide screen, as
+//  a sheet on iPhone.
 //
 
 import SwiftUI
 
+/// What the order screen is for: a table, or a takeaway / delivery
+struct OrderTarget: Identifiable, Equatable {
+    var tableId: String?
+    var type: OrderType
+    var id: String { (tableId ?? "counter") + "-" + type.rawValue }
+}
+
+enum FloorFilter: String, CaseIterable, Identifiable {
+    case all = "All", seated = "Seated", billAsked = "Bill asked", free = "Free"
+    var id: String { rawValue }
+
+    func includes(_ table: POSTable) -> Bool {
+        switch self {
+        case .all: true
+        case .seated: table.effectiveStatus == .occupied
+        case .billAsked: table.effectiveStatus == .billRequested
+        case .free: table.effectiveStatus == .available
+        }
+    }
+}
+
 struct TablesGridView: View {
     @Bindable var store: POSStore
-    @State private var orderingTableId: String?
-    @State private var orderingType: OrderType = .dineIn
-    @State private var showTakeawaySheet = false
-    @State private var showDeliverySheet = false
+    var onOpenBillGenerator: () -> Void = {}
+
+    @State private var selectedTableId: String?
+    @State private var filter: FloorFilter = .all
+    /// The order screen: inline on a wide screen, a sheet on a narrow one
+    @State private var ordering: OrderTarget?
+    @State private var isWide = false
     /// Table whose order detail (with payment / bill request) is open.
     @State private var detailTableId: String?
     /// Table being reserved via the reservation dialog.
     @State private var reservingTable: POSTable?
-    /// Toggles the merge-tables modal.
     @State private var showMergeSheet = false
-    /// Toggles the add/edit tables sheet.
     @State private var showManageSheet = false
+    /// iPhone: the bill card pulled up to show every line
+    @State private var cardExpanded = false
+    @State private var busy = false
+    @State private var errorMessage: String?
+
+    /// From this width the bill sits beside the floor
+    static let wideWidth: CGFloat = 760
+    static let panelWidth: CGFloat = 380
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                header
-                grid
-                if !store.tableGroups.isEmpty {
-                    activeGroupsSection
+        GeometryReader { geo in
+            let wide = geo.size.width >= Self.wideWidth
+            Group {
+                if wide, let target = ordering {
+                    TakeOrderView(store: store, target: target, inline: true,
+                                  onClose: { finishOrdering(selecting: $0) },
+                                  onPay: { id in
+                                      finishOrdering(selecting: id)
+                                      detailTableId = id
+                                  })
+                } else if wide {
+                    HStack(spacing: 0) {
+                        floor(compact: false, fourAcross: false)
+                        Rectangle().fill(SN.line).frame(width: 1)
+                        sidePanel
+                            .frame(width: Self.panelWidth)
+                    }
+                } else {
+                    floor(compact: true, fourAcross: geo.size.width < 500)
+                        .safeAreaInset(edge: .bottom, spacing: 0) { bottomCard }
                 }
-                legend
             }
-            .padding(DesignTokens.spacingL)
+            .onChange(of: wide, initial: true) { _, now in isWide = now }
         }
-        .refreshable { await store.loadTables() }
-        .background(Color(.systemGroupedBackground))
+        .background(SN.page)
+        .foregroundStyle(SN.ink)
         .sheet(item: Binding(
-            get: { orderingTableId.map { OrderingContext(tableId: $0, type: .dineIn) } },
-            set: { ctx in orderingTableId = ctx?.tableId }
-        )) { ctx in
-            TakeOrderView(
-                store: store,
-                tableId: ctx.tableId,
-                table: store.tables.first(where: { $0.id == ctx.tableId }),
-                orderType: .dineIn
-            )
-        }
-        .sheet(isPresented: $showTakeawaySheet) {
-            TakeOrderView(store: store, tableId: nil, table: nil, orderType: .takeaway)
-        }
-        .sheet(isPresented: $showDeliverySheet) {
-            TakeOrderView(store: store, tableId: nil, table: nil, orderType: .delivery)
+            get: { isWide ? nil : ordering },
+            set: { ordering = $0 }
+        )) { target in
+            TakeOrderView(store: store, target: target, onClose: { finishOrdering(selecting: $0) })
         }
         .sheet(item: Binding(
             get: { detailTableId.map { DetailContext(tableId: $0) } },
@@ -70,30 +104,89 @@ struct TablesGridView: View {
         .sheet(isPresented: $showManageSheet) {
             ManageTablesView(store: store)
         }
+        .alert("Couldn't update the table", isPresented: Binding(
+            get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Tables")
-                    .font(.system(.title2, weight: .bold))
-                Text("\(store.tables.count) tables • \(occupiedCount) occupied")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+    private func finishOrdering(selecting tableId: String?) {
+        ordering = nil
+        if let tableId { selectedTableId = tableId }
+    }
+
+    // MARK: Floor
+
+    /// `compact`: the bill is a card at the bottom; `fourAcross`: a phone
+    private func floor(compact: Bool, fourAcross: Bool) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                header(compact: compact)
+                filterChips
+                TimelineView(.periodic(from: .now, by: 30)) { tl in
+                    VStack(alignment: .leading, spacing: 16) {
+                        let sections = floorSections
+                        ForEach(sections) { section in
+                            VStack(alignment: .leading, spacing: 8) {
+                                PanelLabel(text: section.name).accessibilityAddTraits(.isHeader)
+                                LazyVGrid(columns: columns(fourAcross: fourAcross), spacing: 8) {
+                                    ForEach(section.tables) { table in
+                                        tile(table, now: tl.date, compact: fourAcross)
+                                    }
+                                    if section.id == sections.last?.id {
+                                        ParcelTile { ordering = OrderTarget(tableId: nil, type: .takeaway) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                legend
+                if !store.tableGroups.isEmpty { mergedGroups }
             }
-            Spacer()
-            HStack(spacing: 8) {
-                Image(systemName: store.sseConnected ? "wifi" : "wifi.slash")
-                    .font(.subheadline)
-                    .foregroundStyle(store.sseConnected ? .green : .red)
+            .padding(DesignTokens.spacingL)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .refreshable { await store.loadTables() }
+    }
+
+    private func columns(fourAcross: Bool) -> [GridItem] {
+        fourAcross
+            ? Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+            : [GridItem(.adaptive(minimum: 100), spacing: 8)]
+    }
+
+    private var seatedCount: Int { store.tables.filter(\.isSeated).count }
+    private var openTotal: Double { store.tables.filter(\.isSeated).reduce(0) { $0 + $1.unpaidTotal } }
+
+    private func header(compact: Bool) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Floor")
+                    .font(.title2.weight(.bold))
+                    .accessibilityAddTraits(.isHeader)
+                PanelLabel(text: "\(seatedCount) of \(store.tables.count) seated · \(openTotal.rupees) open")
+            }
+            Spacer(minLength: 8)
+            HStack(spacing: compact ? 10 : 8) {
+                LiveBadge(isLive: store.sseConnected)
+                if !compact {
+                    Button("Takeaway") { ordering = OrderTarget(tableId: nil, type: .takeaway) }
+                        .buttonStyle(QuietButtonStyle())
+                    Button("Delivery") { ordering = OrderTarget(tableId: nil, type: .delivery) }
+                        .buttonStyle(QuietButtonStyle())
+                }
                 Menu {
                     Button {
-                        showTakeawaySheet = true
+                        ordering = OrderTarget(tableId: nil, type: .takeaway)
                     } label: {
                         Label("Takeaway Order", systemImage: "bag")
                     }
                     Button {
-                        showDeliverySheet = true
+                        ordering = OrderTarget(tableId: nil, type: .delivery)
                     } label: {
                         Label("Delivery Order", systemImage: "bicycle")
                     }
@@ -109,49 +202,83 @@ struct TablesGridView: View {
                         Label("Manage Tables", systemImage: "slider.horizontal.3")
                     }
                 } label: {
-                    Image(systemName: "plus.circle.fill")
+                    Image(systemName: "ellipsis.circle")
                         .font(.title3)
+                        .foregroundStyle(SN.ink)
+                        .frame(minWidth: 32, minHeight: 32)
                 }
                 .menuStyle(.button)
                 .buttonStyle(.borderless)
-                .accessibilityLabel("New order")
+                .accessibilityLabel("New order and tables")
                 .accessibilityIdentifier("pos-new-menu")
+                Button(action: onOpenBillGenerator) {
+                    Image(systemName: "doc.text")
+                        .font(.title3)
+                        .foregroundStyle(SN.mut)
+                        .frame(minWidth: 32, minHeight: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help("Bill Generator")
+                .accessibilityLabel("Bill Generator")
+                .accessibilityIdentifier("pos-bill-generator")
             }
         }
     }
 
-    private var occupiedCount: Int {
-        store.tables.filter { $0.effectiveStatus == .occupied || $0.effectiveStatus == .billRequested }.count
-    }
-
-    private var gridColumns: [GridItem] {
-        [GridItem(.adaptive(minimum: 240, maximum: 360), spacing: DesignTokens.spacingL)]
-    }
-
-    private var grid: some View {
-        LazyVGrid(columns: gridColumns, spacing: DesignTokens.spacingL) {
-            ForEach(store.tables) { table in
-                let group = groupContaining(table)
-                let primary = primaryTable(for: group)
-                TableCardView(
-                    table: table,
-                    group: group,
-                    primaryNumber: primary?.number,
-                    isOrderable: group == nil || primary?.id == table.id,
-                    upcomingReservation: store.nextReservation(for: table.id),
-                    onTakeOrder: {
-                        // If this card is a secondary member, route the
-                        // order to the primary instead of refusing.
-                        orderingTableId = primary?.id ?? table.id
-                    },
-                    onViewOrders: { detailTableId = primary?.id ?? table.id },
-                    onReserve: { reservingTable = table },
-                    onBackInService: {
-                        Task { try? await store.updateTable(id: table.id, status: "AVAILABLE") }
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(FloorFilter.allCases) { f in
+                    let count = f == .all ? nil : store.tables.filter(f.includes).count
+                    let on = filter == f
+                    Button {
+                        filter = f
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(f.rawValue)
+                            if let count {
+                                Text("\(count)")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(on ? SN.page.opacity(0.8) : SN.mut)
+                            }
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 36)
+                        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(on ? SN.ink : SN.panel))
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(on ? SN.ink : SN.line, lineWidth: 1))
+                        .foregroundStyle(on ? SN.page : SN.ink)
                     }
-                )
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("floor-filter-\(f.rawValue)")
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
             }
+            .padding(.vertical, 1)
         }
+    }
+
+    // MARK: Sections and tiles
+
+    private struct FloorSection: Identifiable {
+        let name: String
+        let tables: [POSTable]
+        var id: String { name }
+    }
+
+    /// Tables in their sections (in table-number order), after the filter
+    private var floorSections: [FloorSection] {
+        let shown = store.tables.filter(filter.includes)
+        var order: [String] = []
+        var bySection: [String: [POSTable]] = [:]
+        for t in shown.sorted(by: { $0.number < $1.number }) {
+            let name = t.section?.trimmingCharacters(in: .whitespaces).nilIfEmpty ?? "Tables"
+            if bySection[name] == nil { order.append(name) }
+            bySection[name, default: []].append(t)
+        }
+        if order.isEmpty { return [FloorSection(name: "Tables", tables: [])] }
+        return order.map { FloorSection(name: $0, tables: bySection[$0] ?? []) }
     }
 
     private func groupContaining(_ table: POSTable) -> POSTableGroup? {
@@ -160,416 +287,795 @@ struct TablesGridView: View {
 
     /// The "lowest-numbered" member of a group acts as the orderable
     /// primary. Convention-based (low number = primary) so a manager
-    /// merging tables doesn't have to think about it. Returns nil if no
-    /// group or members can't be matched to known tables.
+    /// merging tables doesn't have to think about it.
     private func primaryTable(for group: POSTableGroup?) -> POSTable? {
         guard let group else { return nil }
         let members = store.tables.filter { t in group.members.contains { $0.tableId == t.id } }
         return members.min(by: { $0.number < $1.number })
     }
 
-    /// Summary list of every currently-active TableGroup (merged tables).
-    /// Mirrors the web's "Active Table Groups" panel at the bottom of /pos.
-    /// Each row shows the group name, member tables, total capacity, and
-    /// an Unmerge action. Hidden when there are no groups.
-    private var activeGroupsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "rectangle.3.group")
-                    .font(.system(.subheadline))
-                Text("Active Groups")
-                    .font(.system(.subheadline, weight: .semibold))
-                Text("\(store.tableGroups.count)")
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 6).padding(.vertical, 1)
-                    .background(Capsule().fill(Color.blue.opacity(0.18)))
-                    .foregroundStyle(.blue)
-            }
-            ForEach(store.tableGroups) { group in
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(group.displayName)
-                            .font(.system(.subheadline, weight: .semibold))
-                        Text("\(group.totalCapacity) seats • \(group.members.count) tables")
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button(role: .destructive) {
-                        Task { try? await store.unmergeGroup(group.id) }
-                    } label: {
-                        Label("Unmerge", systemImage: "rectangle.split.3x1.slash")
-                            .labelStyle(.iconOnly)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
-                    .accessibilityLabel("Unmerge \(group.displayName)")
-                }
-                .padding(.vertical, 4)
-            }
+    /// The table whose bill a tap on `table` shows: its group's primary,
+    /// unless it has unpaid orders of its own
+    private func billTable(for table: POSTable) -> POSTable {
+        if !table.liveOrders.isEmpty { return table }
+        return primaryTable(for: groupContaining(table)) ?? table
+    }
+
+    private var selectedTable: POSTable? {
+        selectedTableId.flatMap { id in store.tables.first { $0.id == id } }
+    }
+
+    /// Selected tables: the tapped one and the rest of its merged group
+    private var ringedIds: Set<String> {
+        guard let t = selectedTable else { return [] }
+        if let g = groupContaining(t) { return Set(g.members.map(\.tableId)) }
+        return [t.id]
+    }
+
+    /// A reservation to show on a tile: when the table is reserved, or a
+    /// free table is booked for later today
+    private func tileReservation(_ table: POSTable) -> POSReservation? {
+        guard let r = store.nextReservation(for: table.id) else { return nil }
+        if table.effectiveStatus == .reserved || r.date.hasPrefix(POSTime.todayIST) { return r }
+        return nil
+    }
+
+    private func tile(_ table: POSTable, now: Date, compact: Bool) -> some View {
+        let group = groupContaining(table)
+        let primary = primaryTable(for: group)
+        let secondaryOf = (primary != nil && primary?.id != table.id && table.liveOrders.isEmpty) ? primary?.number : nil
+        return FloorTableTile(
+            table: table,
+            isMerged: group != nil,
+            primaryNumber: secondaryOf,
+            reservation: tileReservation(table),
+            isSelected: ringedIds.contains(table.id),
+            compact: compact,
+            now: now
+        ) {
+            if selectedTableId != table.id { cardExpanded = false }
+            selectedTableId = table.id
         }
-        .padding(DesignTokens.spacingM)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium).fill(Color.blue.opacity(0.06)))
-        .overlay(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium).stroke(Color.blue.opacity(0.18), lineWidth: 1))
     }
 
     private var legend: some View {
+        FlowLayout(spacing: 14, lineSpacing: 4) {
+            ForEach(DishStage.allCases) { stage in
+                HStack(spacing: 5) {
+                    Circle().fill(stage.color).frame(width: 7, height: 7)
+                    Text(stage.title.lowercased())
+                }
+            }
+            Text("Tap a table for its bill")
+        }
+        .font(.caption)
+        .foregroundStyle(SN.mut)
+    }
+
+    /// Every merged group, with Unmerge (also offered in Merge Tables)
+    private var mergedGroups: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Status Legend")
-                .font(.system(.subheadline, weight: .semibold))
-            HStack(spacing: 12) {
-                legendDot(color: .green, label: "Available")
-                legendDot(color: .red, label: "Occupied")
-                legendDot(color: .yellow, label: "Reserved")
-                legendDot(color: .purple, label: "Bill Req.")
-                legendDot(color: .gray, label: "Maint.")
-            }
-            .font(.caption)
-        }
-        .padding(DesignTokens.spacingM)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .webCardBackground()
-    }
-
-    private func legendDot(color: Color, label: String) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(label).foregroundStyle(.secondary)
-        }
-    }
-}
-
-// MARK: - Table card
-
-struct TableCardView: View {
-    let table: POSTable
-    let group: POSTableGroup?
-    /// Number of the lowest-numbered table in this card's group. Used to
-    /// label secondary members ("Order at Table 2"). Nil when not grouped
-    /// or when this card *is* the primary.
-    let primaryNumber: Int?
-    /// True if this card can independently take an order. False for
-    /// secondary members of a merged group — those defer to the primary.
-    let isOrderable: Bool
-    let upcomingReservation: POSReservation?
-    let onTakeOrder: () -> Void
-    let onViewOrders: () -> Void
-    let onReserve: () -> Void
-    var onBackInService: () -> Void = {}
-
-    /// Convenience: this card is a *secondary* group member (not the lowest).
-    private var isSecondaryGroupMember: Bool {
-        group != nil && !isOrderable
-    }
-
-    var body: some View {
-        // Compact: spacingS between sections (was spacingM); empty
-        // "No active orders" placeholder removed — the green Available
-        // badge already conveys that state.
-        VStack(alignment: .leading, spacing: 0) {
-            // Merged-group banner — saturated colored band at the top of
-            // every member card so two tables sharing a party are
-            // immediately and unambiguously paired across the grid.
-            // Color is hashed deterministically from the group id so
-            // distinct groups always get distinct hues.
-            if let group {
-                HStack(spacing: 4) {
-                    Image(systemName: "link")
-                        .font(.system(size: 10, weight: .bold))
-                    Text(group.displayName)
-                        .font(.caption.weight(.bold))
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Text("\(group.totalCapacity) seats")
-                        .font(.caption2)
-                        .opacity(0.85)
-                }
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .frame(maxWidth: .infinity)
-                .background(groupColor(group.id))
-                .foregroundStyle(.white)
-            }
-            VStack(alignment: .leading, spacing: DesignTokens.spacingS) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 6) {
-                        Text("Table \(table.number)")
-                            .font(.system(.headline, weight: .bold))
-                        // Capacity inlined with the title to save a row.
-                        HStack(spacing: 2) {
-                            Image(systemName: "person.2.fill")
-                                .font(.system(size: 9))
-                            Text("\(table.capacity)")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                    // Active waiter — only when occupied (not relevant for empty cards).
-                    if let waiter = table.activeWaiterName {
-                        HStack(spacing: 3) {
-                            Image(systemName: "person.crop.circle")
-                                .font(.system(size: 9))
-                            Text(waiter)
-                                .font(.caption2)
-                                .lineLimit(1)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer()
-                statusBadge
-            }
-
-            // Upcoming reservation indicator — only on cards without
-            // active orders, so it doesn't compete with the order list.
-            if table.liveOrders.isEmpty, let r = upcomingReservation {
-                HStack(spacing: 4) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 9))
-                    Text("\(r.time) — \(r.guestName) (\(r.guestCount))")
-                        .font(.caption2)
-                        .lineLimit(1)
-                }
-                .foregroundStyle(.yellow)
-                .padding(.horizontal, 6).padding(.vertical, 2)
-                .background(RoundedRectangle(cornerRadius: 4).fill(Color.yellow.opacity(0.12)))
-            }
-
-            if !table.liveOrders.isEmpty {
-                ordersSection
+            PanelLabel(text: "Merged tables")
+            ForEach(store.tableGroups) { group in
                 HStack {
+                    Image(systemName: "link").font(.caption).foregroundStyle(SN.mut)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(group.displayName).font(.subheadline.weight(.semibold))
+                        Text("Tables \(group.members.map { String($0.table.number) }.sorted { (Int($0) ?? 0) < (Int($1) ?? 0) }.joined(separator: ", ")) · \(group.totalCapacity) seats")
+                            .font(.caption).foregroundStyle(SN.mut)
+                    }
                     Spacer()
-                    Text("\((table.unpaidTotal).rupees)")
-                        .font(.system(.headline, weight: .bold))
-                        .monospacedDigit()
+                    Button("Unmerge") {
+                        Task {
+                            do { try await store.unmergeGroup(group.id) } catch { errorMessage = error.localizedDescription }
+                        }
+                    }
+                    .buttonStyle(QuietButtonStyle())
+                    .accessibilityLabel("Unmerge \(group.displayName)")
                 }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(SN.panel))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(SN.line, lineWidth: 1))
             }
-
-            actionButton
-            }
-            .padding(DesignTokens.spacingM)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusLarge, style: .continuous)
-                .fill(cardBackground)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusLarge, style: .continuous)
-                .stroke(group != nil ? groupColor(group!.id) : borderColor,
-                        lineWidth: group != nil ? 2.5 : 1.5)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusLarge, style: .continuous))
-        // Secondary group members get visually de-emphasized so the eye
-        // settles on the primary that actually takes orders.
-        .opacity(isSecondaryGroupMember ? 0.78 : 1.0)
     }
 
-    /// Deterministic color from a group id so all members of the same
-    /// merge get the same saturated hue, but different groups get
-    /// distinct colors. Hash mod 6 against a hand-picked palette that
-    /// reads well over the existing card backgrounds.
-    private func groupColor(_ id: String) -> Color {
-        let palette: [Color] = [
-            Color(red: 0.13, green: 0.46, blue: 0.95), // blue
-            Color(red: 0.85, green: 0.30, blue: 0.65), // pink
-            Color(red: 0.55, green: 0.30, blue: 0.85), // purple
-            Color(red: 0.95, green: 0.55, blue: 0.15), // orange
-            Color(red: 0.10, green: 0.65, blue: 0.55), // teal
-            Color(red: 0.70, green: 0.20, blue: 0.30), // crimson
-        ]
-        var sum = 0
-        for c in id.unicodeScalars { sum &+= Int(c.value) }
-        return palette[abs(sum) % palette.count]
-    }
+    // MARK: Bill beside the floor
 
-    private var ordersSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Active (\(table.liveOrders.count))")
-                .font(.system(.caption, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            ForEach(table.liveOrders.prefix(3)) { order in
-                HStack {
-                    Text("#\(order.orderNumber?.suffix(4).map(String.init).joined() ?? String(order.id.suffix(4)))")
-                        .font(.caption)
-                        .monospaced()
-                    statusChip(for: order.status)
-                    Spacer()
-                    Text("\(order.items?.count ?? 0) items")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+    @ViewBuilder
+    private var sidePanel: some View {
+        if let tapped = selectedTable {
+            billPanel(for: tapped, style: .side)
+        } else {
+            VStack(spacing: 10) {
+                Image(systemName: "hand.tap")
+                    .font(.title2)
+                Text("Tap a table to see its bill")
+                    .font(.subheadline)
             }
-            if table.liveOrders.count > 3 {
-                Text("+ \(table.liveOrders.count - 3) more")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            .foregroundStyle(SN.mut)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(SN.panel)
         }
     }
 
     @ViewBuilder
-    private var actionButton: some View {
-        // Secondary group members defer all order actions to the primary
-        // (lowest-numbered) table — they don't get their own buttons.
-        if isSecondaryGroupMember, let pn = primaryNumber {
-            HStack(spacing: 4) {
-                Image(systemName: "arrow.right.circle")
-                    .font(.caption)
-                Text("Order at Table \(pn)")
-                    .font(.caption.weight(.medium))
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.1)))
-            .foregroundStyle(.secondary)
-        } else {
-        switch table.effectiveStatus {
-        case .available:
-            HStack(spacing: 8) {
-                Button(action: onTakeOrder) {
-                    Label("Take Order", systemImage: "plus")
-                        .frame(maxWidth: .infinity)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("take-order-\(table.number)")
-                Button(action: onReserve) {
-                    Image(systemName: "calendar")
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("Reserve table \(table.number)")
-                .accessibilityIdentifier("reserve-table-\(table.number)")
-            }
-        case .reserved:
-            Button(action: onTakeOrder) {
-                Label("Seat & Take Order", systemImage: "plus")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-        case .billRequested:
-            // Skip "Add Items" — a bill has been requested. Tap straight
-            // into payment.
-            Button(action: onViewOrders) {
-                Label("Process Payment", systemImage: "creditcard")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.purple)
-        case .occupied:
-            HStack(spacing: 8) {
-                Button(action: onViewOrders) {
-                    Label("View / Pay", systemImage: "doc.text")
-                        .frame(maxWidth: .infinity)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("view-orders-\(table.number)")
-                Button(action: onTakeOrder) {
-                    Label("Add", systemImage: "plus")
-                        .frame(maxWidth: .infinity)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        case .maintenance:
-            Button(action: onBackInService) {
-                Label("Back in service", systemImage: "checkmark.circle")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-        }
+    private var bottomCard: some View {
+        if let tapped = selectedTable {
+            billPanel(for: tapped, style: .card)
         }
     }
 
-    private var statusBadge: some View {
-        let s = table.effectiveStatus
-        let label: String
-        switch s {
-        case .available: label = "Available"
-        case .occupied: label = "Occupied"
-        case .reserved: label = "Reserved"
-        case .billRequested: label = "Bill Req."
-        case .maintenance: label = "Maint."
-        }
-        return Text(label)
-            .font(.system(.caption, weight: .medium))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(statusColor(for: s).opacity(0.15)))
-            .overlay(Capsule().stroke(statusColor(for: s).opacity(0.5), lineWidth: 1))
-            .foregroundStyle(statusColor(for: s))
+    private func billPanel(for tapped: POSTable, style: TableBillPanel.Style) -> some View {
+        let table = billTable(for: tapped)
+        let group = groupContaining(table)
+        let others = group.map { g in g.members.map(\.table.number).filter { $0 != table.number }.sorted() } ?? []
+        return TableBillPanel(
+            store: store,
+            table: table,
+            mergedWith: others,
+            reservation: store.nextReservation(for: table.id),
+            style: style,
+            expanded: $cardExpanded,
+            busy: busy,
+            onAddItems: { ordering = OrderTarget(tableId: table.id, type: .dineIn) },
+            onRequestBill: { requestBill(table) },
+            onPay: { detailTableId = table.id },
+            onReserve: { reservingTable = table },
+            onBackInService: { backInService(table) },
+            onClose: { selectedTableId = nil; cardExpanded = false }
+        )
     }
 
-    private func statusChip(for status: String) -> some View {
-        Text(status)
-            .font(.system(size: 9, weight: .semibold))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(orderStatusColor(status).opacity(0.18)))
-            .foregroundStyle(orderStatusColor(status))
-    }
-
-    private func statusColor(for s: TableStatus) -> Color {
-        switch s {
-        case .available: return .green
-        case .occupied: return .red
-        case .reserved: return .yellow
-        case .billRequested: return .purple
-        case .maintenance: return .gray
+    private func requestBill(_ table: POSTable) {
+        busy = true
+        Task {
+            defer { busy = false }
+            do { try await store.requestBill(tableId: table.id) } catch { errorMessage = error.localizedDescription }
         }
     }
 
-    private func orderStatusColor(_ status: String) -> Color {
-        switch status {
-        case "PENDING": return .orange
-        case "CONFIRMED": return .blue
-        case "PREPARING": return .yellow
-        case "READY": return .mint
-        case "SERVED": return .green
-        case "COMPLETED": return .gray
-        case "CANCELLED": return .red
-        default: return .gray
-        }
-    }
-
-    private var cardBackground: Color {
-        switch table.effectiveStatus {
-        case .available: return Color.green.opacity(0.06)
-        case .occupied: return Color.red.opacity(0.06)
-        case .reserved: return Color.yellow.opacity(0.08)
-        case .billRequested: return Color.purple.opacity(0.08)
-        case .maintenance: return Color.gray.opacity(0.06)
-        }
-    }
-
-    private var borderColor: Color {
-        switch table.effectiveStatus {
-        case .available: return Color.green.opacity(0.4)
-        case .occupied: return Color.red.opacity(0.4)
-        case .reserved: return Color.yellow.opacity(0.6)
-        case .billRequested: return Color.purple.opacity(0.5)
-        case .maintenance: return Color.gray.opacity(0.4)
+    private func backInService(_ table: POSTable) {
+        busy = true
+        Task {
+            defer { busy = false }
+            do { try await store.updateTable(id: table.id, status: "AVAILABLE") } catch { errorMessage = error.localizedDescription }
         }
     }
 }
 
-// Internal sheet context — keeps the sheet binding identifiable.
-private struct OrderingContext: Identifiable {
-    let tableId: String
-    let type: OrderType
-    var id: String { tableId + type.rawValue }
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
-/// Same pattern as OrderingContext but for the order-detail sheet —
 /// SwiftUI sheets bound by `item:` need an Identifiable wrapper.
 private struct DetailContext: Identifiable {
     let tableId: String
     var id: String { tableId }
 }
 
+// MARK: - Tile
+
+/// Fill and border for a table's state, shared by the floor tiles and the
+/// table strip on the order screen
+enum TileLook {
+    static func fill(_ status: TableStatus) -> Color {
+        switch status {
+        case .occupied: SN.blue.opacity(0.12)
+        case .billRequested: SN.amber.opacity(0.16)
+        case .available, .reserved, .maintenance: SN.panel2
+        }
+    }
+
+    static func stroke(_ status: TableStatus) -> Color {
+        switch status {
+        case .occupied: SN.blue.opacity(0.55)
+        case .billRequested: SN.amber.opacity(0.7)
+        case .reserved: SN.mut
+        case .available, .maintenance: SN.line
+        }
+    }
+
+    static func dash(_ status: TableStatus) -> [CGFloat] { status == .reserved ? [4, 3] : [] }
+}
+
+struct FloorTableTile: View {
+    let table: POSTable
+    let isMerged: Bool
+    /// Set on a secondary member of a merged group: its bill is at this table
+    let primaryNumber: Int?
+    let reservation: POSReservation?
+    let isSelected: Bool
+    let compact: Bool
+    let now: Date
+    let action: () -> Void
+
+    private var status: TableStatus { table.effectiveStatus }
+
+    private var cornerNote: String? {
+        if table.isSeated, let since = table.seatedSince { return POSTime.elapsed(since: since, now: now) }
+        if let reservation, status == .reserved || status == .available { return POSTime.clock(reservation.time) }
+        return nil
+    }
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(verbatim: String(table.number))
+                        .font(.subheadline.monospaced().weight(.semibold))
+                        .foregroundStyle(status == .reserved || status == .maintenance ? SN.mut : SN.ink)
+                    if isMerged {
+                        Image(systemName: "link")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(SN.mut)
+                    }
+                    Spacer(minLength: 2)
+                    if let cornerNote {
+                        Text(cornerNote)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(SN.mut)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                }
+                detail
+                Spacer(minLength: 0)
+                if !table.dishStages.isEmpty {
+                    DishProgress(stages: table.dishStages)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
+            .background(shape.fill(TileLook.fill(status)))
+            .overlay(shape.strokeBorder(TileLook.stroke(status), style: StrokeStyle(lineWidth: 1, dash: TileLook.dash(status))))
+            .overlay(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(SN.teal, lineWidth: 2)
+                    .padding(-2)
+                    .opacity(isSelected ? 1 : 0)
+            )
+            .opacity(status == .maintenance ? 0.6 : 1)
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityIdentifier("table-tile-\(table.number)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        if let primaryNumber {
+            Text("→ Table \(primaryNumber)")
+                .font(.caption2)
+                .foregroundStyle(SN.mut)
+                .lineLimit(1)
+        } else if table.isSeated {
+            Text(table.unpaidTotal.rupees)
+                .font(.footnote.monospacedDigit().weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            if !compact, let waiter = table.activeWaiterName {
+                Text(waiter)
+                    .font(.caption2)
+                    .foregroundStyle(SN.mut)
+                    .lineLimit(1)
+            }
+        } else if status == .maintenance {
+            Text("Out of service").font(.caption2).foregroundStyle(SN.mut).lineLimit(1)
+        } else if status == .reserved, let reservation {
+            Text("\(reservation.guestName) ×\(reservation.guestCount)")
+                .font(.caption2)
+                .foregroundStyle(SN.mut)
+                .lineLimit(1)
+        } else if !compact || reservation == nil {
+            Text("\(table.capacity) seats")
+                .font(.caption2)
+                .foregroundStyle(SN.mut)
+                .lineLimit(1)
+        }
+    }
+
+    private var accessibilityText: String {
+        var parts = ["Table \(table.number)"]
+        switch status {
+        case .occupied: parts.append("seated")
+        case .billRequested: parts.append("bill asked")
+        case .reserved: parts.append("reserved")
+        case .maintenance: parts.append("out of service")
+        case .available: parts.append("free")
+        }
+        if let primaryNumber { parts.append("merged, bill at table \(primaryNumber)") } else if isMerged { parts.append("merged") }
+        if table.isSeated {
+            if let since = table.seatedSince { parts.append("for \(POSTime.elapsed(since: since, now: now))") }
+            parts.append(table.unpaidTotal.rupees)
+            if let waiter = table.activeWaiterName { parts.append(waiter) }
+            let stages = table.dishStages
+            let counts = DishStage.allCases.compactMap { s -> String? in
+                let n = stages.filter { $0 == s }.count
+                return n == 0 ? nil : "\(n) \(s.title.lowercased())"
+            }
+            parts.append(contentsOf: counts)
+        } else if let reservation {
+            parts.append("booked \(POSTime.clock(reservation.time)) for \(reservation.guestName)")
+        } else if status == .available {
+            parts.append("\(table.capacity) seats")
+        }
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// A thin line, one segment per dish, coloured by where the dish is
+struct DishProgress: View {
+    let stages: [DishStage]
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(stages.enumerated()), id: \.offset) { _, stage in
+                Capsule().fill(stage.color).frame(height: 3)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The last tile: a takeaway for someone at the counter
+private struct ParcelTile: View {
+    let action: () -> Void
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Text("Parcel").font(.subheadline.weight(.semibold))
+                Text("quick bill").font(.caption2).foregroundStyle(SN.mut)
+            }
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(shape.fill(SN.panel.opacity(0.5)))
+            .overlay(shape.strokeBorder(SN.mut.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Parcel, quick bill")
+        .accessibilityIdentifier("parcel-tile")
+    }
+}
+
+// MARK: - Shared bill pieces
+
+extension DishStage {
+    var color: Color {
+        switch self {
+        case .todo: SN.amber
+        case .cooking: SN.blue
+        case .ready: SN.teal
+        case .served: SN.mut
+        }
+    }
+}
+
+/// "● 2× Fish Curry Rice · Half   ₹640", with extras and the note under it
+struct POSBillLine: View {
+    let color: Color
+    let quantity: Int
+    let name: String
+    var variant: String? = nil
+    var extras: String? = nil
+    var note: String? = nil
+    let amount: Double
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Circle().fill(color).frame(width: 8, height: 8).padding(.top, 6)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(quantity)× \(name)\(variant.map { " · \($0)" } ?? "")")
+                    .font(.subheadline)
+                if let extras {
+                    Text(extras).font(.caption).foregroundStyle(SN.mut)
+                }
+                if let note, !note.isEmpty {
+                    Text(note).font(.caption).italic().foregroundStyle(SN.mut)
+                }
+            }
+            Spacer(minLength: 8)
+            Text(amount.rupees)
+                .font(.subheadline)
+                .monospacedDigit()
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+/// A table's dishes grouped To do / Cooking / Ready / Served
+struct POSStageGroups: View {
+    let items: [POSOrderItem]
+
+    var body: some View {
+        ForEach(DishStage.allCases) { stage in
+            let lines = items.filter { DishStage(itemStatus: $0.status) == stage }
+            if !lines.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    PanelLabel(text: stage.title).padding(.bottom, 2)
+                    ForEach(lines) { item in
+                        POSBillLine(color: stage.color, quantity: item.quantity, name: item.displayName,
+                                    variant: item.displayVariant, extras: item.modifiers?.summary,
+                                    note: item.notes, amount: item.unitPrice * Double(item.quantity))
+                        Rectangle().fill(SN.line).frame(height: 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Food & soft drinks with GST, liquor with VAT, and the total, by BillMath
+struct POSBillTotals: View {
+    let gst: Int
+    let vat: Int
+    @EnvironmentObject private var menuLoader: MenuLoader
+
+    private static func percent(_ rate: Double) -> String {
+        let p = rate * 100
+        return p == p.rounded() ? "\(Int(p))%" : String(format: "%.1f%%", p)
+    }
+
+    var body: some View {
+        let config = menuLoader.billingConfig
+        let amounts = BillMath.computeBill(gst: gst, vat: vat, discount: 0, config: config)
+        VStack(spacing: 4) {
+            if gst > 0 || vat == 0 {
+                row("Food & soft drinks", gst)
+                row("GST \(Self.percent(config.taxRate)) (CGST + SGST)", amounts.gstTax)
+            }
+            if vat > 0 {
+                row("Liquor", vat)
+                row("VAT \(Self.percent(config.liquorTaxRate)) on liquor", amounts.vatTax)
+            }
+            Rectangle().fill(SN.line).frame(height: 1).padding(.vertical, 4)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Total").font(.title3.weight(.bold))
+                Text(config.taxInclusive ? "tax included" : "with tax")
+                    .font(.caption)
+                    .foregroundStyle(SN.mut)
+                Spacer()
+                Text(amounts.total.rupees)
+                    .font(.title2.weight(.bold))
+                    .monospacedDigit()
+                    .accessibilityIdentifier("bill-total")
+            }
+        }
+    }
+
+    private func row(_ label: String, _ amount: Int) -> some View {
+        HStack {
+            Text(label)
+            Spacer()
+            Text(amount.rupees).monospacedDigit()
+        }
+        .font(.subheadline)
+        .foregroundStyle(SN.mut)
+    }
+}
+
+/// Buttons on the floor and the bill: prominent (filled), tinted, or quiet
+struct POSActionStyle: ButtonStyle {
+    enum Kind { case prominent, bill, plain }
+    var kind: Kind = .plain
+    var fullWidth = true
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        configuration.label
+            .font(.body.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: 44)
+            .foregroundStyle(kind == .prominent ? SN.page : SN.ink)
+            .background(shape.fill(fill))
+            .overlay(shape.stroke(stroke, lineWidth: kind == .prominent ? 0 : 1))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
+            .contentShape(shape)
+    }
+
+    private var fill: Color {
+        switch kind {
+        case .prominent: SN.teal
+        case .bill: SN.amber.opacity(0.16)
+        case .plain: SN.panel
+        }
+    }
+
+    private var stroke: Color {
+        switch kind {
+        case .prominent: .clear
+        case .bill: SN.amber.opacity(0.7)
+        case .plain: SN.line
+        }
+    }
+}
+
+/// A small bordered button for the header (Takeaway, Delivery, Unmerge)
+struct QuietButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        configuration.label
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(SN.ink)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 34)
+            .background(shape.fill(SN.panel))
+            .overlay(shape.stroke(SN.line, lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(shape)
+    }
+}
+
+// MARK: - The selected table's bill
+
+struct TableBillPanel: View {
+    enum Style { case side, card }
+
+    @Bindable var store: POSStore
+    let table: POSTable
+    /// The other tables merged with this one
+    let mergedWith: [Int]
+    let reservation: POSReservation?
+    let style: Style
+    @Binding var expanded: Bool
+    let busy: Bool
+    let onAddItems: () -> Void
+    let onRequestBill: () -> Void
+    let onPay: () -> Void
+    let onReserve: () -> Void
+    let onBackInService: () -> Void
+    let onClose: () -> Void
+
+    private var status: TableStatus { table.effectiveStatus }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { tl in
+            switch style {
+            case .side: side(now: tl.date)
+            case .card: card(now: tl.date)
+            }
+        }
+    }
+
+    // MARK: Layouts
+
+    private func side(now: Date) -> some View {
+        VStack(spacing: 0) {
+            heading(now: now)
+                .padding(DesignTokens.spacingL)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Rectangle().fill(SN.line).frame(height: 1)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    lines
+                }
+                .padding(DesignTokens.spacingL)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Rectangle().fill(SN.line).frame(height: 1)
+            VStack(spacing: 12) {
+                if table.isSeated { totals }
+                actions
+            }
+            .padding(DesignTokens.spacingL)
+        }
+        .background(SN.panel)
+    }
+
+    private func card(now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Capsule()
+                .fill(SN.line)
+                .frame(width: 40, height: 5)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 2)
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
+                .accessibilityElement()
+                .accessibilityLabel(expanded ? "Show less" : "Show the whole bill")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { withAnimation(.snappy) { expanded.toggle() } }
+            HStack(alignment: .top) {
+                heading(now: now)
+                Spacer(minLength: 8)
+                if table.isSeated {
+                    Text(table.unpaidTotal.rupees)
+                        .font(.title2.weight(.bold))
+                        .monospacedDigit()
+                }
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(SN.mut)
+                        .frame(minWidth: 32, minHeight: 32)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Close the bill")
+            }
+            if expanded {
+                // As tall as the lines need, scrolling past 380pt
+                ViewThatFits(in: .vertical) {
+                    expandedLines
+                    ScrollView { expandedLines }
+                }
+                .frame(maxHeight: 380)
+            } else {
+                Text(summary)
+                    .font(.subheadline)
+                    .foregroundStyle(SN.mut)
+                    .lineLimit(2)
+            }
+            actions
+        }
+        .padding(.horizontal, DesignTokens.spacingL)
+        .padding(.top, 8)
+        .padding(.bottom, DesignTokens.spacingM)
+        .background(
+            UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous)
+                .fill(SN.panel)
+                .shadow(color: .black.opacity(0.12), radius: 10, y: -2)
+                .ignoresSafeArea(edges: .bottom)
+        )
+        .overlay(
+            UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous)
+                .stroke(SN.line, lineWidth: 1)
+                .ignoresSafeArea(edges: .bottom)
+        )
+        .gesture(
+            DragGesture(minimumDistance: 20).onEnded { value in
+                withAnimation(.snappy) {
+                    if value.translation.height < -40 { expanded = true }
+                    else if value.translation.height > 40 { if expanded { expanded = false } else { onClose() } }
+                }
+            }
+        )
+    }
+
+    // MARK: Pieces
+
+    private var expandedLines: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            lines
+            if table.isSeated { totals }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func heading(now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            PanelLabel(text: headline(now: now))
+                .lineLimit(2)
+            Text("Table \(table.number)")
+                .font(.title2.weight(.bold))
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    private func headline(now: Date) -> String {
+        var parts: [String] = []
+        switch status {
+        case .occupied, .billRequested:
+            let since = table.seatedSince.map { POSTime.elapsed(since: $0, now: now) }
+            parts.append(status == .billRequested ? "Bill asked" + (since.map { " \($0)" } ?? "") : "Seated" + (since.map { " \($0)" } ?? ""))
+            if let waiter = table.activeWaiterName { parts.append(waiter) }
+            parts.append("\(table.capacity) seats")
+            let n = table.liveOrders.count
+            parts.append("\(n) order\(n == 1 ? "" : "s")")
+        case .available: parts += ["Free", "\(table.capacity) seats"]
+        case .reserved: parts += ["Reserved", "\(table.capacity) seats"]
+        case .maintenance: parts.append("Out of service")
+        }
+        if !mergedWith.isEmpty { parts.append("with \(mergedWith.map(String.init).joined(separator: ", "))") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// "1 to do · 1 cooking · 5 served", or the booking / seats for a free table
+    private var summary: String {
+        if table.isSeated {
+            let stages = table.dishStages
+            return DishStage.allCases.compactMap { s -> String? in
+                let n = stages.filter { $0 == s }.count
+                return n == 0 ? nil : "\(n) \(s.title.lowercased())"
+            }.joined(separator: " · ")
+        }
+        if let reservation { return bookingText(reservation) }
+        return status == .maintenance ? "Not taking guests" : "Nothing ordered yet"
+    }
+
+    private func bookingText(_ r: POSReservation) -> String {
+        let day = r.date.hasPrefix(POSTime.todayIST) ? "" : " on \(String(r.date.prefix(10)))"
+        return "Booked \(POSTime.clock(r.time))\(day) · \(r.guestName) ×\(r.guestCount)"
+    }
+
+    @ViewBuilder
+    private var lines: some View {
+        if table.isSeated {
+            POSStageGroups(items: table.liveItems)
+            let notes = table.liveOrders.compactMap(\.notes).filter { !$0.isEmpty }
+            if !notes.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    PanelLabel(text: "Notes")
+                    ForEach(Array(notes.enumerated()), id: \.offset) { _, n in
+                        Text(n).font(.caption).foregroundStyle(SN.mut)
+                    }
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                if let reservation {
+                    Label(bookingText(reservation), systemImage: "calendar")
+                        .font(.subheadline)
+                }
+                Text(status == .maintenance ? "This table is out of service." : "Nothing ordered yet.")
+                    .font(.subheadline)
+                    .foregroundStyle(SN.mut)
+            }
+        }
+    }
+
+    private var totals: some View {
+        let gross = store.grossByTax(for: table)
+        return POSBillTotals(gst: gross.gst, vat: gross.vat)
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        let n = table.number
+        switch status {
+        case .available:
+            HStack(spacing: 8) {
+                Button("Take order", action: onAddItems)
+                    .buttonStyle(POSActionStyle(kind: .prominent))
+                    .accessibilityIdentifier("take-order-\(n)")
+                Button("Reserve", action: onReserve)
+                    .buttonStyle(POSActionStyle())
+                    .accessibilityLabel("Reserve table \(n)")
+                    .accessibilityIdentifier("reserve-table-\(n)")
+            }
+        case .reserved:
+            Button("Seat & take order", action: onAddItems)
+                .buttonStyle(POSActionStyle(kind: .prominent))
+                .accessibilityIdentifier("take-order-\(n)")
+        case .occupied:
+            HStack(spacing: 8) {
+                Button("+ Items", action: onAddItems)
+                    .buttonStyle(POSActionStyle())
+                    .accessibilityIdentifier("add-items-\(n)")
+                Button("Bill", action: onRequestBill)
+                    .buttonStyle(POSActionStyle(kind: .bill))
+                    .disabled(busy)
+                    .accessibilityLabel("Ask for the bill")
+                    .accessibilityIdentifier("request-bill-\(n)")
+                Button("Pay", action: onPay)
+                    .buttonStyle(POSActionStyle())
+                    .accessibilityIdentifier("view-orders-\(n)")
+            }
+        case .billRequested:
+            HStack(spacing: 8) {
+                Button("+ Items", action: onAddItems)
+                    .buttonStyle(POSActionStyle(fullWidth: false))
+                    .accessibilityIdentifier("add-items-\(n)")
+                Button("Pay", action: onPay)
+                    .buttonStyle(POSActionStyle(kind: .prominent))
+                    .accessibilityIdentifier("view-orders-\(n)")
+            }
+        case .maintenance:
+            Button("Back in service", action: onBackInService)
+                .buttonStyle(POSActionStyle())
+                .disabled(busy)
+                .accessibilityIdentifier("back-in-service-\(n)")
+        }
+    }
+}
 
 // MARK: - Manage tables
 
