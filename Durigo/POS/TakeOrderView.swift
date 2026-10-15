@@ -447,10 +447,8 @@ struct TakeOrderView: View {
 
             VStack(spacing: 10) {
                 if !cart.isEmpty {
-                    // Notes field — kitchen sees this on every order card.
-                    TextField("Notes for kitchen (allergies, preferences)", text: $notes, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...3)
+                    // The kitchen sees this on every order card
+                    KitchenNotesField(text: $notes)
                 }
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 1) {
@@ -846,9 +844,7 @@ struct TakeOrderView: View {
             Rectangle().fill(SN.line).frame(height: 1)
             VStack(spacing: 10) {
                 if !cart.isEmpty {
-                    TextField("Notes for kitchen (allergies, preferences)", text: $notes, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1...3)
+                    KitchenNotesField(text: $notes)
                 }
                 let gross = store.grossByTax(table: table, cart: cart)
                 POSBillTotals(gst: gross.gst, vat: gross.vat)
@@ -1094,5 +1090,35 @@ private struct VariantPickerSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// The order's note for the kitchen: a real text box (two lines, growing to
+/// five) at body size, so it's easy to tap and read on a phone
+struct KitchenNotesField: View {
+    @Binding var text: String
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Note for the kitchen")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(SN.mut)
+            TextField("Allergies, less spicy, no onion…", text: $text, axis: .vertical)
+                .font(.body)
+                .lineLimit(2...5)
+                .focused($focused)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(minHeight: 64, alignment: .topLeading)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(SN.panel2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(focused ? SN.teal : SN.line, lineWidth: focused ? 2 : 1)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture { focused = true }
+                .accessibilityIdentifier("order-kitchen-notes")
+        }
     }
 }

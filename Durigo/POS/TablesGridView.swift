@@ -4,7 +4,7 @@
 //
 //  The POS floor ("Floor + Counter"): compact table tiles grouped by
 //  section, filter chips, and the selected table's bill beside the floor
-//  (a side panel on iPad and Mac, a card at the bottom on iPhone). Adding
+//  (a side panel on iPad and Mac, the system sheet on iPhone). Adding
 //  items opens TakeOrderView: inline beside the floor on a wide screen, as
 //  a sheet on iPhone.
 //
@@ -47,8 +47,12 @@ struct TablesGridView: View {
     @State private var reservingTable: POSTable?
     @State private var showMergeSheet = false
     @State private var showManageSheet = false
-    /// iPhone: the bill card pulled up to show every line
-    @State private var cardExpanded = false
+    /// The table whose bill is in the phone's sheet
+    @State private var billSheetId: String?
+    /// What a bill-sheet button opens once the sheet has gone (one sheet at a time)
+    @State private var afterBillSheet: (() -> Void)?
+    /// The table whose bill comes back once Take order or Reserve is done (or cancelled)
+    @State private var reopenBillFor: String?
     @State private var busy = false
     @State private var errorMessage: String?
 
@@ -76,17 +80,37 @@ struct TablesGridView: View {
                     }
                 } else {
                     floor(compact: true, fourAcross: geo.size.width < 500)
-                        .safeAreaInset(edge: .bottom, spacing: 0) { bottomCard }
                 }
             }
             .onChange(of: wide, initial: true) { _, now in isWide = now }
         }
         .background(SN.page)
         .foregroundStyle(SN.ink)
+        // Phones and narrow iPads: the table's bill in the system sheet, half
+        // height with the floor still usable behind it, pulled up for the rest
+        .sheet(item: Binding(
+            get: { isWide ? nil : billSheetId.map { DetailContext(tableId: $0) } },
+            set: { billSheetId = $0?.tableId }
+        ), onDismiss: {
+            let next = afterBillSheet
+            afterBillSheet = nil
+            if next == nil { selectedTableId = nil }
+            next?()
+        }) { ctx in
+            if let tapped = store.tables.first(where: { $0.id == ctx.tableId }) {
+                billPanel(for: tapped, style: .side)
+                    // A table with nothing on it only needs room for its two buttons
+                    .presentationDetents(tapped.liveOrders.isEmpty ? [.height(300)] : [.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    // The floor stays usable behind the sheet: tap another table to switch
+                    .presentationBackgroundInteraction(.enabled(upThrough: tapped.liveOrders.isEmpty ? .height(300) : .medium))
+                    .presentationBackground(SN.panel)
+            }
+        }
         .sheet(item: Binding(
             get: { isWide ? nil : ordering },
             set: { ordering = $0 }
-        )) { target in
+        ), onDismiss: reopenBill) { target in
             TakeOrderView(store: store, target: target, onClose: { finishOrdering(selecting: $0) })
         }
         .sheet(item: Binding(
@@ -95,7 +119,7 @@ struct TablesGridView: View {
         )) { ctx in
             OrderDetailView(store: store, tableId: ctx.tableId)
         }
-        .sheet(item: $reservingTable) { table in
+        .sheet(item: $reservingTable, onDismiss: reopenBill) { table in
             ReservationDialogView(store: store, tableId: table.id, tableNumber: table.number)
         }
         .sheet(isPresented: $showMergeSheet) {
@@ -115,12 +139,22 @@ struct TablesGridView: View {
 
     private func finishOrdering(selecting tableId: String?) {
         ordering = nil
-        if let tableId { selectedTableId = tableId }
+        if let tableId {
+            selectedTableId = tableId
+            reopenBillFor = tableId
+        }
+    }
+
+    /// Back where you were: the table's bill, now with the new order or booking
+    private func reopenBill() {
+        defer { reopenBillFor = nil }
+        guard !isWide, let id = reopenBillFor else { return }
+        billSheetId = id
     }
 
     // MARK: Floor
 
-    /// `compact`: the bill is a card at the bottom; `fourAcross`: a phone
+    /// `compact`: the bill opens in a sheet; `fourAcross`: a phone
     private func floor(compact: Bool, fourAcross: Bool) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -338,8 +372,8 @@ struct TablesGridView: View {
             compact: compact,
             now: now
         ) {
-            if selectedTableId != table.id { cardExpanded = false }
             selectedTableId = table.id
+            if !isWide { billSheetId = table.id }
         }
     }
 
@@ -404,13 +438,6 @@ struct TablesGridView: View {
         }
     }
 
-    @ViewBuilder
-    private var bottomCard: some View {
-        if let tapped = selectedTable {
-            billPanel(for: tapped, style: .card)
-        }
-    }
-
     private func billPanel(for tapped: POSTable, style: TableBillPanel.Style) -> some View {
         let table = billTable(for: tapped)
         let group = groupContaining(table)
@@ -421,15 +448,27 @@ struct TablesGridView: View {
             mergedWith: others,
             reservation: store.nextReservation(for: table.id),
             style: style,
-            expanded: $cardExpanded,
             busy: busy,
-            onAddItems: { ordering = OrderTarget(tableId: table.id, type: .dineIn) },
+            onAddItems: afterSheet { reopenBillFor = table.id; ordering = OrderTarget(tableId: table.id, type: .dineIn) },
             onRequestBill: { requestBill(table) },
-            onPay: { detailTableId = table.id },
-            onReserve: { reservingTable = table },
+            onPay: afterSheet { detailTableId = table.id },
+            onReserve: afterSheet { reopenBillFor = table.id; reservingTable = table },
             onBackInService: { backInService(table) },
-            onClose: { selectedTableId = nil; cardExpanded = false }
+            onClose: { selectedTableId = nil; billSheetId = nil }
         )
+    }
+
+    /// A bill button that opens another screen: from the phone's sheet, the sheet
+    /// goes first and the screen opens once it has (iOS shows one sheet at a time)
+    private func afterSheet(_ open: @escaping () -> Void) -> () -> Void {
+        {
+            if billSheetId != nil {
+                afterBillSheet = open
+                billSheetId = nil
+            } else {
+                open()
+            }
+        }
     }
 
     private func requestBill(_ table: POSTable) {
@@ -823,7 +862,7 @@ struct QuietButtonStyle: ButtonStyle {
 // MARK: - The selected table's bill
 
 struct TableBillPanel: View {
-    enum Style { case side, card }
+    enum Style { case side }
 
     @Bindable var store: POSStore
     let table: POSTable
@@ -831,7 +870,6 @@ struct TableBillPanel: View {
     let mergedWith: [Int]
     let reservation: POSReservation?
     let style: Style
-    @Binding var expanded: Bool
     let busy: Bool
     let onAddItems: () -> Void
     let onRequestBill: () -> Void
@@ -846,7 +884,6 @@ struct TableBillPanel: View {
         TimelineView(.periodic(from: .now, by: 30)) { tl in
             switch style {
             case .side: side(now: tl.date)
-            case .card: card(now: tl.date)
             }
         }
     }
@@ -876,84 +913,7 @@ struct TableBillPanel: View {
         .background(SN.panel)
     }
 
-    private func card(now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Capsule()
-                .fill(SN.line)
-                .frame(width: 40, height: 5)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 2)
-                .contentShape(Rectangle())
-                .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
-                .accessibilityElement()
-                .accessibilityLabel(expanded ? "Show less" : "Show the whole bill")
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction { withAnimation(.snappy) { expanded.toggle() } }
-            HStack(alignment: .top) {
-                heading(now: now)
-                Spacer(minLength: 8)
-                if table.isSeated {
-                    Text(table.unpaidTotal.rupees)
-                        .font(.title2.weight(.bold))
-                        .monospacedDigit()
-                }
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(SN.mut)
-                        .frame(minWidth: 32, minHeight: 32)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Close the bill")
-            }
-            if expanded {
-                // As tall as the lines need, scrolling past 380pt
-                ViewThatFits(in: .vertical) {
-                    expandedLines
-                    ScrollView { expandedLines }
-                }
-                .frame(maxHeight: 380)
-            } else {
-                Text(summary)
-                    .font(.subheadline)
-                    .foregroundStyle(SN.mut)
-                    .lineLimit(2)
-            }
-            actions
-        }
-        .padding(.horizontal, DesignTokens.spacingL)
-        .padding(.top, 8)
-        .padding(.bottom, DesignTokens.spacingM)
-        .background(
-            UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous)
-                .fill(SN.panel)
-                .shadow(color: .black.opacity(0.12), radius: 10, y: -2)
-                .ignoresSafeArea(edges: .bottom)
-        )
-        .overlay(
-            UnevenRoundedRectangle(topLeadingRadius: 18, topTrailingRadius: 18, style: .continuous)
-                .stroke(SN.line, lineWidth: 1)
-                .ignoresSafeArea(edges: .bottom)
-        )
-        .gesture(
-            DragGesture(minimumDistance: 20).onEnded { value in
-                withAnimation(.snappy) {
-                    if value.translation.height < -40 { expanded = true }
-                    else if value.translation.height > 40 { if expanded { expanded = false } else { onClose() } }
-                }
-            }
-        )
-    }
-
     // MARK: Pieces
-
-    private var expandedLines: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            lines
-            if table.isSeated { totals }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
 
     private func heading(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 4) {
