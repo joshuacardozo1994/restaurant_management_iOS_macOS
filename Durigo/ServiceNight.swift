@@ -353,14 +353,20 @@ struct LiveBadge: View {
     let isLive: Bool
     var body: some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(isLive ? SN.teal : SN.mut)
-                .frame(width: 8, height: 8)
-                .background(Circle().fill(SN.teal.opacity(isLive ? 0.18 : 0)).frame(width: 16, height: 16))
+            // The ring is part of the layout, so a toolbar's glass capsule doesn't clip it
+            ZStack {
+                Circle().fill(SN.teal.opacity(isLive ? 0.18 : 0)).frame(width: 16, height: 16)
+                Circle().fill(isLive ? SN.teal : SN.mut).frame(width: 8, height: 8)
+            }
             Text(isLive ? "LIVE" : "RECONNECTING")
                 .font(.caption.monospaced().weight(.medium))
                 .tracking(0.8)
+                .lineLimit(1)
         }
+        // Room inside the toolbar's capsule on iOS 26 and macOS 26
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .fixedSize()
         .foregroundStyle(isLive ? SN.teal : SN.mut)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isLive ? "Live" : "Reconnecting")
