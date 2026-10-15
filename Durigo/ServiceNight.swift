@@ -41,7 +41,19 @@ struct ServiceNight: Decodable, Equatable {
         let reservedFor: String?   // HH:MM
     }
     struct Floor: Decodable, Equatable { let tables: [Table]; let seated: Int; let total: Int }
-    struct Ticket: Decodable, Equatable { let orderNumber: String; let table: Int?; let since: String }
+    struct Ticket: Decodable, Equatable {
+        struct Item: Decodable, Equatable { let name: String; let quantity: Double; let cooking: Bool }
+        let orderNumber: String
+        let table: Int?
+        let type: String
+        let status: String
+        let since: String
+        let waiter: String?
+        /// Cooks assigned to (or working on) its waiting dishes; empty when nobody has it
+        let cooks: [String]
+        /// Dishes not yet ready
+        let items: [Item]
+    }
     struct Kitchen: Decodable, Equatable { let todo: Int; let cooking: Int; let ready: Int; let oldest: Ticket? }
     struct Stock: Decodable, Equatable { let name: String; let unit: String; let currentStock: Double; let minimumStock: Double }
     struct Reservation: Decodable, Equatable { let guestName: String; let guestCount: Int; let time: String; let table: Int? }
@@ -619,19 +631,67 @@ private struct KitchenPanel: View {
                 Lane(label: "Cooking", value: k.cooking, color: SN.blue)
                 Lane(label: "Ready", value: k.ready, color: SN.teal)
             }
-            HStack(alignment: .firstTextBaseline) {
-                Text("Oldest ticket").foregroundStyle(SN.mut)
-                Spacer(minLength: 8)
-                if let o = k.oldest {
-                    Text("#\(o.orderNumber)\(o.table.map { " · T\($0)" } ?? "") · \(Fmt.elapsed(o.since, now: now))")
+            OldestTicketCard(ticket: k.oldest, now: now)
+        }
+    }
+}
+
+/// The ticket that has waited longest: where it's going, what's still to come, and who has it
+private struct OldestTicketCard: View {
+    let ticket: ServiceNight.Ticket?
+    let now: Date
+
+    var body: some View {
+        if let t = ticket {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    PanelLabel(text: "Oldest ticket")
+                    Spacer(minLength: 8)
+                    Text("waiting \(Fmt.elapsed(t.since, now: now))")
                         .font(.subheadline.monospaced().weight(.medium))
                         .foregroundStyle(SN.amber)
-                } else {
-                    Text("None waiting").foregroundStyle(SN.mut)
                 }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(t.table.map { "Table \($0)" } ?? Fmt.typeLabels[t.type] ?? t.type)
+                        .font(.headline)
+                    Text("#\(t.orderNumber)").font(.caption.monospaced()).foregroundStyle(SN.mut)
+                }
+                if !t.items.isEmpty {
+                    Text(dishes(t.items))
+                        .font(.subheadline)
+                        .foregroundStyle(SN.mut)
+                        .lineLimit(2)
+                }
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 2) {
+                    GridRow {
+                        Text("Cook").foregroundStyle(SN.mut)
+                        if t.cooks.isEmpty {
+                            Text("Not assigned").fontWeight(.medium).foregroundStyle(SN.amber)
+                        } else {
+                            Text(t.cooks.joined(separator: ", "))
+                        }
+                    }
+                    GridRow {
+                        Text("Waiter").foregroundStyle(SN.mut)
+                        Text(t.waiter ?? "—")
+                    }
+                }
+                .font(.subheadline)
             }
-            .font(.subheadline)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(SN.line, lineWidth: 1))
+            .accessibilityElement(children: .combine)
+        } else {
+            Text("No ticket waiting").font(.subheadline).foregroundStyle(SN.mut)
         }
+    }
+
+    /// "2× Fish Curry Rice, Prawn Balchão +2 more"
+    private func dishes(_ items: [ServiceNight.Ticket.Item]) -> String {
+        let shown = items.prefix(3).map { ($0.quantity == 1 ? "" : "\(Fmt.qty($0.quantity))× ") + $0.name }
+        let more = items.count - shown.count
+        return shown.joined(separator: ", ") + (more > 0 ? " +\(more) more" : "")
     }
 }
 
