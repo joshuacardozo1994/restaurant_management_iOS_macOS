@@ -55,6 +55,7 @@ import SwiftUI
 
     @MainActor
     func loadMenu() async {
+        if SkeletonPreview.isActive { try? await SkeletonPreview.hang(); return }
         let baseString = Config.shared.serverURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: "\(baseString)/api/menu/full") else { return }
         var request = URLRequest(url: url)

@@ -341,6 +341,25 @@ final class DurigoTests: XCTestCase {
         XCTAssertEqual(real.phone, RestaurantIdentity.durigos.phone)
     }
 
+    /// Every skeleton's sample data still decodes into its model (a sample
+    /// that drifted from the model would leave that skeleton empty)
+    func testSkeletonSamplesDecode() {
+        XCTAssertNotNil(ServiceNight.sample)
+        XCTAssertNotNil(ReportData.sample)
+        XCTAssertNotNil(SalesReportData.sample)
+        XCTAssertNotNil(PerformanceReportData.sample)
+        XCTAssertNotNil(CustomersReportData.sample)
+        XCTAssertNotNil(StaffReportData.sample)
+        XCTAssertNotNil(InventoryReportData.sample)
+        XCTAssertNotNil(CAReportData.sample)
+        XCTAssertEqual(POSTable.sample.count, 12)
+        XCTAssertFalse(POSTable.sample[0].liveOrders.isEmpty)
+        XCTAssertEqual(TillBill.sample.count, 4)
+        XCTAssertEqual(LedgerBill.sample.count, 6)
+        XCTAssertEqual(KitchenOrder.sample.count, 5)
+        XCTAssertEqual(AdminDiscount.sample.count, 3)
+    }
+
     func testPerformanceExample() throws {
         // This is an example of a performance test case.
         measure {

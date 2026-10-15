@@ -214,6 +214,7 @@ test's name is given.
 | Menu editor (items, categories, variants) | Long lists; forms on iPhone | ✅ iPhone and iPad (🤖 new item test). Mac ✅ 15 Oct. |
 | Modifiers, Discounts, Inventory, Users | Forms; destructive confirmations | ✅ iPhone and iPad (🤖 AdminScreensUITests). Mac ✅ 15 Oct. |
 | Settings and Restaurant settings | Percent fields; field labels (the form shows values without labels) | ✅ every field keeps its label (LabeledContent); only what reaches a bill (as on the web). 🤖 out-of-range GST refused. Mac ✅ 15 Oct. |
+| Skeleton loaders (15 Oct) | While a screen's data loads it draws its own layout with sample data, redacted, with a shimmer (`.skeleton(_:)` in `Shared/Skeleton.swift`, samples in `Shared/SampleData.swift`); no shimmer with Reduce Motion; read as one "Loading" element; never on pull-to-refresh of loaded data. Spinners stay only on buttons and short actions (sign in, pay, send, save, PDF) | ✅ iPhone 17 and iPad Pro 13", light and dark, with `--skeleton-preview` (DEBUG: data never finishes loading): dashboard, POS floor, Till (mode picker stays live), Bills (summary, rows, detail), Reports and its six breakouts, Menu editor, Kitchen, Users, Discounts, Modifiers, Inventory, Reservations, Restaurant settings; without the flag real data replaces them. 🤖 `testSkeletonSamplesDecode` |
 
 ### Order of work
 

@@ -17,6 +17,9 @@ struct POSContainerView: View {
     @State private var showingGenerator = false
     @State private var store: POSStore?
 
+    /// Sample tables for the floor's skeleton
+    private var placeholder: POSStore { POSStore.placeholder(api: APIClient(session: session)) }
+
     var body: some View {
         Group {
             if showingGenerator {
@@ -37,10 +40,13 @@ struct POSContainerView: View {
                     Divider().opacity(0.4)
                     BillGenerator()
                 }
-            } else if let store {
+            } else if let store, store.tablesLoaded {
                 TablesGridView(store: store, onOpenBillGenerator: { showingGenerator = true })
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Loading: the floor with sample tables, as placeholders
+                TablesGridView(store: placeholder, onOpenBillGenerator: {})
+                    .skeleton(true)
+                    .accessibilityIdentifier("floor-loading")
             }
         }
         .onAppear { openBillGeneratorIfAsked() }

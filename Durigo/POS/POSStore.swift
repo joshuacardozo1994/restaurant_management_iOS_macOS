@@ -78,11 +78,20 @@ final class POSStore {
         didSet { UserDefaults.standard.set(selectedWaiterId, forKey: "POS.selectedWaiterId") }
     }
     var isLoading: Bool = false
+    /// The first table load has finished (until then the floor is a skeleton)
+    var tablesLoaded = false
     var lastError: String?
     var sseConnected: Bool = false
 
     private let api: APIClient
     private var sseTask: Task<Void, Never>?
+
+    /// A store holding sample tables, for the floor's skeleton (it never loads)
+    static func placeholder(api: APIClient) -> POSStore {
+        let s = POSStore(api: api)
+        s.tables = POSTable.sample
+        return s
+    }
 
     init(api: APIClient) {
         self.api = api
@@ -199,6 +208,7 @@ final class POSStore {
         } catch {
             lastError = "Failed to load tables: \(error.localizedDescription)"
         }
+        tablesLoaded = true
     }
 
     // MARK: Menu (admin shape — real CUIDs)

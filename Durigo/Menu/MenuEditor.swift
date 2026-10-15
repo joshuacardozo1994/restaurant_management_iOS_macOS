@@ -63,6 +63,8 @@ struct AdminMenuItem: Codable, Identifiable, Equatable, Hashable {
     var categories: [AdminCategory] = []
     var variantTemplates: [AdminVariantTemplate] = []
     var isLoading = false
+    /// The first load has finished (until then the list is a skeleton)
+    var hasLoaded = false
     var errorMessage: String?
 
     init(session: Session) {
@@ -72,7 +74,7 @@ struct AdminMenuItem: Codable, Identifiable, Equatable, Hashable {
     func loadAll() async {
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoaded = true }
         do {
             async let itemsData = api.get("/api/admin/menu")
             async let categoriesData = api.get("/api/admin/categories")
@@ -238,7 +240,8 @@ struct MenuEditor: View {
                 if let store {
                     content(store: store)
                 } else {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ScrollView { skeletonList(store: nil).padding(DesignTokens.spacingL) }
+                        .background(Color(.systemGroupedBackground))
                 }
             }
             .navigationTitle("Menu")
@@ -348,8 +351,8 @@ struct MenuEditor: View {
                     errorBanner(msg)
                 }
                 let groups = filteredGroups(store: store)
-                if store.isLoading && groups.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
+                if !store.hasLoaded && groups.isEmpty {
+                    skeletonList(store: store)
                 } else if groups.isEmpty {
                     emptyState
                 } else {
@@ -362,6 +365,19 @@ struct MenuEditor: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(.systemGroupedBackground))
+    }
+
+    /// Loading: sample categories and items in the real sections, as placeholders
+    private func skeletonList(store: AdminMenuStore?) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
+            ForEach(AdminCategory.sample) { category in
+                categorySection(category: category,
+                                items: AdminMenuItem.sample.filter { $0.categoryId == category.id },
+                                store: store)
+            }
+        }
+        .skeleton(true)
+        .accessibilityIdentifier("menu-loading")
     }
 
     private var searchField: some View {
@@ -423,7 +439,7 @@ struct MenuEditor: View {
     private func categorySection(
         category: AdminCategory,
         items: [AdminMenuItem],
-        store: AdminMenuStore
+        store: AdminMenuStore?
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -447,7 +463,7 @@ struct MenuEditor: View {
             ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
                 MenuItemRow(
                     item: item,
-                    onToggle: { Task { await store.toggleAvailability(item) } },
+                    onToggle: { Task { await store?.toggleAvailability(item) } },
                     onTap: { editingItem = item },
                     onDelete: { deleteCandidate = item }
                 )

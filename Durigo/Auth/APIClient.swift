@@ -76,6 +76,7 @@ final class APIClient {
     }
 
     private func execute(method: String, path: String, query: [URLQueryItem], body: Data?) async throws -> Data {
+        if SkeletonPreview.isActive && method == "GET" { try await SkeletonPreview.hang() }
         var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty {
             components.queryItems = query
@@ -143,6 +144,7 @@ final class APIClient {
         AsyncThrowingStream { continuation in
             let task = Task { [self] in
                 do {
+                    if SkeletonPreview.isActive { try await SkeletonPreview.hang() }
                     let url = baseURL.appending(path: path)
                     var request = URLRequest(url: url)
                     request.httpMethod = "GET"

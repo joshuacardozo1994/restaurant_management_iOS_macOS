@@ -426,13 +426,15 @@ struct AdminUserPayload: Encodable {
     private let api: APIClient
     var items: [AdminUserModel] = []
     var isLoading = false
+    /// The first load has finished (until then the screen is a skeleton)
+    var hasLoaded = false
     var errorMessage: String?
 
     init(session: Session) { self.api = APIClient(session: session) }
 
     func load() async {
         isLoading = true; errorMessage = nil
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoaded = true }
         do {
             let data = try await api.get("/api/admin/users")
             items = try JSONDecoder().decode([AdminUserModel].self, from: data)
@@ -483,7 +485,7 @@ struct UsersAdminView: View {
                 if let store {
                     content(store: store)
                 } else {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Color(.systemGroupedBackground)
                 }
             }
             .navigationTitle("Users")
@@ -530,8 +532,15 @@ struct UsersAdminView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
                 if let msg = store.errorMessage { errorBanner(msg) }
-                if store.isLoading && store.items.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
+                if !store.hasLoaded && store.items.isEmpty {
+                    // Loading: sample staff in the real sections, as placeholders
+                    VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
+                        ForEach(["ADMIN", "WAITER", "KITCHEN", "CASHIER"], id: \.self) { role in
+                            roleSection(role: role, users: AdminUserModel.sample.filter { $0.role == role })
+                        }
+                    }
+                    .skeleton(true)
+                    .accessibilityIdentifier("users-loading")
                 } else if store.items.isEmpty {
                     emptyState
                 } else {
@@ -813,13 +822,15 @@ struct DiscountPayload: Encodable {
     private let api: APIClient
     var items: [AdminDiscount] = []
     var isLoading = false
+    /// The first load has finished (until then the screen is a skeleton)
+    var hasLoaded = false
     var errorMessage: String?
 
     init(session: Session) { self.api = APIClient(session: session) }
 
     func load() async {
         isLoading = true; errorMessage = nil
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoaded = true }
         do {
             let data = try await api.get("/api/admin/discounts")
             items = try JSONDecoder().decode([AdminDiscount].self, from: data)
@@ -860,7 +871,7 @@ struct DiscountsAdminView: View {
         NavigationStack {
             Group {
                 if let store { content(store: store) }
-                else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+                else { Color(.systemGroupedBackground) }
             }
             .navigationTitle("Discounts")
             #if os(iOS)
@@ -903,8 +914,17 @@ struct DiscountsAdminView: View {
                         .padding(DesignTokens.spacingM)
                         .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous).fill(Color.red.opacity(0.08)))
                 }
-                if store.isLoading && store.items.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
+                if !store.hasLoaded && store.items.isEmpty {
+                    // Loading: sample discounts in the real card, as placeholders
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(AdminDiscount.sample) { d in
+                            discountRow(d)
+                            Divider().background(Color.primary.opacity(DesignTokens.borderOpacity)).padding(.leading, DesignTokens.spacingL)
+                        }
+                    }
+                    .webCardBackground()
+                    .skeleton(true)
+                    .accessibilityIdentifier("discounts-loading")
                 } else if store.items.isEmpty {
                     VStack(spacing: DesignTokens.spacingM) {
                         Image(systemName: "ticket").font(.system(size: 36, weight: .light)).foregroundStyle(.secondary)
@@ -1182,13 +1202,15 @@ struct ModifierPayload: Encodable {
     var items: [AdminModifier] = []
     var categories: [AdminCategory] = []
     var isLoading = false
+    /// The first load has finished (until then the screen is a skeleton)
+    var hasLoaded = false
     var errorMessage: String?
 
     init(session: Session) { self.api = APIClient(session: session) }
 
     func load() async {
         isLoading = true; errorMessage = nil
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoaded = true }
         do {
             async let modsData = api.get("/api/admin/modifiers")
             async let catsData = api.get("/api/admin/categories")
@@ -1239,7 +1261,7 @@ struct ModifiersAdminView: View {
         NavigationStack {
             Group {
                 if let store { content(store: store) }
-                else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+                else { Color(.systemGroupedBackground) }
             }
             .navigationTitle("Modifiers")
             #if os(iOS)
@@ -1282,8 +1304,15 @@ struct ModifiersAdminView: View {
                         .padding(DesignTokens.spacingM)
                         .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous).fill(Color.red.opacity(0.08)))
                 }
-                if store.isLoading && store.items.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
+                if !store.hasLoaded && store.items.isEmpty {
+                    // Loading: sample modifiers in the real sections, as placeholders
+                    VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
+                        ForEach(["ADD", "REMOVE", "SPECIAL"], id: \.self) { type in
+                            modSection(type: type, mods: AdminModifier.sample.filter { $0.type == type })
+                        }
+                    }
+                    .skeleton(true)
+                    .accessibilityIdentifier("modifiers-loading")
                 } else if store.items.isEmpty {
                     VStack(spacing: DesignTokens.spacingM) {
                         Image(systemName: "tag").font(.system(size: 36, weight: .light)).foregroundStyle(.secondary)
@@ -1533,6 +1562,8 @@ struct AppSettings: Codable, Equatable {
     private let api: APIClient
     var settings: AppSettings?
     var isLoading = false
+    /// The first load has finished (until then the screen is a skeleton)
+    var hasLoaded = false
     var saving = false
     var errorMessage: String?
 
@@ -1540,7 +1571,7 @@ struct AppSettings: Codable, Equatable {
 
     func load() async {
         isLoading = true; errorMessage = nil
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoaded = true }
         do {
             let data = try await api.get("/api/admin/settings")
             settings = try JSONDecoder().decode(AppSettings.self, from: data)
@@ -1581,30 +1612,13 @@ struct AppSettingsForm: View {
         NavigationStack {
             Form {
                 if let draft = Binding($draft) {
-                    // Only what reaches a bill; the server keeps the other
-                    // stored settings, which nothing reads yet (as on the web)
-                    Section {
-                        labeledField("Name", text: draft.restaurant.name).accessibilityIdentifier("settings-restaurant-name")
-                        labeledField("Address", text: draft.restaurant.address)
-                        labeledField("Phone", text: draft.restaurant.phone).keyboardType(.phonePad)
-                        labeledField("GSTIN", text: draft.restaurant.gstin).textInputAutocapitalization(.characters)
-                        labeledField("VAT TIN", text: draft.restaurant.vatTin.orEmpty)
-                    } header: {
-                        Text("Restaurant")
-                    } footer: {
-                        Text("Printed at the top of every bill. The VAT TIN prints on bills with liquor.")
-                    }
-                    Section("Tax") {
-                        percentField("GST on food & soft drinks", rate: draft.billing.taxRate)
-                        percentField("VAT on liquor", rate: draft.billing.liquorTaxRate.or(0.22))
-                        Toggle("Menu prices include tax", isOn: draft.billing.taxInclusive.or(true))
-                    }
-                } else {
-                    if store?.isLoading == true {
-                        Section { HStack { Spacer(); ProgressView(); Spacer() } }
-                    } else if let msg = store?.errorMessage {
-                        Section { Text(msg).foregroundStyle(.red) }
-                    }
+                    sections(draft)
+                } else if store?.isLoading ?? true {
+                    // Loading: the real fields with sample settings, as placeholders
+                    sections(.constant(AppSettings.sample))
+                        .skeleton(true)
+                } else if let msg = store?.errorMessage {
+                    Section { Text(msg).foregroundStyle(.red) }
                 }
                 if let saveError {
                     Section { Text(saveError).foregroundStyle(.red) }
@@ -1632,6 +1646,28 @@ struct AppSettingsForm: View {
                 await store?.load()
                 draft = store?.settings
             }
+        }
+    }
+
+    /// Only what reaches a bill; the server keeps the other stored settings,
+    /// which nothing reads yet (as on the web)
+    @ViewBuilder
+    private func sections(_ draft: Binding<AppSettings>) -> some View {
+        Section {
+            labeledField("Name", text: draft.restaurant.name).accessibilityIdentifier("settings-restaurant-name")
+            labeledField("Address", text: draft.restaurant.address)
+            labeledField("Phone", text: draft.restaurant.phone).keyboardType(.phonePad)
+            labeledField("GSTIN", text: draft.restaurant.gstin).textInputAutocapitalization(.characters)
+            labeledField("VAT TIN", text: draft.restaurant.vatTin.orEmpty)
+        } header: {
+            Text("Restaurant")
+        } footer: {
+            Text("Printed at the top of every bill. The VAT TIN prints on bills with liquor.")
+        }
+        Section("Tax") {
+            percentField("GST on food & soft drinks", rate: draft.billing.taxRate)
+            percentField("VAT on liquor", rate: draft.billing.liquorTaxRate.or(0.22))
+            Toggle("Menu prices include tax", isOn: draft.billing.taxInclusive.or(true))
         }
     }
 
@@ -1725,13 +1761,15 @@ struct ReservationUpdatePayload: Encodable {
     var items: [AdminReservation] = []
     var tables: [AdminTable] = []
     var isLoading = false
+    /// The first load has finished (until then the screen is a skeleton)
+    var hasLoaded = false
     var errorMessage: String?
 
     init(session: Session) { self.api = APIClient(session: session) }
 
     func load() async {
         isLoading = true; errorMessage = nil
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoaded = true }
         do {
             async let resData = api.get("/api/reservations/upcoming", query: [URLQueryItem(name: "days", value: "30")])
             async let tablesData = api.get("/api/admin/tables")
@@ -1773,7 +1811,7 @@ struct ReservationsAdminView: View {
         NavigationStack {
             Group {
                 if let store { content(store: store) }
-                else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+                else { Color(.systemGroupedBackground) }
             }
             .navigationTitle("Reservations")
             #if os(iOS)
@@ -1808,7 +1846,16 @@ struct ReservationsAdminView: View {
                         .padding(DesignTokens.spacingM)
                         .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall).fill(Color.red.opacity(0.08)))
                 }
-                if store.items.isEmpty {
+                if !store.hasLoaded && store.items.isEmpty {
+                    // Loading: sample bookings in the real day sections, as placeholders
+                    VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
+                        ForEach(groupedByDay(AdminReservation.sample), id: \.day) { group in
+                            daySection(day: group.day, items: group.items)
+                        }
+                    }
+                    .skeleton(true)
+                    .accessibilityIdentifier("reservations-loading")
+                } else if store.items.isEmpty {
                     VStack(spacing: DesignTokens.spacingM) {
                         Image(systemName: "calendar").font(.system(size: 36, weight: .light)).foregroundStyle(.secondary)
                         Text("No upcoming reservations").font(.headline)
@@ -2146,6 +2193,8 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
     private let api: APIClient
     var orders: [KitchenOrder] = []
     var isLoading = false
+    /// The first load has finished (until then the screen is a skeleton)
+    var hasLoaded = false
     var errorMessage: String?
     /// Available kitchen staff (KITCHEN + ADMIN, active only) for the
     /// per-item assignment picker. Loaded once on `start()`.
@@ -2164,9 +2213,16 @@ struct KitchenOrder: Codable, Identifiable, Hashable, Transferable {
 
     init(session: Session) { self.api = APIClient(session: session) }
 
+    /// A store holding sample tickets, for the board's skeleton (it never loads)
+    static func placeholder(session: Session) -> KitchenStore {
+        let s = KitchenStore(session: session)
+        s.orders = KitchenOrder.sample
+        return s
+    }
+
     func load() async {
         isLoading = true; errorMessage = nil
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoaded = true }
         do {
             let data = try await api.get("/api/kitchen/orders")
             let all = try JSONDecoder().decode([KitchenOrder].self, from: data)
@@ -2605,8 +2661,14 @@ struct KitchenAdminView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let store { content(store: store) }
-                else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+                if let store, store.hasLoaded || !store.orders.isEmpty {
+                    content(store: store)
+                } else {
+                    // Loading: sample tickets on the real board, as placeholders
+                    content(store: .placeholder(session: session))
+                        .skeleton(true)
+                        .accessibilityIdentifier("kitchen-loading")
+                }
             }
             .navigationTitle("Kitchen")
             #if os(iOS)
@@ -3285,13 +3347,15 @@ struct IngredientPayload: Encodable {
     private let api: APIClient
     var items: [AdminIngredient] = []
     var isLoading = false
+    /// The first load has finished (until then the screen is a skeleton)
+    var hasLoaded = false
     var errorMessage: String?
 
     init(session: Session) { self.api = APIClient(session: session) }
 
     func load() async {
         isLoading = true; errorMessage = nil
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoaded = true }
         do {
             let data = try await api.get("/api/admin/inventory")
             items = try JSONDecoder().decode([AdminIngredient].self, from: data)
@@ -3332,7 +3396,7 @@ struct InventoryAdminView: View {
         NavigationStack {
             Group {
                 if let store { content(store: store) }
-                else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+                else { Color(.systemGroupedBackground) }
             }
             .navigationTitle("Inventory")
             #if os(iOS)
@@ -3375,8 +3439,13 @@ struct InventoryAdminView: View {
                         .padding(DesignTokens.spacingM)
                         .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall).fill(Color.red.opacity(0.08)))
                 }
-                if store.isLoading && store.items.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
+                if !store.hasLoaded && store.items.isEmpty {
+                    // Loading: sample ingredients in the real cards, as placeholders
+                    VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
+                        ForEach(AdminIngredient.sample) { ing in ingredientCard(ing) }
+                    }
+                    .skeleton(true)
+                    .accessibilityIdentifier("inventory-loading")
                 } else if store.items.isEmpty {
                     VStack(spacing: DesignTokens.spacingM) {
                         Image(systemName: "shippingbox").font(.system(size: 36, weight: .light)).foregroundStyle(.secondary)

@@ -299,8 +299,16 @@ struct ServiceNightDashboard: View {
         } else if let msg = store?.errorMessage {
             ContentUnavailableView("Couldn't load the dashboard", systemImage: "wifi.exclamationmark", description: Text(msg))
                 .frame(maxWidth: .infinity, minHeight: 300)
-        } else {
-            ProgressView().frame(maxWidth: .infinity, minHeight: 300)
+        } else if let sample = ServiceNight.sample {
+            // Loading: the dashboard's own panels, as placeholders
+            VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
+                Text(Fmt.weekday(sample.generatedAt, style: .dateTime.weekday(.wide).day().month(.abbreviated)))
+                    .font(.subheadline)
+                    .foregroundStyle(SN.mut)
+                layout(sample, now: .now, width: width - DesignTokens.spacingL * 2)
+            }
+            .skeleton(true)
+            .accessibilityIdentifier("dashboard-loading")
         }
     }
 

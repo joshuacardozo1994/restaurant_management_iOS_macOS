@@ -76,7 +76,7 @@ struct BillingView: View {
         NavigationStack(path: $path) {
             GeometryReader { geo in
                 Group {
-                    if let store {
+                    if let store, store.tillLoaded || mode != .waiting {
                         switch mode {
                         case .waiting: till(store: store, width: geo.size.width)
                         case .bills where session.seesLedger:
@@ -86,7 +86,8 @@ struct BillingView: View {
                             AppBillsList(mode: $mode)
                         }
                     } else {
-                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // Loading: the till with sample bills, as placeholders
+                        till(store: .placeholder(session: session), width: geo.size.width, loading: true)
                     }
                 }
                 .onAppear { layoutWidth = geo.size.width }
@@ -150,11 +151,12 @@ struct BillingView: View {
 
     // MARK: Till layouts
 
+    /// `loading`: a skeleton of sample bills, with the mode picker still live
     @ViewBuilder
-    private func till(store: TillStore, width: CGFloat) -> some View {
+    private func till(store: TillStore, width: CGFloat, loading: Bool = false) -> some View {
         if width >= Self.wideWidth {
             HStack(spacing: 0) {
-                queueColumn(store: store, selectable: true)
+                queueColumn(store: store, selectable: true, loading: loading)
                     .frame(width: min(340, width * 0.28))
                 Rectangle().fill(SN.line).frame(width: 1)
                 if let bill = selectedBill(store) {
@@ -165,6 +167,7 @@ struct BillingView: View {
                             .padding(DesignTokens.spacingXL)
                     }
                     .frame(maxWidth: .infinity)
+                    .skeleton(loading)
                     Rectangle().fill(SN.line).frame(width: 1)
                     ScrollView {
                         padStack(bill)
@@ -172,6 +175,7 @@ struct BillingView: View {
                     }
                     .frame(width: min(400, width * 0.33))
                     .background(SN.panel, ignoresSafeAreaEdges: [])
+                    .skeleton(loading)
                     .id(bill.key)
                 } else {
                     emptyDetail(store).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -179,7 +183,7 @@ struct BillingView: View {
             }
         } else if width >= Self.mediumWidth {
             HStack(spacing: 0) {
-                queueColumn(store: store, selectable: true)
+                queueColumn(store: store, selectable: true, loading: loading)
                     .frame(width: min(320, width * 0.42))
                 Rectangle().fill(SN.line).frame(width: 1)
                 if let bill = selectedBill(store) {
@@ -194,13 +198,14 @@ struct BillingView: View {
                         .padding(DesignTokens.spacingL)
                     }
                     .frame(maxWidth: .infinity)
+                    .skeleton(loading)
                     .id(bill.key)
                 } else {
                     emptyDetail(store).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         } else {
-            queueColumn(store: store, selectable: false)
+            queueColumn(store: store, selectable: false, loading: loading)
         }
     }
 
@@ -240,7 +245,7 @@ struct BillingView: View {
     // MARK: Queue
 
     @ViewBuilder
-    private func queueColumn(store: TillStore, selectable: Bool) -> some View {
+    private func queueColumn(store: TillStore, selectable: Bool, loading: Bool = false) -> some View {
         let current = selectable ? selectedBill(store)?.key : nil
         TimelineView(.periodic(from: .now, by: 30)) { tl in
             List {
@@ -260,6 +265,7 @@ struct BillingView: View {
                                 NavigationLink(value: BillingRoute.till(bill.key)) { row }
                             }
                         }
+                        .skeleton(loading)
                         .listRowBackground(selectable ? Color.clear : SN.panel)
                         .listRowSeparator(selectable ? .hidden : .visible)
                         .listRowInsets(selectable ? EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12) : nil)
@@ -276,6 +282,7 @@ struct BillingView: View {
                             .foregroundStyle(SN.mut)
                             .accessibilityLabel("\(store.till.count) waiting")
                     }
+                    .skeleton(loading)
                 }
                 if let msg = store.tillError {
                     Section {
@@ -298,15 +305,11 @@ struct BillingView: View {
         }
     }
 
-    @ViewBuilder
+    /// Only once loaded: until then the whole till is a skeleton
     private func emptyQueue(_ store: TillStore) -> some View {
-        if store.tillLoaded {
-            ContentUnavailableView("Nothing waiting to be paid", systemImage: "checkmark.circle",
-                                   description: Text("Tables and takeaways show up here as soon as they order."))
-                .accessibilityIdentifier("till-empty")
-        } else {
-            ProgressView().frame(maxWidth: .infinity).padding()
-        }
+        ContentUnavailableView("Nothing waiting to be paid", systemImage: "checkmark.circle",
+                               description: Text("Tables and takeaways show up here as soon as they order."))
+            .accessibilityIdentifier("till-empty")
     }
 
     // MARK: Actions

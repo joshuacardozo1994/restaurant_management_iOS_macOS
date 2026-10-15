@@ -200,6 +200,8 @@ struct MenuList: View {
             #else
             .listStyle(.inset)
             #endif
+            // Until the menu arrives the list shows placeholder categories
+            .skeleton(menuLoader.menu == nil)
         }
         .navigationTitle("Menu")
         .navigationBarTitleDisplayMode(.inline)
@@ -221,7 +223,6 @@ struct MenuList: View {
             VoiceOrderView()
         }
         }
-        .redacted(reason: menuLoader.menu == nil ? .placeholder : [])
         .task {
             await menuLoader.loadMenu()
         }

@@ -154,31 +154,23 @@ struct Stats: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading {
-                    VStack {
-                        Spacer()
-                        ProgressView("Loading stats…")
-                        Spacer()
+            // While loading, the same sections (with no figures yet) are placeholders
+            ScrollView {
+                VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
+                    heroRevenue()
+
+                    keyMetrics()
+
+                    if let container = statsData.container {
+                        popularSection(container: container)
                     }
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                            heroRevenue()
 
-                            keyMetrics()
-
-                            if let container = statsData.container {
-                                popularSection(container: container)
-                            }
-
-                            paymentDistributionSection()
-                        }
-                        .padding(DesignTokens.spacingL)
-                    }
-                    .background(Color(.systemBackground))
+                    paymentDistributionSection()
                 }
+                .padding(DesignTokens.spacingL)
+                .skeleton(isLoading)
             }
+            .background(Color(.systemBackground))
             .task { await loadStats() }
             .onChange(of: startDate) { _, _ in Task { await loadStats() } }
             .onChange(of: endDate) { _, _ in Task { await loadStats() } }
@@ -209,6 +201,7 @@ struct Stats: View {
 
     private func loadStats() async {
         isLoading = true
+        if SkeletonPreview.isActive { return }
 
         let descriptor = FetchDescriptor<BillHistoryItem>(
             sortBy: [SortDescriptor(\.date, order: .reverse)]

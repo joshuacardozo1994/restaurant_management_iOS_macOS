@@ -330,6 +330,14 @@ final class TillStore {
         self.api = APIClient(session: session)
     }
 
+    /// A store holding sample bills, for the till's skeleton (it never loads)
+    static func placeholder(session: Session) -> TillStore {
+        let s = TillStore(session: session)
+        s.till = TillBill.sample
+        s.tillLoaded = true
+        return s
+    }
+
     func loadTill() async {
         struct Response: Decodable { let bills: [TillBill]; let billing: BillingConfig? }
         do {

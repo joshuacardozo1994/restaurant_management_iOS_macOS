@@ -187,6 +187,9 @@ struct LedgerView: View {
 
     // MARK: List
 
+    /// Nothing to show yet: the takings and the rows are skeletons
+    private var loadingFirst: Bool { !store.ledgerLoaded && store.ledger.isEmpty }
+
     private func list(index: LocalBillIndex) -> some View {
         List {
             Section {
@@ -194,7 +197,8 @@ struct LedgerView: View {
                     rangePicker
                     // While searching on a phone, the results come first
                     if wide || search.isEmpty {
-                        LedgerSummaryCards(summary: store.summary, wide: wide)
+                        LedgerSummaryCards(summary: loadingFirst ? .sample : store.summary, wide: wide)
+                            .skeleton(loadingFirst)
                         waitingStrip
                     }
                     if let msg = store.ledgerError {
@@ -230,6 +234,13 @@ struct LedgerView: View {
 
             Section {
                 if tableRows { LedgerHeaderRow() }
+                if loadingFirst {
+                    ForEach(LedgerBill.sample) { bill in
+                        LedgerRow(bill: bill, wide: tableRows, unsynced: false)
+                            .skeleton(true)
+                            .listRowBackground(SN.panel)
+                    }
+                }
                 ForEach(filtered) { bill in
                     let local = index.bill(for: bill)
                     row(bill, local: local)
@@ -241,7 +252,7 @@ struct LedgerView: View {
                             }
                         }
                 }
-                if filtered.isEmpty {
+                if filtered.isEmpty && !loadingFirst {
                     emptyRow.listRowBackground(Color.clear)
                 }
             }
@@ -276,7 +287,8 @@ struct LedgerView: View {
     @ViewBuilder
     private var emptyRow: some View {
         if !store.ledgerLoaded {
-            ProgressView().frame(maxWidth: .infinity).padding()
+            // Other dates loading, with this search showing nothing
+            Color.clear.frame(height: 44)
         } else if store.ledger.isEmpty {
             ContentUnavailableView("No bills", systemImage: "doc.text",
                                    description: Text("Bills paid \(store.range == .today ? "today" : "on these dates") show up here."))
@@ -354,7 +366,13 @@ struct LedgerView: View {
 
     @ViewBuilder
     private func detailPanel(index: LocalBillIndex) -> some View {
-        if let bill = filtered.first(where: { $0.id == selectedId }) ?? filtered.first {
+        if loadingFirst, let sample = LedgerBill.sample.first {
+            ScrollView {
+                LedgerDetailContent(store: store, bill: sample, local: nil, path: $path)
+                    .padding(DesignTokens.spacingXL)
+            }
+            .skeleton(true)
+        } else if let bill = filtered.first(where: { $0.id == selectedId }) ?? filtered.first {
             ScrollView {
                 LedgerDetailContent(store: store, bill: bill, local: index.bill(for: bill), path: $path)
                     .padding(DesignTokens.spacingXL)

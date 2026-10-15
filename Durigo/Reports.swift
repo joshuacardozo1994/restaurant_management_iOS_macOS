@@ -111,6 +111,7 @@ final class ReportsStore {
         isLoading = true
         error = nil
         defer { isLoading = false }
+        if SkeletonPreview.isActive { try? await SkeletonPreview.hang(); return }
 
         let trimmed = baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         var components = URLComponents(string: "\(trimmed)/api/reports")!
@@ -168,25 +169,28 @@ struct Reports: View {
                     periodPicker
                     breakoutLinks
 
-                    if let store, store.isLoading && store.data == nil {
-                        loadingState
-                    } else if let data = store?.data {
-                        keyMetrics(data: data)
-                        if !data.topSellingItems.isEmpty {
-                            topItemsSection(items: data.topSellingItems)
+                    // Loading: the report's own sections with sample figures, as placeholders
+                    let loading = store?.data == nil && (store?.isLoading ?? true)
+                    if let data = store?.data ?? (loading ? ReportData.sample : nil) {
+                        Group {
+                            keyMetrics(data: data)
+                            if !data.topSellingItems.isEmpty {
+                                topItemsSection(items: data.topSellingItems)
+                            }
+                            if !data.categoryBreakdown.isEmpty {
+                                categorySection(categories: data.categoryBreakdown, total: data.totalRevenue)
+                            }
+                            if !data.paymentMethods.isEmpty {
+                                paymentMethodSection(methods: data.paymentMethods)
+                            }
+                            if !data.staffPerformance.isEmpty {
+                                staffSection(staff: data.staffPerformance)
+                            }
+                            if !data.hourlyDistribution.isEmpty {
+                                hourlyDistributionSection(hours: data.hourlyDistribution)
+                            }
                         }
-                        if !data.categoryBreakdown.isEmpty {
-                            categorySection(categories: data.categoryBreakdown, total: data.totalRevenue)
-                        }
-                        if !data.paymentMethods.isEmpty {
-                            paymentMethodSection(methods: data.paymentMethods)
-                        }
-                        if !data.staffPerformance.isEmpty {
-                            staffSection(staff: data.staffPerformance)
-                        }
-                        if !data.hourlyDistribution.isEmpty {
-                            hourlyDistributionSection(hours: data.hourlyDistribution)
-                        }
+                        .skeleton(loading)
                     } else if let err = store?.error {
                         errorState(err)
                     }
@@ -291,17 +295,6 @@ struct Reports: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .webCardBackground(cornerRadius: DesignTokens.cornerRadiusSmall)
         }
-    }
-
-    private var loadingState: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-            Text("Loading reports…")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
     }
 
     private func errorState(_ message: String) -> some View {
@@ -612,13 +605,16 @@ struct PerformanceReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
                 rangePicker
-                if let store, store.isLoading && store.data == nil {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
-                } else if let d = store?.data {
-                    metricGrid(d)
-                    if !d.alerts.isEmpty { alertsSection(d.alerts) }
-                    if !d.staffPerformance.isEmpty { staffSection(d.staffPerformance) }
-                    if !d.busyHours.isEmpty { busySection(d.busyHours) }
+                // Loading: the report's own sections with sample figures, as placeholders
+                let loading = store?.data == nil && (store?.isLoading ?? true)
+                if let d = store?.data ?? (loading ? PerformanceReportData.sample : nil) {
+                    Group {
+                        metricGrid(d)
+                        if !d.alerts.isEmpty { alertsSection(d.alerts) }
+                        if !d.staffPerformance.isEmpty { staffSection(d.staffPerformance) }
+                        if !d.busyHours.isEmpty { busySection(d.busyHours) }
+                    }
+                    .skeleton(loading)
                 } else if let err = store?.error {
                     errorBanner(err)
                 }
@@ -842,13 +838,16 @@ struct SalesReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
                 rangePicker
-                if let store, store.isLoading && store.data == nil {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
-                } else if let d = store?.data {
-                    metricGrid(d)
-                    if !d.topItems.isEmpty { topItemsSection(d.topItems) }
-                    if !d.paymentMethods.isEmpty { paymentSection(d.paymentMethods) }
-                    if !d.hourlyData.isEmpty { hourlySection(d.hourlyData) }
+                // Loading: the report's own sections with sample figures, as placeholders
+                let loading = store?.data == nil && (store?.isLoading ?? true)
+                if let d = store?.data ?? (loading ? SalesReportData.sample : nil) {
+                    Group {
+                        metricGrid(d)
+                        if !d.topItems.isEmpty { topItemsSection(d.topItems) }
+                        if !d.paymentMethods.isEmpty { paymentSection(d.paymentMethods) }
+                        if !d.hourlyData.isEmpty { hourlySection(d.hourlyData) }
+                    }
+                    .skeleton(loading)
                 } else if let err = store?.error {
                     errorBanner(err)
                 }
@@ -1127,16 +1126,19 @@ struct CustomersReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
                 AnalyticsPeriodPicker(period: $period)
-                if let store, store.isLoading && store.data == nil {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
-                } else if let d = store?.data {
-                    metricGrid(d)
-                    if d.topSpenders.isEmpty && d.totalCustomers == 0 {
-                        emptyState(message: "No customer data yet. Bills uploaded from iOS don't yet associate customers — once you start linking customers in POS, this view will populate.")
+                // Loading: the report's own sections with sample figures, as placeholders
+                let loading = store?.data == nil && (store?.isLoading ?? true)
+                if let d = store?.data ?? (loading ? CustomersReportData.sample : nil) {
+                    Group {
+                        metricGrid(d)
+                        if d.topSpenders.isEmpty && d.totalCustomers == 0 {
+                            emptyState(message: "No customer data yet. Bills uploaded from iOS don't yet associate customers — once you start linking customers in POS, this view will populate.")
+                        }
+                        if !d.topSpenders.isEmpty { topSpendersSection(d.topSpenders) }
+                        if !d.frequencyDistribution.isEmpty { frequencySection(d.frequencyDistribution, total: d.totalCustomers) }
+                        if !d.orderTypePreferences.isEmpty { orderTypeSection(d.orderTypePreferences) }
                     }
-                    if !d.topSpenders.isEmpty { topSpendersSection(d.topSpenders) }
-                    if !d.frequencyDistribution.isEmpty { frequencySection(d.frequencyDistribution, total: d.totalCustomers) }
-                    if !d.orderTypePreferences.isEmpty { orderTypeSection(d.orderTypePreferences) }
+                    .skeleton(loading)
                 } else if let err = store?.error {
                     errorBanner(err)
                 }
@@ -1331,13 +1333,16 @@ struct StaffReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
                 AnalyticsPeriodPicker(period: $period)
-                if let store, store.isLoading && store.data == nil {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
-                } else if let d = store?.data {
-                    metricGrid(d)
-                    if !d.topPerformers.isEmpty { topPerformersSection(d.topPerformers) }
-                    if !d.staffPerformance.isEmpty { staffSection(d.staffPerformance) }
-                    if !d.roleStats.isEmpty { roleSection(d.roleStats) }
+                // Loading: the report's own sections with sample figures, as placeholders
+                let loading = store?.data == nil && (store?.isLoading ?? true)
+                if let d = store?.data ?? (loading ? StaffReportData.sample : nil) {
+                    Group {
+                        metricGrid(d)
+                        if !d.topPerformers.isEmpty { topPerformersSection(d.topPerformers) }
+                        if !d.staffPerformance.isEmpty { staffSection(d.staffPerformance) }
+                        if !d.roleStats.isEmpty { roleSection(d.roleStats) }
+                    }
+                    .skeleton(loading)
                 } else if let err = store?.error {
                     errorBanner(err)
                 }
@@ -1511,13 +1516,16 @@ struct InventoryReportView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                if let store, store.isLoading && store.data == nil {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
-                } else if let d = store?.data {
-                    metricGrid(d)
-                    if !d.lowStockItems.isEmpty { lowStockSection(d.lowStockItems) }
-                    if !d.topConsumed.isEmpty { consumedSection(d.topConsumed) }
-                    if !d.suppliers.isEmpty { supplierSection(d.suppliers) }
+                // Loading: the report's own sections with sample figures, as placeholders
+                let loading = store?.data == nil && (store?.isLoading ?? true)
+                if let d = store?.data ?? (loading ? InventoryReportData.sample : nil) {
+                    Group {
+                        metricGrid(d)
+                        if !d.lowStockItems.isEmpty { lowStockSection(d.lowStockItems) }
+                        if !d.topConsumed.isEmpty { consumedSection(d.topConsumed) }
+                        if !d.suppliers.isEmpty { supplierSection(d.suppliers) }
+                    }
+                    .skeleton(loading)
                 } else if let err = store?.error {
                     errorBanner(err)
                 }
@@ -1724,16 +1732,19 @@ struct CAReportView: View {
             VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
                 MonthYearPicker(year: $year, month: $month)
 
-                if let store, store.isLoading && store.data == nil {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, DesignTokens.spacing2XL)
-                } else if let d = store?.data {
-                    if d.totalBills == 0 {
-                        emptyMonth(label: d.monthLabel)
-                    } else {
-                        copyCard(d)
-                        metricGrid(d)
-                        breakdownSection(d)
+                // Loading: the report's own sections with sample figures, as placeholders
+                let loading = store?.data == nil && (store?.isLoading ?? true)
+                if let d = store?.data ?? (loading ? CAReportData.sample : nil) {
+                    Group {
+                        if d.totalBills == 0 {
+                            emptyMonth(label: d.monthLabel)
+                        } else {
+                            copyCard(d)
+                            metricGrid(d)
+                            breakdownSection(d)
+                        }
                     }
+                    .skeleton(loading)
                 } else if let err = store?.error {
                     errorBanner(err)
                 }
