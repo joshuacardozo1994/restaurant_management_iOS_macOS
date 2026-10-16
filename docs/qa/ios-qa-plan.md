@@ -144,8 +144,10 @@ test's name is given.
 
 | # | Check | Expected | Status |
 |---|---|---|---|
-| 7.1 | New reservation with no table; for later today; in the past | Saved; saved; refused with a reason | ✅ 🤖 testReservationCreateRefusePastAndStatuses ("That time has already passed") |
-| 7.2 | Confirm, arrived, complete, no-show, cancel | Status changes; never frees a table with diners | ✅ 🤖 same test (Confirmed, Arrived, Completed on the server); the table rule is API check 6.x |
+| 7.1 | New booking (16 Oct: phone first, a regular's name fills in); a time already past | Saved; refused with a reason | ⏳ 🤖 testReservationCreateRefusePastAndStatuses rewritten for the book (books tomorrow, confirms from the row); the refusal is api-checks 9.3 |
+| 7.2 | Confirm, Seat (arrived), no-show, cancel; move to another table | Status changes; Seat seats the table; a taken table is refused; never frees a table with diners | ✅ simulator 16 Oct: Seat T12 → Here, T12 occupied on the server; Confirm from the row. Rules: Vitest `tests/reservations/book.test.ts`, api-checks 9.5, 9.7, 9.8 |
+| 7.3 | Book, Timeline, Week (16 Oct redesign, as the web) | Remembered per device; side panel when there's room (iPad landscape, Mac); timeline lists booked tables, the rest as chips; week columns when wide, rows on a phone | ✅ iPad (Book light, Timeline dark, Week light), iPhone (Book light and dark) |
+| 7.4 | A screen opened from More on iPhone stays open when something else changes | Before 16 Oct, any redraw (a badge changing after seating a table) snapped back to the POS tab | ✅ fixed 16 Oct (the More tab is remembered); seated a booking from Reservations under More, the screen stayed |
 
 ### 8. Reports (P1, CA report P0)
 

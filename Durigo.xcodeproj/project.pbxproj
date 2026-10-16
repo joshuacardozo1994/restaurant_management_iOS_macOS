@@ -29,6 +29,7 @@
 		CC46FCCC5EC600C1CF8BE3CB /* ServiceNight.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B126C893B1B768C94D3BD4 /* ServiceNight.swift */; };
 		D00558BC5C079702E7D6873A /* ReservationDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401779939A1442A2825368C7 /* ReservationDialogView.swift */; };
 		DA18F49353BC4963B3B1DCD0 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD2D94297F97D6EC67F3EFB9 /* KeychainHelper.swift */; };
+		E06D15EF240A0D85B02B94EE /* ReservationsBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = E38D50594A16F063694E0900 /* ReservationsBook.swift */; };
 		E42E2246E5C10AA011C94E20 /* TakeOrderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFFB9A60E671038E38D67EE /* TakeOrderView.swift */; };
 		E7083EEE2BA1EB7700E8B825 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7083EED2BA1EB7700E8B825 /* Config.swift */; };
 		E7083EF02BA1EC3400E8B825 /* config.dev.plist in Resources */ = {isa = PBXBuildFile; fileRef = E7083EEF2BA1EC3400E8B825 /* config.dev.plist */; };
@@ -123,6 +124,7 @@
 		D77500D2BEDB2E4CAA74265B /* APIClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		DD2D94297F97D6EC67F3EFB9 /* KeychainHelper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		DDCA3801AFBD6414D0E8DD8C /* Skeleton.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
+		E38D50594A16F063694E0900 /* ReservationsBook.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReservationsBook.swift; sourceTree = "<group>"; };
 		E7083EED2BA1EB7700E8B825 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		E7083EEF2BA1EC3400E8B825 /* config.dev.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = config.dev.plist; sourceTree = "<group>"; };
 		E7083EF12BA1EC4A00E8B825 /* config.local.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = config.local.plist; sourceTree = "<group>"; };
@@ -226,6 +228,15 @@
 			);
 			name = POS;
 			path = POS;
+			sourceTree = "<group>";
+		};
+		68FA7B8E9410A81CD08C28AA /* Reservations */ = {
+			isa = PBXGroup;
+			children = (
+				E38D50594A16F063694E0900 /* ReservationsBook.swift */,
+			);
+			name = Reservations;
+			path = Reservations;
 			sourceTree = "<group>";
 		};
 		BAD5C9094AF86577FF48EDEB /* Kitchen */ = {
@@ -334,6 +345,7 @@
 				C2B126C893B1B768C94D3BD4 /* ServiceNight.swift */,
 				E87DFAB125A998C0EBAFDB61 /* ReportOverview.swift */,
 				BAD5C9094AF86577FF48EDEB /* Kitchen */,
+				68FA7B8E9410A81CD08C28AA /* Reservations */,
 			);
 			path = Durigo;
 			sourceTree = "<group>";
@@ -639,6 +651,7 @@
 				BDB4A614BB434CAB92B71102 /* SampleData.swift in Sources */,
 				AE69CEDC321A21D86317EA4C /* ReportOverview.swift in Sources */,
 				BADC56C07AE03B861E36A571 /* KitchenRail.swift in Sources */,
+				E06D15EF240A0D85B02B94EE /* ReservationsBook.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

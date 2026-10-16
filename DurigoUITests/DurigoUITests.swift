@@ -1070,56 +1070,66 @@ extension QAPlanUITests {
         XCTAssertFalse(element("bill-detail-apply-discount").exists, "A waiter can discount a bill")
     }
 
-    // 7.1 + 7.2: a reservation with no table for later today is saved; one in
-    // the past is refused with a reason; statuses change from its sheet
+    // 7.1 + 7.2: a booking made from the book (phone first) is saved; its
+    // row's button confirms it, and the server has it. (A time already past
+    // is refused by the server: api-checks 9.3)
     func testReservationCreateRefusePastAndStatuses() throws {
         try launch(as: "admin", tab: "reservations")
         open("Reservations")
         let stamp = Int(Date().timeIntervalSince1970) % 100000
-        func create(name: String, time: String) {
-            let add = element("admin-reservations-new")
-            XCTAssertTrue(add.waitForExistence(timeout: 10), "No + on reservations")
-            add.tap()
-            let nameField = app.textFields["reservation-form-name"]
-            XCTAssertTrue(nameField.waitForExistence(timeout: 5))
-            nameField.tap(); nameField.typeText(name)
-            let phone = app.textFields["Phone"]
-            phone.tap(); phone.typeText("9800011122")
-            replaceText(in: app.textFields["reservation-form-time"], with: time)
-            app.buttons["Save"].tap()
-        }
-        // Later today (at 23:xx this may roll into tomorrow; the test runs at night)
-        create(name: "QA Later \(stamp)", time: istTime(minutesFromNow: 60))
-        let later = app.staticTexts["QA Later \(stamp)"]
-        XCTAssertTrue(later.waitForExistence(timeout: 10), "Reservation for later today wasn't saved")
-
-        create(name: "QA Past \(stamp)", time: istTime(minutesFromNow: -120))
-        let refusal = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'already passed'")).firstMatch
-        XCTAssertTrue(refusal.waitForExistence(timeout: 10), "A reservation in the past wasn't refused with a reason")
-        screenshot("reservation-past-refused")
-        app.buttons["Cancel"].firstMatch.tap()
-
-        // Each status closes the sheet; the row's chip shows the new one
-        for status in ["Confirmed", "Arrived"] {
-            XCTAssertTrue(later.waitForExistence(timeout: 5))
-            later.tap()
-            let button = app.buttons[status].firstMatch
-            XCTAssertTrue(button.waitForExistence(timeout: 5), "No \(status) button")
-            button.tap()
-            XCTAssertTrue(app.staticTexts[status].waitForExistence(timeout: 8), "Row doesn't show \(status)")
-        }
-        later.tap()
-        app.buttons["Completed"].firstMatch.tap()
+        // Tomorrow's book: the new booking is for tomorrow, so its time is never past
+        let tomorrowChip = element("day-1")
+        XCTAssertTrue(tomorrowChip.waitForExistence(timeout: 10), "No day strip")
+        tomorrowChip.tap()
+        let add = element("admin-reservations-new")
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "No + on reservations")
+        add.tap()
+        let phone = app.textFields["reservation-form-phone"]
+        XCTAssertTrue(phone.waitForExistence(timeout: 5), "The form doesn't start with the phone")
+        phone.tap(); phone.typeText("9800011122")
+        let nameField = app.textFields["reservation-form-name"]
+        nameField.tap(); nameField.typeText("QA Book \(stamp)")
+        app.navigationBars.buttons["Book"].firstMatch.tap()
         let admin = try apiToken("admin")
-        var status: String?
+        let tomorrow = Self.istDay(offset: 1)
+        var booking: [String: Any]?
         for _ in 0..<10 {
-            let today = try call("/api/reservations/today", token: admin) as? [[String: Any]]
-            status = today?.first { $0["guestName"] as? String == "QA Later \(stamp)" }?["status"] as? String
-            if status == "COMPLETED" { break }
+            let next = try call("/api/reservations/day?date=\(tomorrow)", token: admin) as? [String: Any]
+            booking = ((next?["bookings"] as? [[String: Any]]) ?? []).first { $0["name"] as? String == "QA Book \(stamp)" }
+            if booking != nil { break }
             sleep(1)
         }
-        XCTAssertEqual(status, "COMPLETED", "Completed didn't reach the server")
+        let id = try XCTUnwrap(booking?["id"] as? String, "The booking wasn't saved")
+        XCTAssertEqual(booking?["status"] as? String, "PENDING")
+        screenshot("reservation-booked")
+
+        // Its row in tomorrow's book opens it, and Confirm saves
+        let date = tomorrow
+        let row = element("booking-\(id)")
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "The booking isn't in the book")
+        row.tap()
+        let confirm = app.buttons["Confirm"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "No Confirm on the booking")
+        confirm.tap()
+        var status: String?
+        for _ in 0..<10 {
+            let r = try call("/api/reservations/day?date=\(date)", token: admin) as? [String: Any]
+            status = ((r?["bookings"] as? [[String: Any]]) ?? []).first { $0["id"] as? String == id }?["status"] as? String
+            if status == "CONFIRMED" { break }
+            sleep(1)
+        }
+        XCTAssertEqual(status, "CONFIRMED", "Confirm didn't reach the server")
+        _ = try call("/api/reservations/\(id)", token: admin, method: "DELETE")
         screenshot("reservation-statuses")
+    }
+
+    /// A Goa calendar date, days from today (yyyy-MM-dd)
+    static func istDay(offset: Int) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "Asia/Kolkata")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: Date().addingTimeInterval(TimeInterval(offset) * 86_400))
     }
 
     // 6.6 + 6.7: on the kitchen rail, tap a dish to cooking and again to

@@ -255,15 +255,20 @@ extension AdminIngredient {
     ]
 }
 
-extension AdminReservation {
-    static let sample: [AdminReservation] = [
-        .init(id: "r1", tableId: "t5", guestName: "Fernandes", guestPhone: "9800000000", guestCount: 4, date: SampleData.day(), time: "20:30",
-              duration: 90, status: "CONFIRMED", notes: nil, table: .init(id: "t5", number: 5, capacity: 4, status: "RESERVED")),
-        .init(id: "r2", tableId: "t8", guestName: "D'Souza", guestPhone: "9800000000", guestCount: 6, date: SampleData.day(), time: "21:00",
-              duration: 120, status: "CONFIRMED", notes: "Birthday", table: .init(id: "t8", number: 8, capacity: 8, status: "AVAILABLE")),
-        .init(id: "r3", tableId: "t2", guestName: "Rodrigues", guestPhone: "9800000000", guestCount: 2, date: SampleData.day(1), time: "13:00",
-              duration: 90, status: "CONFIRMED", notes: nil, table: .init(id: "t2", number: 2, capacity: 2, status: "AVAILABLE")),
-    ]
+extension ReservationDayData {
+    /// A Friday's book: bookings through the evening, a note, one without a table
+    static let sample: ReservationDayData = {
+        let rows: [(String, String, Int, String)] = [("19:00", "Fernandes", 4, "ARRIVED"), ("19:00", "Naik", 2, "CONFIRMED"), ("19:30", "Dsouza", 6, "CONFIRMED"),
+                                                     ("20:00", "Pinto", 2, "CONFIRMED"), ("20:30", "Rodrigues", 4, "PENDING"), ("21:00", "Sequeira", 2, "CONFIRMED")]
+        let bookings = rows.enumerated().map { i, r in
+            Booking(id: "r\(i)", date: ReportDate.today, time: r.0, startsAt: "2026-01-01T13:00:00.000Z", duration: 120, name: r.1, phone: "98220 41123",
+                    people: r.2, tableId: i == 4 ? nil : "t\(i)", table: i == 4 ? nil : 3 + i, status: r.3, note: i == 2 ? "Birthday, cake at 9" : nil, visits: i % 3)
+        }
+        return ReservationDayData(date: ReportDate.today, bookings: bookings,
+                                  tables: (0..<8).map { ReservationDayData.Table(id: "t\($0)", number: 3 + $0, capacity: 4, status: "AVAILABLE") },
+                                  opens: "10:00", closes: "23:00",
+                                  coming: [.init(date: ReportDate.add(ReportDate.today, days: 1), covers: 58, bookings: 15)], generatedAt: "2026-01-01T13:00:00.000Z")
+    }()
 }
 
 extension KitchenBoard {
