@@ -202,6 +202,8 @@ struct CounterView: View {
     /// A new takeaway or delivery (the floor opens the order screen)
     let onNew: (OrderType) -> Void
     @State private var store: CounterStore?
+    /// Orders left open from an earlier day: folded away so today comes first
+    @State private var showOlder = false
 
     private var canPay: Bool { NavigationItem.billing.isAllowed(for: session.user?.role) }
 
@@ -220,8 +222,27 @@ struct CounterView: View {
                 lane("Ready", data.lane("ready"), loading: loading)
                 lane("To pay", data.lane("pay"), loading: loading)
                 lane("Cooking", data.lane("cooking"), loading: loading)
+                if !loading && data.orders.isEmpty && !data.older.isEmpty {
+                    Section {
+                        Text("Nothing open today. Takeaways and deliveries show here until they're paid.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 if !data.older.isEmpty {
-                    lane("From an earlier day", data.older, loading: loading)
+                    Section {
+                        DisclosureGroup(isExpanded: $showOlder) {
+                            ForEach(data.older) { order in
+                                row(order)
+                                    .swipeActions(edge: .trailing) { actions(order) }
+                                    .contextMenu { actions(order) }
+                            }
+                        } label: {
+                            Label("\(data.older.count) still open from an earlier day", systemImage: "clock.arrow.circlepath")
+                        }
+                        .accessibilityIdentifier("counter-older")
+                    } footer: {
+                        Text("Clear these: pay them, or cancel them from All Orders.")
+                    }
                 }
                 Section {
                     NavigationLink {
@@ -267,8 +288,10 @@ struct CounterView: View {
 
     private var subtitle: String {
         guard let c = store?.counter else { return "" }
-        let ready = c.lane("ready").count
-        return "\(ready) ready · \(c.lane("pay").count) to pay · \(c.lane("cooking").count) cooking"
+        // Only what's there, so it fits beside the title on a phone
+        let parts = [(c.lane("ready").count, "ready"), (c.lane("pay").count, "to pay"), (c.lane("cooking").count, "cooking")]
+            .filter { $0.0 > 0 }.map { "\($0.0) \($0.1)" }
+        return parts.joined(separator: " · ")
     }
 
     @ViewBuilder

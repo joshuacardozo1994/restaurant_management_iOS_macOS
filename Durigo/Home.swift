@@ -311,7 +311,7 @@ struct SettingsView: View {
                     Section("Account") {
                         LabeledContent("Name", value: user.name)
                         LabeledContent("Username", value: user.username)
-                        LabeledContent("Role", value: user.role)
+                        LabeledContent("Role", value: user.role.capitalized)
                     }
                 }
 

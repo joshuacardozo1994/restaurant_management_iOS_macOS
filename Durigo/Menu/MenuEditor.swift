@@ -240,8 +240,7 @@ struct MenuEditor: View {
                 if let store {
                     content(store: store)
                 } else {
-                    ScrollView { skeletonList(store: nil).padding(DesignTokens.spacingL) }
-                        .background(Color(.systemGroupedBackground))
+                    List { skeletonList(store: nil) }
                 }
             }
             .navigationTitle("Menu")
@@ -344,86 +343,50 @@ struct MenuEditor: View {
 
     @ViewBuilder
     private func content(store: AdminMenuStore) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                searchField
-                if let msg = store.errorMessage {
-                    errorBanner(msg)
-                }
-                let groups = filteredGroups(store: store)
-                if !store.hasLoaded && groups.isEmpty {
-                    skeletonList(store: store)
-                } else if groups.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(groups, id: \.category.id) { group in
-                        categorySection(category: group.category, items: group.items, store: store)
-                    }
+        let groups = filteredGroups(store: store)
+        List {
+            if let msg = store.errorMessage {
+                Section {
+                    Label(msg, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
                 }
             }
-            .padding(DesignTokens.spacingL)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            if !store.hasLoaded && groups.isEmpty {
+                skeletonList(store: store)
+            } else {
+                ForEach(groups, id: \.category.id) { group in
+                    categorySection(category: group.category, items: group.items, store: store)
+                }
+            }
         }
-        .background(Color(.systemGroupedBackground))
+        #if os(iOS)
+        .listStyle(.insetGrouped)
+        #else
+        .listStyle(.inset)
+        #endif
+        .overlay {
+            if store.hasLoaded && groups.isEmpty && store.errorMessage == nil { emptyState }
+        }
+        .searchable(text: $searchText, prompt: "Dish or description")
     }
 
     /// Loading: sample categories and items in the real sections, as placeholders
+    @ViewBuilder
     private func skeletonList(store: AdminMenuStore?) -> some View {
-        VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-            ForEach(AdminCategory.sample) { category in
-                categorySection(category: category,
-                                items: AdminMenuItem.sample.filter { $0.categoryId == category.id },
-                                store: store)
-            }
+        ForEach(AdminCategory.sample) { category in
+            categorySection(category: category,
+                            items: AdminMenuItem.sample.filter { $0.categoryId == category.id },
+                            store: store)
+                .skeleton(true)
+                .accessibilityIdentifier("menu-loading")
         }
-        .skeleton(true)
-        .accessibilityIdentifier("menu-loading")
-    }
-
-    private var searchField: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("Search by name", text: $searchText)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .accessibilityIdentifier("admin-menu-search")
-            if !searchText.isEmpty {
-                Button { searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .padding(DesignTokens.spacingM)
-        .webCardBackground(cornerRadius: DesignTokens.cornerRadiusSmall)
-    }
-
-    private func errorBanner(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: DesignTokens.spacingS) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-            Spacer()
-        }
-        .padding(DesignTokens.spacingM)
-        .background(
-            RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous)
-                .fill(Color.red.opacity(0.08))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous)
-                .stroke(Color.red.opacity(0.25), lineWidth: 1)
-        )
     }
 
     private var emptyState: some View {
         Group {
             if searchText.isEmpty {
                 ContentUnavailableView("No menu items yet", systemImage: "fork.knife",
-                                       description: Text("Tap + to add your first item."))
+                                       description: Text("Choose New Item from the ⋯ menu to add the first dish."))
             } else {
                 ContentUnavailableView.search(text: searchText)
             }
@@ -435,41 +398,24 @@ struct MenuEditor: View {
         items: [AdminMenuItem],
         store: AdminMenuStore?
     ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(category.name)
-                    .font(.system(.headline, weight: .semibold))
-                Text(categoryTypeLabel(category.type))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.primary.opacity(0.08)))
-                Spacer()
-                Text("\(items.count)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, DesignTokens.spacingL)
-            .padding(.top, DesignTokens.spacingL)
-            .padding(.bottom, DesignTokens.spacingS)
-
-            ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
+        Section {
+            ForEach(items) { item in
                 MenuItemRow(
                     item: item,
                     onToggle: { Task { await store?.toggleAvailability(item) } },
                     onTap: { editingItem = item },
                     onDelete: { deleteCandidate = item }
                 )
-                if idx < items.count - 1 {
-                    Divider()
-                        .background(Color.primary.opacity(DesignTokens.borderOpacity))
-                        .padding(.leading, DesignTokens.spacingL)
-                }
+            }
+        } header: {
+            HStack {
+                // The type only where the name doesn't already say it ("Beverages · Beverage")
+                let type = categoryTypeLabel(category.type)
+                Text(category.name.localizedCaseInsensitiveContains(type) ? category.name : "\(category.name) · \(type)")
+                Spacer()
+                Text("\(items.count)").monospacedDigit()
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .webCardBackground(cornerRadius: DesignTokens.cornerRadiusMedium)
     }
 
     private func categoryTypeLabel(_ type: String) -> String {
@@ -502,43 +448,36 @@ private struct MenuItemRow: View {
 
     var body: some View {
         HStack(spacing: DesignTokens.spacingM) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(item.name)
-                        .font(.system(.body, weight: .semibold))
-                        .strikethrough(!item.available, color: .secondary)
-                        .foregroundStyle(item.available ? .primary : .secondary)
-                    if !item.variantTemplates.isEmpty {
-                        Text("\(item.variantTemplates.count) variant\(item.variantTemplates.count == 1 ? "" : "s")")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.primary.opacity(0.08)))
+            // Tapping the dish edits it; the switch sets whether it's on the menu
+            Button(action: onTap) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.name).fontWeight(.semibold)
+                        let details = [item.description, item.variantTemplates.isEmpty ? nil
+                                       : "\(item.variantTemplates.count) variant\(item.variantTemplates.count == 1 ? "" : "s")"]
+                            .compactMap { $0 }.filter { !$0.isEmpty }
+                        if !details.isEmpty {
+                            Text(details.joined(separator: " · "))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
                     }
+                    Spacer()
+                    Text(item.price.rupees).monospacedDigit()
                 }
-                if let desc = item.description, !desc.isEmpty {
-                    Text(desc)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            }
-            Spacer()
-            Text("\((item.price).rupees)")
-                .font(.system(.body, design: .rounded, weight: .semibold))
+                // Off the menu: dimmed (the switch says the rest)
                 .foregroundStyle(item.available ? .primary : .secondary)
-            Toggle("", isOn: Binding(
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Toggle("Available", isOn: Binding(
                 get: { item.available },
                 set: { _ in onToggle() }
             ))
             .labelsHidden()
             .accessibilityIdentifier("admin-menu-availability-\(item.id)")
         }
-        .padding(.horizontal, DesignTokens.spacingL)
-        .padding(.vertical, DesignTokens.spacingM)
-        .contentShape(Rectangle())
-        .onTapGesture { onTap() }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive, action: onDelete) {
                 Label("Delete", systemImage: "trash")
