@@ -182,12 +182,8 @@ struct StatTile: View {
                 Text(title)
                     .font(.system(.subheadline, weight: .medium))
                     .foregroundStyle(.secondary)
+                // `icon` is kept for callers but not drawn: the title already says it
                 Spacer()
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
             }
             Text(value)
                 .font(.system(.title, design: .rounded, weight: .bold))

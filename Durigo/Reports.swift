@@ -93,7 +93,6 @@ struct CustomersReportView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                AnalyticsPeriodPicker(period: $period)
                 // Loading: the report's own sections with sample figures, as placeholders
                 let loading = store?.data == nil && (store?.isLoading ?? true)
                 if let d = store?.data ?? (loading ? CustomersReportData.sample : nil) {
@@ -115,6 +114,7 @@ struct CustomersReportView: View {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Customers")
+        .toolbar { ToolbarItem(placement: .primaryAction) { AnalyticsPeriodPicker(period: $period) } }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -303,7 +303,7 @@ struct InventoryReportView: View {
             .padding(DesignTokens.spacingL)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("Inventory")
+        .navigationTitle("Stock")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -411,32 +411,15 @@ struct InventoryReportView: View {
 
 // MARK: - Shared period picker for analytics breakouts
 
+/// The period, as a menu in the navigation bar
 private struct AnalyticsPeriodPicker: View {
     @Binding var period: AnalyticsPeriod
 
     var body: some View {
-        Menu {
-            ForEach(AnalyticsPeriod.allCases) { p in
-                Button {
-                    period = p
-                } label: {
-                    if period == p {
-                        Label(p.label, systemImage: "checkmark")
-                    } else {
-                        Text(p.label)
-                    }
-                }
-            }
-        } label: {
-            HStack {
-                Text(period.label).font(.system(.body, weight: .medium))
-                Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, DesignTokens.spacingL)
-            .padding(.vertical, DesignTokens.spacingM)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .webCardBackground(cornerRadius: DesignTokens.cornerRadiusSmall)
+        Picker("Period", selection: $period) {
+            ForEach(AnalyticsPeriod.allCases) { Text($0.label).tag($0) }
         }
+        .pickerStyle(.menu)
     }
 }
 
@@ -500,7 +483,6 @@ struct CAReportView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                MonthYearPicker(year: $year, month: $month)
 
                 // Loading: the report's own sections with sample figures, as placeholders
                 let loading = store?.data == nil && (store?.isLoading ?? true)
@@ -523,6 +505,7 @@ struct CAReportView: View {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("CA Report")
+        .toolbar { ToolbarItem(placement: .primaryAction) { MonthYearPicker(year: $year, month: $month) } }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -695,31 +678,12 @@ private struct MonthYearPicker: View {
     }
 
     var body: some View {
-        Menu {
-            ForEach(options) { opt in
-                Button {
-                    year = opt.year
-                    month = opt.month
-                } label: {
-                    let lbl = Self.label(year: opt.year, month: opt.month)
-                    if opt.year == year && opt.month == month {
-                        Label(lbl, systemImage: "checkmark")
-                    } else {
-                        Text(lbl)
-                    }
-                }
-            }
-        } label: {
-            HStack {
-                Text(Self.label(year: year, month: month))
-                    .font(.system(.body, weight: .medium))
-                Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, DesignTokens.spacingL)
-            .padding(.vertical, DesignTokens.spacingM)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .webCardBackground(cornerRadius: DesignTokens.cornerRadiusSmall)
+        Picker("Month", selection: Binding(
+            get: { Option(year: year, month: month) },
+            set: { year = $0.year; month = $0.month })) {
+            ForEach(options) { Text(Self.label(year: $0.year, month: $0.month)).tag($0) }
         }
+        .pickerStyle(.menu)
     }
 }
 
