@@ -858,8 +858,11 @@ final class QAPlanUITests: XCTestCase {
     // (the script after the run checks the database for QA_TAKEAWAY_PHONE)
     func testTakeawayWithCustomer() throws {
         try launch(as: "waiter", tab: "pos")
+        // A phone folds Takeaway and Delivery into the + menu
+        let newMenu = element("pos-new")
+        if newMenu.waitForExistence(timeout: 15) { newMenu.tap() }
         let takeaway = element("pos-new-takeaway")
-        XCTAssertTrue(takeaway.waitForExistence(timeout: 15))
+        XCTAssertTrue(takeaway.waitForExistence(timeout: 5))
         takeaway.tap()
 
         let phone = app.textFields["takeaway-customer-phone"]
@@ -989,7 +992,7 @@ extension QAPlanUITests {
         let users = try XCTUnwrap(call("/api/admin/users", token: admin) as? [[String: Any]])
         let waiterId = try XCTUnwrap(users.first { $0["username"] as? String == "qa-waiter" }?["id"] as? String)
         try launch(as: "waiter", tab: "pos")
-        XCTAssertTrue(element("pos-new-takeaway").waitForExistence(timeout: 15), "POS didn't load")
+        XCTAssertTrue(element("floor-filter").waitForExistence(timeout: 15), "POS didn't load")
         _ = try call("/api/admin/users/\(waiterId)/toggle-active", ["active": false], token: admin, method: "PATCH")
         addTeardownBlock { [self] in
             _ = try? call("/api/admin/users/\(waiterId)/toggle-active", ["active": true], token: admin, method: "PATCH")

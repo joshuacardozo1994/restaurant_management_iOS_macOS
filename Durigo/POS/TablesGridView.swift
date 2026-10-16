@@ -255,10 +255,17 @@ struct TablesGridView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             Button("Counter", systemImage: "takeoutbag.and.cup.and.straw") { route = .counter }
                 .accessibilityIdentifier("pos-counter")
-            Button("Takeaway", systemImage: "bag") { ordering = OrderTarget(tableId: nil, type: .takeaway) }
-                .accessibilityIdentifier("pos-new-takeaway")
-            Button("Delivery", systemImage: "bicycle") { ordering = OrderTarget(tableId: nil, type: .delivery) }
-                .accessibilityIdentifier("pos-new-delivery")
+            if isWide {
+                newOrderButtons
+            } else {
+                // A phone's bar has room for three buttons beside the title
+                Menu {
+                    newOrderButtons
+                } label: {
+                    Label("New order", systemImage: "plus")
+                }
+                .accessibilityIdentifier("pos-new")
+            }
         }
         ToolbarItem(placement: .secondaryAction) {
             Button("All Orders", systemImage: "list.bullet.rectangle") { route = .orders }
@@ -274,6 +281,14 @@ struct TablesGridView: View {
             Button("Bill Generator", systemImage: "doc.text", action: onOpenBillGenerator)
                 .accessibilityIdentifier("pos-bill-generator")
         }
+    }
+
+    @ViewBuilder
+    private var newOrderButtons: some View {
+        Button("Takeaway", systemImage: "bag") { ordering = OrderTarget(tableId: nil, type: .takeaway) }
+            .accessibilityIdentifier("pos-new-takeaway")
+        Button("Delivery", systemImage: "bicycle") { ordering = OrderTarget(tableId: nil, type: .delivery) }
+            .accessibilityIdentifier("pos-new-delivery")
     }
 
     private var floorSubtitle: String { "\(seatedCount) of \(store.tables.count) seated · \(openTotal.rupees) open" }
