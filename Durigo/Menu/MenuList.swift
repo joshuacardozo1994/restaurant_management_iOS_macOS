@@ -135,6 +135,10 @@ struct MenuList: View {
             }
         }
         .task {
+            #if DEBUG
+            // `--voice-order` opens voice ordering (screenshots)
+            if CommandLine.arguments.contains("--voice-order") { isShowingVoiceOrder = true }
+            #endif
             await menuLoader.loadMenu()
         }
     }

@@ -33,135 +33,58 @@ struct VoiceOrderView: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                // Subtle recording status indicator
-                if isRecording {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(.blue)
-                            .frame(width: 8, height: 8)
-                        Text("Listening")
-                            .font(.caption)
+            List {
+                Section {
+                    if recognizedText.isEmpty {
+                        Text(isRecording ? "Listening…" : "Tap Start, then say the order: \"two fish curry rice\"")
                             .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 4)
-                } else {
-                    Color.clear.frame(height: 20)
-                        .padding(.top, 4)
-                }
-                
-                // Current recognized text with buttons
-                VStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if recognizedText.isEmpty {
-                            Text("Speak your order")
-                                .font(.title3)
-                                .foregroundStyle(.tertiary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 32)
-                        } else {
-                            Text(recognizedText)
-                                .font(.system(.title2, design: .rounded))
-                                .fontWeight(.medium)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 24)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(.secondarySystemGroupedBackground))
-                            .shadow(color: Color.black.opacity(0.05), radius: 8, y: 2)
-                    )
-                    
-                    if !recognizedText.isEmpty {
-                        HStack(spacing: 12) {
-                            Button(action: {
-                                clearAndResetRecognition()
-                            }) {
-                                HStack {
-                                    Image(systemName: "xmark")
-                                    Text("Clear")
-                                }
-                                .font(.headline)
-                                .foregroundStyle(.red)
+                            .padding(.vertical, DesignTokens.spacingS)
+                    } else {
+                        Text(recognizedText)
+                            .font(.title2.weight(.medium))
+                            .padding(.vertical, DesignTokens.spacingS)
+                        HStack(spacing: DesignTokens.spacingM) {
+                            Button("Clear", systemImage: "xmark", role: .destructive) { clearAndResetRecognition() }
+                                .buttonStyle(.bordered)
                                 .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.red.opacity(0.1))
-                                )
-                            }
-                            
-                            Button(action: addCurrentItem) {
-                                HStack {
-                                    Image(systemName: "plus")
-                                    Text("Add")
-                                }
-                                .font(.headline)
-                                .foregroundStyle(.white)
+                            Button("Add", systemImage: "plus", action: addCurrentItem)
+                                .buttonStyle(.borderedProminent)
+                                .tint(SN.teal)
                                 .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.blue)
-                                        .shadow(color: Color.blue.opacity(0.3), radius: 8, y: 4)
-                                )
-                            }
                         }
+                        .controlSize(.large)
+                    }
+                } header: {
+                    if isRecording {
+                        Label("Listening", systemImage: "waveform")
+                            .foregroundStyle(SN.teal)
+                    } else {
+                        Text("Heard")
                     }
                 }
-                .padding(.horizontal)
-                
-                // Added items list
+
                 if !addedItems.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("ORDER")
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.tertiary)
-                            Spacer()
-                            Text("\(addedItems.count)")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                    Section("Order · \(addedItems.count)") {
+                        ForEach($addedItems) { $item in
+                            AddedItemRow(item: $item)
                         }
-                        .padding(.horizontal, 20)
-                        
-                        ScrollView {
-                            VStack(spacing: 8) {
-                                ForEach($addedItems) { $item in
-                                    AddedItemRow(item: $item, onRemove: {
-                                        addedItems.removeAll { $0.id == item.id }
-                                    })
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
+                        .onDelete { addedItems.remove(atOffsets: $0) }
                     }
                 }
-                
-                Spacer()
-                
-                // Minimalist control button
-                Button(action: { isRecording ? stopRecording() : startRecording() }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: isRecording ? "stop.circle.fill" : "mic.circle.fill")
-                            .font(.title3)
-                        Text(isRecording ? "Stop" : "Start")
-                            .fontWeight(.medium)
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(isRecording ? Color.red : Color.blue)
-                            .shadow(color: (isRecording ? Color.red : Color.blue).opacity(0.3), radius: 12, y: 6)
-                    )
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    isRecording ? stopRecording() : startRecording()
+                } label: {
+                    Label(isRecording ? "Stop" : "Start", systemImage: isRecording ? "stop.fill" : "mic.fill")
+                        .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 8)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(isRecording ? SN.red : SN.teal)
+                .padding(.horizontal, DesignTokens.spacingL)
+                .padding(.vertical, DesignTokens.spacingS)
+                .background(.bar)
             }
             .navigationTitle("Voice Order")
             .navigationBarTitleDisplayMode(.inline)
@@ -527,77 +450,25 @@ struct VoiceOrderView: View {
     }
 }
 
-// Added item row with edit capability
+/// A dish heard and matched: half-portion steps, swipe to remove
 struct AddedItemRow: View {
     @Binding var item: ParsedOrderItem
-    let onRemove: () -> Void
-    
+
     var body: some View {
-        HStack(spacing: 12) {
-            // Quantity controls - minimal buttons
-            HStack(spacing: 4) {
-                Button(action: {
-                    if item.quantity > 0.5 {
-                        item.quantity -= 0.5
+        Stepper(value: $item.quantity, in: 0.5...100, step: 0.5) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(Fmt.qty(item.quantity))× \(item.matchedItem.name)")
+                    if let suffix = item.matchedItem.suffix {
+                        Text(suffix).font(.caption).foregroundStyle(.secondary)
                     }
-                }) {
-                    Image(systemName: "minus")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(Color(.tertiarySystemGroupedBackground)))
                 }
-                
-                Text("\(item.quantity, specifier: "%.1f")")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                Spacer()
+                Text((item.matchedItem.price * item.quantity).rupees)
                     .monospacedDigit()
-                    .frame(minWidth: 28)
-                
-                Button(action: {
-                    item.quantity += 0.5
-                }) {
-                    Image(systemName: "plus")
-                        .font(.caption)
-                        .foregroundStyle(.blue)
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(Color(.tertiarySystemGroupedBackground)))
-                }
-            }
-            
-            // Item name
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.matchedItem.name)
-                    .font(.body)
-                if let suffix = item.matchedItem.suffix {
-                    Text(suffix)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            
-            Spacer()
-            
-            // Price
-            Text("\((item.matchedItem.price).rupees)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            
-            // Remove button - minimal
-            Button(action: onRemove) {
-                Image(systemName: "xmark")
-                    .font(.caption)
                     .foregroundStyle(.secondary)
-                    .frame(width: 24, height: 24)
-                    .background(Circle().fill(Color(.tertiarySystemGroupedBackground)))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.secondarySystemGroupedBackground))
-        )
     }
 }
 
@@ -608,58 +479,33 @@ struct MatchPickerView: View {
     let searchText: String
     let onSelect: (Category.Item) -> Void
     let onCancel: () -> Void
-    
+
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("MULTIPLE MATCHES")
-                    .font(.caption2)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                
-                ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(matches) { item in
-                            Button(action: {
-                                onSelect(item)
-                            }) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.name)
-                                            .font(.body)
-                                            .foregroundStyle(.primary)
-                                        if let suffix = item.suffix {
-                                            Text(suffix)
-                                                .font(.caption2)
-                                                .foregroundStyle(.tertiary)
-                                        }
-                                    }
-                                    Spacer()
-                                    Text("\((item.price).rupees)")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(.secondarySystemGroupedBackground))
-                                )
+            List {
+                Section {
+                    ForEach(matches) { item in
+                        Button { onSelect(item) } label: {
+                            LabeledContent {
+                                Text(item.price.rupees).monospacedDigit()
+                            } label: {
+                                Text(item.name)
+                                if let suffix = item.suffix { Text(suffix) }
                             }
                         }
+                        .tint(.primary)
                     }
-                    .padding(.horizontal)
+                } header: {
+                    Text("“\(searchText)” could be")
                 }
             }
-            .navigationTitle("Select Item")
+            .navigationTitle("Which one?")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        onCancel()
-                    }
+                    Button("Cancel", action: onCancel)
                 }
             }
         }
