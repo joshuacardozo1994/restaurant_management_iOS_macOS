@@ -493,12 +493,16 @@ struct TillBillHeading: View {
     let now: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            PanelLabel(text: headline)
-                .lineLimit(2)
+        // A large title with its subtitle, as a navigation bar sets them
+        // (the bar itself holds Waiting / Bills on iPad and Mac)
+        VStack(alignment: .leading, spacing: 2) {
             Text(bill.title)
                 .font(.largeTitle.weight(.bold))
                 .accessibilityAddTraits(.isHeader)
+            Text(headline)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
     }
 
