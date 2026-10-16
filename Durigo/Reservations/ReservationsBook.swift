@@ -226,6 +226,7 @@ struct ReservationsAdminView: View {
             .background(SN.page)
             .foregroundStyle(SN.ink)
             .navigationTitle("Reservations")
+            .navigationSubtitleIfAvailable(bookSubtitle)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -273,7 +274,12 @@ struct ReservationsAdminView: View {
         let wide = width >= 980
         return ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                ViewBar(view: Binding(get: { view }, set: { viewRaw = $0.rawValue }))
+                Picker("View", selection: $viewRaw) {
+                    ForEach(BookView.allCases) { Text($0.rawValue.capitalized).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 360)
                 if view != .week { dayStrip }
                 switch view {
                 case .book: BookList(day: day, now: now, wide: wide, live: live, onOpen: { editing = $0 }, onAction: act)
@@ -292,17 +298,19 @@ struct ReservationsAdminView: View {
                 ForEach(0..<7, id: \.self) { i in
                     let d = ReportDate.add(ReportDate.today, days: i)
                     let on = d == date
-                    Button { date = d } label: {
-                        VStack(spacing: 1) {
-                            Text(i == 0 ? "Today" : ReportDate.weekdayShort(d)).font(.subheadline)
-                            Text("\(ReportDate.dayOfMonth(d))").font(.caption2.monospaced()).opacity(0.7)
-                        }
-                        .frame(minWidth: 52).padding(.vertical, 6)
-                        .foregroundStyle(on ? SN.panel : SN.ink)
-                        .background(RoundedRectangle(cornerRadius: Book.corner).fill(on ? SN.ink : SN.panel))
-                        .overlay(RoundedRectangle(cornerRadius: Book.corner).stroke(on ? SN.ink : SN.line))
+                    let label = VStack(spacing: 1) {
+                        Text(i == 0 ? "Today" : ReportDate.weekdayShort(d)).font(.subheadline)
+                        Text("\(ReportDate.dayOfMonth(d))").font(.caption2.monospaced()).opacity(0.7)
                     }
-                    .buttonStyle(.plain)
+                    .frame(minWidth: 40)
+                    Group {
+                        if on {
+                            Button { date = d } label: { label }.buttonStyle(.borderedProminent).tint(SN.ink)
+                        } else {
+                            Button { date = d } label: { label }.buttonStyle(.bordered)
+                        }
+                    }
+                    .buttonBorderShape(.roundedRectangle(radius: Book.corner))
                     .accessibilityAddTraits(on ? .isSelected : [])
                     .accessibilityIdentifier("day-\(i)")
                 }
@@ -315,38 +323,24 @@ struct ReservationsAdminView: View {
         }
     }
 
+    /// "36 covers · 11 bookings · 2 here · 1 late" for the shown day
+    private var bookSubtitle: String {
+        guard let day = store?.day else { return "" }
+        let booked = day.bookings.filter { $0.status != "CANCELLED" && $0.status != "NO_SHOW" }
+        let today = day.date == ReportDate.today
+        var parts = ["\(booked.reduce(0) { $0 + $1.people }) covers", "\(booked.count) booking\(booked.count == 1 ? "" : "s")"]
+        if today { parts.append("\(booked.filter { $0.status == "ARRIVED" || $0.status == "COMPLETED" }.count) here") }
+        let late = today ? booked.filter { Book.isLate($0, now: now) }.count : 0
+        if late > 0 { parts.append("\(late) late") }
+        return (today ? "Today · " : "\(ReportDate.label(day.date)) · ") + parts.joined(separator: " · ")
+    }
+
     /// The row's button: confirm, or seat (then offer to take the order)
     private func act(_ b: Booking, _ status: String) {
         Task {
             if let error = await store?.patch(b, ["status": AnyEncodable(status)]) { message = error; return }
             if status == "ARRIVED" { message = "\(b.name) seated\(b.table.map { " at T\($0)" } ?? ""). Take their order from the POS." }
         }
-    }
-}
-
-private struct ViewBar: View {
-    @Binding var view: BookView
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(BookView.allCases) { v in
-                let on = v == view
-                Button { view = v } label: {
-                    Text(v.rawValue.capitalized)
-                        .font(.subheadline.weight(on ? .semibold : .regular))
-                        .padding(.horizontal, 14).padding(.vertical, 7)
-                        .foregroundStyle(on ? SN.panel : SN.ink)
-                        .background(RoundedRectangle(cornerRadius: Book.corner).fill(on ? SN.ink : Color.clear))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-        }
-        .padding(2)
-        .background(RoundedRectangle(cornerRadius: Book.corner).fill(SN.panel))
-        .overlay(RoundedRectangle(cornerRadius: Book.corner).stroke(SN.line))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("View")
     }
 }
 
@@ -372,12 +366,6 @@ private struct BookList: View {
 
         HStack(alignment: .top, spacing: DesignTokens.spacingXL) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 16) {
-                    stat(covers, "covers"); stat(booked.count, booked.count == 1 ? "booking" : "bookings")
-                    if isToday { stat(here, "here") }
-                    if late > 0 { stat(late, "late").foregroundStyle(SN.red) }
-                }
-                .padding(.bottom, 8)
                 if booked.isEmpty {
                     Text("No bookings for \(isToday ? "today" : ReportDate.label(day.date)) yet.").foregroundStyle(SN.mut).frame(maxWidth: .infinity).padding(.vertical, 40)
                 }

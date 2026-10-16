@@ -310,11 +310,16 @@ struct KitchenRailView: View {
             .background(SN.page)
             .foregroundStyle(SN.ink)
             .navigationTitle("Kitchen")
+            .navigationSubtitleIfAvailable(kitchenSubtitle)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 LiveBadgeItem(isLive: store?.liveConnected ?? false)
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Recall", systemImage: "arrow.uturn.backward") { recallOpen = true }
+                        .accessibilityIdentifier("kitchen-recall")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Toggle("Chime for new orders", isOn: $chime)
@@ -431,16 +436,19 @@ struct KitchenRailView: View {
     }
 
     private func header(board: KitchenBoard, kitchen: Int, bar: Int, main: [KitchenBoard.Ticket], live: Bool) -> some View {
-        let shown = view == .both ? board.tickets : main
-        let oldest = shown.map { minutes($0, live: live) }.max() ?? 0
         var counts: [String: Int] = [:]
         for t in main { for l in t.lines where l.status != "READY" { counts[l.name, default: 0] += l.quantity } }
         let toMake = counts.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+
         return VStack(alignment: .leading, spacing: 8) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) { summary(shown.count, oldest); Spacer(); controls(board: board, kitchen: kitchen, bar: bar) }
-                VStack(alignment: .leading, spacing: 8) { summary(shown.count, oldest); controls(board: board, kitchen: kitchen, bar: bar) }
+            Picker("This screen shows", selection: $viewRaw) {
+                ForEach(KitchenView.allCases) { v in
+                    Text("\(v.label) \(v == .both ? board.tickets.count : v == .kitchen ? kitchen : bar)").tag(v.rawValue)
+                }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 420)
             if !toMake.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -460,37 +468,12 @@ struct KitchenRailView: View {
         .overlay(alignment: .bottom) { Rectangle().fill(SN.line).frame(height: 1) }
     }
 
-    private func summary(_ count: Int, _ oldest: Int) -> some View {
-        Text("\(count) ticket\(count == 1 ? "" : "s")\(count > 0 ? " · oldest \(Rail.waited(oldest))" : "")")
-            .font(.subheadline).foregroundStyle(SN.mut).lineLimit(1)
-    }
-
-    private func controls(board: KitchenBoard, kitchen: Int, bar: Int) -> some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 2) {
-                ForEach(KitchenView.allCases) { v in
-                    let n = v == .both ? board.tickets.count : v == .kitchen ? kitchen : bar
-                    let on = v == view
-                    Button { viewRaw = v.rawValue } label: {
-                        HStack(spacing: 4) { Text(v.label); Text("\(n)").font(.caption.monospaced()).opacity(0.7) }
-                            .font(.subheadline.weight(on ? .semibold : .regular))
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                            .foregroundStyle(on ? SN.panel : SN.ink)
-                            .background(RoundedRectangle(cornerRadius: Rail.corner).fill(on ? SN.ink : Color.clear))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                }
-            }
-            .padding(2)
-            .overlay(RoundedRectangle(cornerRadius: Rail.corner).stroke(SN.line))
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("This screen shows")
-            Button { recallOpen = true } label: { Label("Recall", systemImage: "arrow.uturn.backward") }
-                .buttonStyle(.bordered).buttonBorderShape(.roundedRectangle(radius: Rail.corner)).tint(SN.ink)
-                .accessibilityIdentifier("kitchen-recall")
-        }
+    /// "8 tickets · oldest 12m", for the navigation bar's subtitle
+    private var kitchenSubtitle: String {
+        guard let board = store?.board else { return "" }
+        let shown = view == .both ? board.tickets : board.tickets.filter { $0.lines.contains { $0.station == (view == .bar ? "bar" : "kitchen") } }
+        let oldest = shown.map { Rail.minutes($0.createdAt, now: now) }.max() ?? 0
+        return "\(shown.count) ticket\(shown.count == 1 ? "" : "s")\(shown.isEmpty ? "" : " · oldest \(Rail.waited(oldest))")"
     }
 
     private func barStrip(_ bar: [KitchenBoard.Ticket], live: Bool) -> some View {
@@ -677,12 +660,13 @@ private struct TicketCard: View {
             if ready.count == lines.count {
                 Button { onSend(ready) } label: {
                     Text("Send\(station == "bar" ? " drinks" : "") · \(ticket.where)")
-                        .font((compact ? Font.subheadline : .body).weight(.semibold))
-                        .frame(maxWidth: .infinity).padding(.vertical, compact ? 7 : 10)
-                        .foregroundStyle(SN.panel)
-                        .background(RoundedRectangle(cornerRadius: Rail.corner).fill(SN.teal))
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.roundedRectangle(radius: Rail.corner))
+                .controlSize(compact ? .regular : .large)
+                .tint(SN.teal)
                 .padding(8)
             } else {
                 Text("\(ready.count) of \(lines.count) ready").font(.caption).foregroundStyle(SN.mut)
