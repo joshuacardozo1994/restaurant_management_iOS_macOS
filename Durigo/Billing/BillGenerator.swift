@@ -353,6 +353,10 @@ struct BillGenerator: View {
                 MenuList()
             }
             .task {
+                #if DEBUG
+                // `--bill-menu` opens the menu picker (screenshots)
+                if CommandLine.arguments.contains("--bill-menu") { isShowingMenuList = true }
+                #endif
                 await loadWaiters()
             }
             .alert("Are you sure you want to clear the bill", isPresented: $showingBillClearAlert) {

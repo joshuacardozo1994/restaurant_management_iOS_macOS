@@ -150,7 +150,7 @@ final class DurigoUITests: XCTestCase {
         
         showMenuButton.tap()
         
-        let menuItemSearchQueryTextField = app.textFields["menuItemSearchQueryTextField"]
+        let menuItemSearchQueryTextField = app.searchFields.firstMatch
         XCTAssertTrue(menuItemSearchQueryTextField.exists, "The menu item search query textfield exists")
         
         
@@ -160,21 +160,21 @@ final class DurigoUITests: XCTestCase {
         let sodaStaticText = app.staticTexts["menu-item-name-926E11D5-A2F8-4FCE-9252-C5E6D72F13BA"]
         XCTAssertTrue(sodaStaticText.exists, "Soda does not exist")
         
-        app.buttons["clearSearchField"].tap()
+        menuItemSearchQueryTextField.buttons["Clear text"].tap()
         
         //test for loose match
         menuItemSearchQueryTextField.tap()
         menuItemSearchQueryTextField.typeText("Sooda")
         XCTAssertTrue(sodaStaticText.exists, "Soda does not exist")
         
-        app.buttons["clearSearchField"].tap()
+        menuItemSearchQueryTextField.buttons["Clear text"].tap()
         
         //test for no match
         menuItemSearchQueryTextField.tap()
         menuItemSearchQueryTextField.typeText("Soodaaaa")
         XCTAssertFalse(sodaStaticText.exists, "Soda exists")
         
-        app.buttons["clearSearchField"].tap()
+        menuItemSearchQueryTextField.buttons["Clear text"].tap()
         
         //test if quantity gets added
         menuItemSearchQueryTextField.tap()

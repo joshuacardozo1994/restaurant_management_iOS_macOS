@@ -35,7 +35,13 @@ struct POSContainerView: View {
             // The Bill Generator pushed over the floor: the system back button returns
             .navigationDestination(isPresented: $showingGenerator) { BillGenerator() }
         }
-        .onAppear { openBillGeneratorIfAsked() }
+        .onAppear {
+            openBillGeneratorIfAsked()
+            #if DEBUG
+            // `--pos-route=generator` (screenshots)
+            if CommandLine.arguments.contains("--pos-route=generator") { showingGenerator = true }
+            #endif
+        }
         .onChange(of: navigation.showBillGenerator) { openBillGeneratorIfAsked() }
         .task {
             // First-time setup: build the store + load the static-ish

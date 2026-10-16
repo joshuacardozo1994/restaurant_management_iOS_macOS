@@ -12,7 +12,7 @@ struct MenuList: View {
     @Environment(\.dismiss) var dismiss
     @State private var searchQuery = ""
     @State private var isShowingVoiceOrder = false
-    
+
     func getFilteredResults() -> [Category]? {
         guard let categories = menuLoader.menu else { return nil }
         if searchQuery.isEmpty {
@@ -62,137 +62,44 @@ struct MenuList: View {
     
     
     
+    /// Picks a serving size for a dish in the bill (adding it first if needed)
+    private func choose(_ servingSize: Category.Item.ServingSize, for menuItem: Category.Item) {
+        addToMenu(menuItem: menuItem)
+        menuLoader.billItems = menuLoader.billItems.map { billItem in
+            guard billItem.id == menuItem.id else { return billItem }
+            var item = billItem
+            item.servingSize = servingSize
+            item.price = Double(Helper.evaluateExpression(expression: servingSize.expression, withValue: Double(menuItem.price)) ?? 0)
+            return item
+        }
+    }
+
+    /// Adds the dish, in its first serving size when it has sizes
+    private func add(_ menuItem: Category.Item) {
+        if let first = menuItem.servingSizes?.first {
+            choose(first, for: menuItem)
+        } else {
+            addToMenu(menuItem: menuItem)
+        }
+    }
+
+    private func addHalf(_ menuItem: Category.Item) {
+        if !menuLoader.billItems.contains(where: { $0.id == menuItem.id }) { add(menuItem); return }
+        menuLoader.billItems = menuLoader.billItems.map { item in
+            var item = item
+            if item.id == menuItem.id { item.quantity += 0.5 }
+            return item
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    HStack {
-                        TextField("Menu Item", text: $searchQuery)
-                            .autocorrectionDisabled()
-                            .padding()
-                            .accessibilityIdentifier("menuItemSearchQueryTextField")
-                        if !searchQuery.isEmpty {
-                            Button(action: {
-                                searchQuery = ""
-                            }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                                    .padding(.trailing)
-                            }
-                            .accessibilityIdentifier("clearSearchField")
-                        }
+            let items = getFilteredResults() ?? [Category.placeholder, Category.placeholder]
+            List(items) { category in
+                Section(category.name) {
+                    ForEach(category.items.filter({ [Category.Item.VisibilityScope.bill, Category.Item.VisibilityScope.both].contains($0.visibilityScope) })) { menuItem in
+                        row(menuItem)
                     }
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(10)
-                    
-                    Button(action: { randomiseServingSizeUUIDs() }) {
-                        Image(systemName: "arrow.2.circlepath")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding()
-                
-                let items = getFilteredResults() ?? [Category.placeholder, Category.placeholder]
-                List(items) { category in
-                    Section {
-                        ForEach(category.items.filter({ [Category.Item.VisibilityScope.bill, Category.Item.VisibilityScope.both].contains($0.visibilityScope)  })) { menuItem in
-                        HStack {
-                            HStack {
-                                if let quantity = menuLoader.billItems.first(where: { $0.id == menuItem.id })?.quantity {
-                                    Text(String(format: "%.1f", quantity))
-                                        .bold()
-                                        .onTapGesture {
-                                            print("tapped")
-                                            menuLoader.billItems = menuLoader.billItems.map({
-                                                MenuItem(id: $0.id, name: $0.name, prefix: $0.prefix, suffix: $0.suffix, quantity: $0.quantity + ($0.id == menuItem.id ? 0.5 : 0), price: $0.price, servingSize: $0.servingSize, tags: $0.tags)
-                                            })
-                                            
-                                        }
-                                } else {
-                                    Text("0").hidden()
-                                }
-                            }
-                            .frame(width: 28)
-                            if let servingSizes = menuItem.servingSizes {
-                                Menu {
-                                    ForEach(servingSizes) { servingSize in
-                                        Button(action: {
-                                            addToMenu(menuItem: menuItem)
-                                            menuLoader.billItems = menuLoader.billItems.map { billItem in
-                                                guard billItem.id == menuItem.id  else { return billItem }
-                                                var newbillItem = billItem
-                                                newbillItem.servingSize = servingSize
-                                                newbillItem.price = Double(Helper.evaluateExpression(expression: servingSize.expression, withValue: Double(menuItem.price)) ?? 0)
-                                                return newbillItem
-                                            }
-                                        }) {
-                                            Text(servingSize.name)
-                                                
-                                        }
-                                    }
-                                    
-                                    
-                                } label: {
-                                    Text(menuLoader.billItems.first(where: { $0.id == menuItem.id })?.servingSize?.name ?? servingSizes.first?.name ?? "")
-                                        .foregroundStyle(Color.primary)
-                                        .bold()
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 2)
-                                        .overlay(
-                                                RoundedRectangle(cornerRadius: 4)
-                                                    .stroke(Color.primary, lineWidth: 1)
-                                            )
-                                }
-                            }
-                            let text = Text(menuItem.prefix != nil ? "(\(menuItem.prefix ?? "")) " : "")
-                                .italic()
-                            +
-                            Text(menuItem.name)
-                                
-                                .bold()
-                            +
-                            Text(menuItem.suffix != nil ? " (\(menuItem.suffix ?? ""))" : "")
-                                .italic()
-                            text
-                                .accessibilityIdentifier("menu-item-name-\(menuItem.id.uuidString)")
-                            Spacer()
-                            Group {
-                                if let quantity = $menuLoader.billItems.first(where: { $0.id == menuItem.id })?.quantity {
-                                    Stepper("Quantity", value: quantity, in: 0...100)
-                                        .labelsHidden()
-                                } else {
-                                    Button(action: {
-                                        addToMenu(menuItem: menuItem)
-                                        menuLoader.billItems = menuLoader.billItems.map { billItem in
-                                            guard billItem.id == menuItem.id else { return billItem }
-                                            guard let servingSizes = menuItem.servingSizes else { return billItem }
-                                            guard let servingSize = servingSizes.first else { return billItem }
-                                            var newbillItem = billItem
-                                            newbillItem.servingSize = servingSize
-                                            newbillItem.price = Double(Helper.evaluateExpression(expression: servingSize.expression, withValue: Double(menuItem.price)) ?? 0)
-                                            return newbillItem
-                                        }
-                                    }) {
-                                        Color.clear
-                                            .frame(height: 32)
-                                    }
-                                }
-                            }
-                            .frame(width: 94, height: 32)
-                            
-                            if let billItemPrice = menuLoader.billItems.first(where: { $0.id == menuItem.id })?.price {
-                                Text("\(Int(billItemPrice))")
-                            } else {
-                                Text("\(Int(menuItem.price))")
-                            }
-                            
-                            
-                        }
-                    }
-                } header: {
-                    Text(category.name)
-                        .textCase(.uppercase)
-                        .font(.headline)
                 }
             }
             #if os(iOS)
@@ -202,29 +109,80 @@ struct MenuList: View {
             #endif
             // Until the menu arrives the list shows placeholder categories
             .skeleton(menuLoader.menu == nil)
-        }
-        .navigationTitle("Menu")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(action: {
-                    isShowingVoiceOrder = true
-                }) {
-                    Image(systemName: "mic.fill")
+            .overlay {
+                if let results = getFilteredResults(), results.isEmpty, !searchQuery.isEmpty {
+                    ContentUnavailableView.search(text: searchQuery)
                 }
             }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    dismiss()
+            .searchable(text: $searchQuery, prompt: "Dish, or \"4 soda\"")
+            .autocorrectionDisabled()
+            .navigationTitle("Menu")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button("Voice order", systemImage: "mic") { isShowingVoiceOrder = true }
+                    Button("Add sizes as new lines", systemImage: "arrow.2.circlepath") { randomiseServingSizeUUIDs() }
+                        .help("The next size picked for a dish already on the bill goes on a line of its own")
                 }
             }
-        }
-        .sheet(isPresented: $isShowingVoiceOrder) {
-            VoiceOrderView()
-        }
+            .sheet(isPresented: $isShowingVoiceOrder) {
+                VoiceOrderView()
+            }
         }
         .task {
             await menuLoader.loadMenu()
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ menuItem: Category.Item) -> some View {
+        let inBill = menuLoader.billItems.first(where: { $0.id == menuItem.id })
+        HStack(spacing: DesignTokens.spacingM) {
+            // Tapping the dish adds it
+            Button { add(menuItem) } label: {
+                HStack {
+                    (Text(menuItem.prefix.map { "(\($0)) " } ?? "").italic()
+                     + Text(menuItem.name).fontWeight(.semibold)
+                     + Text(menuItem.suffix.map { " (\($0))" } ?? "").italic())
+                        .accessibilityIdentifier("menu-item-name-\(menuItem.id.uuidString)")
+                    Spacer(minLength: DesignTokens.spacingS)
+                    Text((inBill?.price ?? Double(menuItem.price)).rupees)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(inBill == nil ? "Adds it to the bill" : "")
+
+            if let servingSizes = menuItem.servingSizes {
+                Menu(inBill?.servingSize?.name ?? servingSizes.first?.name ?? "Size") {
+                    ForEach(servingSizes) { size in
+                        Button(size.name) { choose(size, for: menuItem) }
+                    }
+                }
+                .menuStyle(.button)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .fixedSize()
+            }
+
+            if let quantity = $menuLoader.billItems.first(where: { $0.id == menuItem.id })?.quantity {
+                Stepper(value: quantity, in: 0...100) {
+                    Text(Fmt.qty(quantity.wrappedValue))
+                        .monospacedDigit()
+                        .accessibilityIdentifier("menu-item-quantity-Text-\(menuItem.id.uuidString)")
+                }
+                .fixedSize()
+            }
+        }
+        .contextMenu {
+            Button("Add half a portion", systemImage: "circle.lefthalf.filled") { addHalf(menuItem) }
         }
     }
 }
