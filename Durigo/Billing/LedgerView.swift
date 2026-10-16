@@ -191,7 +191,26 @@ struct LedgerView: View {
     private var loadingFirst: Bool { !store.ledgerLoaded && store.ledger.isEmpty }
 
     private func list(index: LocalBillIndex) -> some View {
-        List {
+        Group {
+            if wide {
+                // iPad and Mac: the system's selection, arrow keys included
+                List(selection: Binding(get: { shownId }, set: { if let id = $0 { selectedId = id } })) {
+                    listContent(index: index)
+                }
+            } else {
+                List { listContent(index: index) }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .refreshable {
+            await store.loadLedger()
+            await refreshDeviceCopies()
+        }
+    }
+
+    @ViewBuilder
+    private func listContent(index: LocalBillIndex) -> some View {
             Section {
                 VStack(alignment: .leading, spacing: DesignTokens.spacingM) {
                     rangePicker
@@ -244,7 +263,6 @@ struct LedgerView: View {
                 ForEach(filtered) { bill in
                     let local = index.bill(for: bill)
                     row(bill, local: local)
-                        .listRowBackground(wide && shownId == bill.id ? SN.teal.opacity(0.12) : SN.panel)
                         .swipeActions(edge: .trailing) {
                             if !bill.paid, let local {
                                 Button("Mark paid", systemImage: "checkmark.circle") { markingPaid = local }
@@ -253,16 +271,11 @@ struct LedgerView: View {
                         }
                 }
                 if filtered.isEmpty && !loadingFirst {
-                    emptyRow.listRowBackground(Color.clear)
+                    emptyRow
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
             }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .refreshable {
-            await store.loadLedger()
-            await refreshDeviceCopies()
-        }
     }
 
     @ViewBuilder
@@ -270,9 +283,7 @@ struct LedgerView: View {
         let content = LedgerRow(bill: bill, wide: tableRows, unsynced: local.map { $0.syncedAt == nil } ?? false)
             .accessibilityIdentifier(local.map { "BillHistoryList-Item-\($0.id.uuidString)" } ?? "ledger-row-\(bill.billNo)")
         if wide {
-            Button { selectedId = bill.id } label: { content }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(shownId == bill.id ? .isSelected : [])
+            content.tag(bill.id)
         } else {
             NavigationLink(value: BillingRoute.ledger(bill)) { content }
         }
@@ -373,7 +384,8 @@ struct LedgerView: View {
             }
             .id(bill.id)
         } else {
-            Text("Choose a bill").foregroundStyle(SN.mut).frame(maxWidth: .infinity, maxHeight: .infinity)
+            // The newest bill opens on its own; with none, the list says so
+            Color.clear
         }
     }
 
@@ -782,12 +794,14 @@ struct LedgerDetailContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    PanelLabel(text: heading).lineLimit(2)
-                    Text("\(bill.where) · \(bill.total.rupees)")
+                // A title with its subtitle; the amount is the Paid line below
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(bill.where)
                         .font(.title2.weight(.bold))
-                        .monospacedDigit()
                         .accessibilityAddTraits(.isHeader)
+                    Text(heading)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 MethodPills(bill: bill)

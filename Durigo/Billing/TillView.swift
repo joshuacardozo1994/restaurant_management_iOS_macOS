@@ -121,6 +121,10 @@ struct BillingView: View {
         }
         .task(id: session.isSignedIn) {
             guard session.isSignedIn else { return }
+            #if DEBUG
+            // `--billing-mode=bills` opens on the ledger (screenshots)
+            if CommandLine.arguments.contains("--billing-mode=bills") { mode = session.seesLedger ? .bills : .appBills }
+            #endif
             if store == nil { store = TillStore(session: session) }
             await store?.loadTill()
             store?.startLive()
