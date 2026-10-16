@@ -41,22 +41,15 @@
 		E730ED352B0AA08800132ABA /* Home.swift in Sources */ = {isa = PBXBuildFile; fileRef = E730ED342B0AA08800132ABA /* Home.swift */; };
 		E730ED372B0AA45600132ABA /* BillHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E730ED362B0AA45600132ABA /* BillHistory.swift */; };
 		E730ED392B0AA94900132ABA /* Navigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E730ED382B0AA94900132ABA /* Navigation.swift */; };
-		E73256682B5CF72000EAB9D2 /* StatsFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E73256672B5CF72000EAB9D2 /* StatsFilter.swift */; };
-		E732566A2B5D093B00EAB9D2 /* StatsPopularQuantities.swift in Sources */ = {isa = PBXBuildFile; fileRef = E73256692B5D093B00EAB9D2 /* StatsPopularQuantities.swift */; };
-		E7377F472B382CD20011A3F7 /* ChristmasMenuGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7377F462B382CD20011A3F7 /* ChristmasMenuGenerator.swift */; };
 		E7377F492B38364E0011A3F7 /* Belleza-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7377F482B38364E0011A3F7 /* Belleza-Regular.ttf */; };
 		E7377F4B2B38365B0011A3F7 /* BrittanySignature.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7377F4A2B38365B0011A3F7 /* BrittanySignature.ttf */; };
 		E73D4E142AEE98BA00EA7459 /* MenuEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E73D4E132AEE98BA00EA7459 /* MenuEditor.swift */; };
-		E73F5D6F2B3EDA180015104D /* Stats.swift in Sources */ = {isa = PBXBuildFile; fileRef = E73F5D6E2B3EDA180015104D /* Stats.swift */; };
 		E73F5D712B3EE0BA0015104D /* billItems.json in Resources */ = {isa = PBXBuildFile; fileRef = E73F5D702B3EE0BA0015104D /* billItems.json */; };
 		E73F5D732B3EEF610015104D /* View+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E73F5D722B3EEF610015104D /* View+Extensions.swift */; };
 		E73F5D752B4C82AA0015104D /* col2Grid.swift in Sources */ = {isa = PBXBuildFile; fileRef = E73F5D742B4C82AA0015104D /* col2Grid.swift */; };
-		E773B97D2B5D4FB30061684D /* StatsChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = E773B97C2B5D4FB30061684D /* StatsChart.swift */; };
 		E773B97F2B5D75130061684D /* Array+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E773B97E2B5D75130061684D /* Array+Extensions.swift */; };
-		E773B9812B5D7AA90061684D /* StatsPopularSales.swift in Sources */ = {isa = PBXBuildFile; fileRef = E773B9802B5D7AA90061684D /* StatsPopularSales.swift */; };
 		E798C5EC2B322E6400935DCE /* SwiftDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E798C5EB2B322E6400935DCE /* SwiftDataModels.swift */; };
 		E7BD04092B22181800615B17 /* Helper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7BD04082B22181800615B17 /* Helper.swift */; };
-		E7D092EF2B10A8C80047F8A6 /* MenuGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D092EE2B10A8C80047F8A6 /* MenuGenerator.swift */; };
 		E7D092F12B10AB010047F8A6 /* Font+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D092F02B10AB010047F8A6 /* Font+Extensions.swift */; };
 		E7D092F42B10ADED0047F8A6 /* Poppins-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7D092F32B10ADED0047F8A6 /* Poppins-Bold.ttf */; };
 		E7D092F52B10ADF30047F8A6 /* Poppins-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E7D092F22B10ADC20047F8A6 /* Poppins-Medium.ttf */; };
@@ -137,22 +130,15 @@
 		E730ED342B0AA08800132ABA /* Home.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Home.swift; sourceTree = "<group>"; };
 		E730ED362B0AA45600132ABA /* BillHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillHistory.swift; sourceTree = "<group>"; };
 		E730ED382B0AA94900132ABA /* Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Navigation.swift; sourceTree = "<group>"; };
-		E73256672B5CF72000EAB9D2 /* StatsFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsFilter.swift; sourceTree = "<group>"; };
-		E73256692B5D093B00EAB9D2 /* StatsPopularQuantities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsPopularQuantities.swift; sourceTree = "<group>"; };
-		E7377F462B382CD20011A3F7 /* ChristmasMenuGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChristmasMenuGenerator.swift; sourceTree = "<group>"; };
 		E7377F482B38364E0011A3F7 /* Belleza-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Belleza-Regular.ttf"; sourceTree = "<group>"; };
 		E7377F4A2B38365B0011A3F7 /* BrittanySignature.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = BrittanySignature.ttf; sourceTree = "<group>"; };
 		E73D4E132AEE98BA00EA7459 /* MenuEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuEditor.swift; sourceTree = "<group>"; };
-		E73F5D6E2B3EDA180015104D /* Stats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stats.swift; sourceTree = "<group>"; };
 		E73F5D702B3EE0BA0015104D /* billItems.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = billItems.json; sourceTree = "<group>"; };
 		E73F5D722B3EEF610015104D /* View+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Extensions.swift"; sourceTree = "<group>"; };
 		E73F5D742B4C82AA0015104D /* col2Grid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = col2Grid.swift; sourceTree = "<group>"; };
-		E773B97C2B5D4FB30061684D /* StatsChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsChart.swift; sourceTree = "<group>"; };
 		E773B97E2B5D75130061684D /* Array+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Extensions.swift"; sourceTree = "<group>"; };
-		E773B9802B5D7AA90061684D /* StatsPopularSales.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsPopularSales.swift; sourceTree = "<group>"; };
 		E798C5EB2B322E6400935DCE /* SwiftDataModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataModels.swift; sourceTree = "<group>"; };
 		E7BD04082B22181800615B17 /* Helper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Helper.swift; sourceTree = "<group>"; };
-		E7D092EE2B10A8C80047F8A6 /* MenuGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuGenerator.swift; sourceTree = "<group>"; };
 		E7D092F02B10AB010047F8A6 /* Font+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Font+Extensions.swift"; sourceTree = "<group>"; };
 		E7D092F22B10ADC20047F8A6 /* Poppins-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Medium.ttf"; sourceTree = "<group>"; };
 		E7D092F32B10ADED0047F8A6 /* Poppins-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Bold.ttf"; sourceTree = "<group>"; };
@@ -270,18 +256,6 @@
 			path = "Reusable Views";
 			sourceTree = "<group>";
 		};
-		E73F5D6D2B3ED9FE0015104D /* Stats */ = {
-			isa = PBXGroup;
-			children = (
-				E73F5D6E2B3EDA180015104D /* Stats.swift */,
-				E73256672B5CF72000EAB9D2 /* StatsFilter.swift */,
-				E73256692B5D093B00EAB9D2 /* StatsPopularQuantities.swift */,
-				E773B9802B5D7AA90061684D /* StatsPopularSales.swift */,
-				E773B97C2B5D4FB30061684D /* StatsChart.swift */,
-			);
-			path = Stats;
-			sourceTree = "<group>";
-		};
 		E7BD04072B22180900615B17 /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
@@ -330,7 +304,6 @@
 				E7ED3A572AEAEAEC00F2DDA8 /* Shared */,
 				E7ED3A462AEAEAB400F2DDA8 /* Menu */,
 				E7ED3A112AEAE9AC00F2DDA8 /* DurigoApp.swift */,
-				E73F5D6D2B3ED9FE0015104D /* Stats */,
 				E730ED382B0AA94900132ABA /* Navigation.swift */,
 				E730ED342B0AA08800132ABA /* Home.swift */,
 				E7ED3A3C2AEAE9ED00F2DDA8 /* Billing */,
@@ -404,9 +377,7 @@
 				E7ED3A4B2AEAEADE00F2DDA8 /* MenuLoader.swift */,
 				E7ED3A4C2AEAEADE00F2DDA8 /* Models.swift */,
 				E73D4E132AEE98BA00EA7459 /* MenuEditor.swift */,
-				E7D092EE2B10A8C80047F8A6 /* MenuGenerator.swift */,
 				E798C5EB2B322E6400935DCE /* SwiftDataModels.swift */,
-				E7377F462B382CD20011A3F7 /* ChristmasMenuGenerator.swift */,
 				E71F1E272F4A65DB005080A1 /* VoiceOrderView.swift */,
 			);
 			path = Menu;
@@ -594,7 +565,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E773B9812B5D7AA90061684D /* StatsPopularSales.swift in Sources */,
 				E7D369B02B22FE3100446811 /* MockURLSession.swift in Sources */,
 				E7ED3A3E2AEAE9FC00F2DDA8 /* BillGenerator.swift in Sources */,
 				E7ED3A5B2AEAEB1F00F2DDA8 /* Date+Extensions.swift in Sources */,
@@ -603,18 +573,13 @@
 				E7ED3A482AEAEAC400F2DDA8 /* BillPreview.swift in Sources */,
 				E73D4E142AEE98BA00EA7459 /* MenuEditor.swift in Sources */,
 				E71F1E282F4A65DB005080A1 /* VoiceOrderView.swift in Sources */,
-				E773B97D2B5D4FB30061684D /* StatsChart.swift in Sources */,
 				E730ED372B0AA45600132ABA /* BillHistory.swift in Sources */,
 				E7BD04092B22181800615B17 /* Helper.swift in Sources */,
 				E7D369AE2B22FC2400446811 /* MockDataLoader.swift in Sources */,
 				E7D369AA2B22FB2F00446811 /* MockURLProtocol.swift in Sources */,
-				E7D092EF2B10A8C80047F8A6 /* MenuGenerator.swift in Sources */,
 				E7E0CB3E2B0E8D6A004514CC /* Number+Extensions.swift in Sources */,
-				E7377F472B382CD20011A3F7 /* ChristmasMenuGenerator.swift in Sources */,
 				E7E0CB402B0F3187004514CC /* Preview.swift in Sources */,
-				E732566A2B5D093B00EAB9D2 /* StatsPopularQuantities.swift in Sources */,
 				E730ED332B0A7AB500132ABA /* ActivityView.swift in Sources */,
-				E73F5D6F2B3EDA180015104D /* Stats.swift in Sources */,
 				E730ED352B0AA08800132ABA /* Home.swift in Sources */,
 				E7083EEE2BA1EB7700E8B825 /* Config.swift in Sources */,
 				E73F5D732B3EEF610015104D /* View+Extensions.swift in Sources */,
@@ -626,7 +591,6 @@
 				E7ED3A512AEAEADE00F2DDA8 /* Models.swift in Sources */,
 				E7ED3A4E2AEAEADE00F2DDA8 /* MenuLoader.swift in Sources */,
 				E730ED392B0AA94900132ABA /* Navigation.swift in Sources */,
-				E73256682B5CF72000EAB9D2 /* StatsFilter.swift in Sources */,
 				E73F5D752B4C82AA0015104D /* col2Grid.swift in Sources */,
 				E7ED3A122AEAE9AC00F2DDA8 /* DurigoApp.swift in Sources */,
 				E71F1E262F4A4B3A005080A1 /* Reports.swift in Sources */,
