@@ -230,6 +230,8 @@ Hand-made controls replaced with the system's: segmented Pickers (kitchen, reser
 
 The pay pad is Form sections in every place it appears (Till on iPhone, iPad and Mac; Pay on the POS order screen): "Pay with" is a segmented Cash / UPI / Card / Split (Split opens the split sheet, and an "Edit split" row stays while splitting), Wallet under a menu Picker "Other ways to pay", the discount field with a segmented ₹ / %, "Cash given" a segmented Exact / next ₹100 / ₹500 / ₹2,000 with Change as a labelled row. On iPhone the bill's details are the navigation subtitle ("Bill 7419 · QA Waiter · seated 1d · 1 order"), its lines a section with Tax details as a DisclosureGroup, and Pay stays pinned at the bottom. ✅ iPhone 17 (Cash then ₹500 showed Change ₹260; Pay read "Pay ₹240 by Cash"), iPad Pro 13" portrait. UI tests use `app.segmentedControls["pay-method"].buttons["Split" / "UPI"]`.
 
+The till's queue is a plain `List`: on iPad and Mac `List(selection:)` (the system highlight, arrow keys move between bills), on iPhone navigation links; no hand-drawn outline. ✅ iPad Pro 13" (tapping Table 8 moved the highlight and opened its bill), iPhone 17.
+
 ### Order of work
 
 1. Service screens on the real devices during a mock service: Bill Generator, POS, payment, Kitchen with the real printer.

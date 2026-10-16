@@ -259,56 +259,62 @@ struct BillingView: View {
 
     @ViewBuilder
     private func queueColumn(store: TillStore, selectable: Bool, loading: Bool = false) -> some View {
-        let current = selectable ? selectedBill(store)?.key : nil
         TimelineView(.periodic(from: .now, by: 30)) { tl in
-            List {
-                Section {
-                    if store.till.isEmpty {
-                        emptyQueue(store)
-                            .listRowBackground(Color.clear)
+            Group {
+                if selectable {
+                    // iPad and Mac: the system's selection, arrow keys included
+                    List(selection: Binding(
+                        get: { selectedBill(store)?.key },
+                        set: { if let key = $0 { selectedKey = key } }
+                    )) {
+                        queueSections(store: store, now: tl.date, selectable: true, loading: loading)
                     }
-                    ForEach(store.till) { bill in
-                        let amount = BillMath.computeBill(gst: bill.gross.gst, vat: bill.gross.vat, discount: 0, config: config).total
-                        let row = TillQueueRow(bill: bill, amount: amount, now: tl.date, selected: current == bill.key)
-                        Group {
-                            if selectable {
-                                Button { selectedKey = bill.key } label: { row }
-                                    .buttonStyle(.plain)
-                            } else {
-                                NavigationLink(value: BillingRoute.till(bill.key)) { row }
-                            }
-                        }
-                        .skeleton(loading)
-                        .listRowBackground(selectable ? Color.clear : SN.panel)
-                        .listRowSeparator(selectable ? .hidden : .visible)
-                        .listRowInsets(selectable ? EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12) : nil)
+                } else {
+                    List {
+                        queueSections(store: store, now: tl.date, selectable: false, loading: loading)
                     }
-                } header: {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Waiting to pay")
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(SN.ink)
-                            .textCase(nil)
-                        Spacer()
-                        Text("\(store.till.count)")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(SN.mut)
-                            .accessibilityLabel("\(store.till.count) waiting")
-                    }
-                    .skeleton(loading)
-                }
-                if let msg = store.tillError {
-                    Section {
-                        Label("Showing the last list: \(msg)", systemImage: "wifi.exclamationmark")
-                            .font(.footnote)
-                            .foregroundStyle(SN.red)
-                    }
-                    .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.plain)
-            .scrollContentBackground(.hidden)
             .refreshable { await store.loadTill() }
+        }
+    }
+
+    @ViewBuilder
+    private func queueSections(store: TillStore, now: Date, selectable: Bool, loading: Bool) -> some View {
+        Section {
+            if store.till.isEmpty {
+                emptyQueue(store)
+                    .listRowSeparator(.hidden)
+            }
+            ForEach(store.till) { bill in
+                let amount = BillMath.computeBill(gst: bill.gross.gst, vat: bill.gross.vat, discount: 0, config: config).total
+                let row = TillQueueRow(bill: bill, amount: amount, now: now)
+                Group {
+                    if selectable {
+                        row.tag(bill.key)
+                    } else {
+                        NavigationLink(value: BillingRoute.till(bill.key)) { row }
+                    }
+                }
+                .skeleton(loading)
+            }
+        } header: {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Waiting to pay")
+                Spacer()
+                Text("\(store.till.count)")
+                    .monospacedDigit()
+                    .accessibilityLabel("\(store.till.count) waiting")
+            }
+            .skeleton(loading)
+        }
+        if let msg = store.tillError {
+            Section {
+                Label("Showing the last list: \(msg)", systemImage: "wifi.exclamationmark")
+                    .font(.footnote)
+                    .foregroundStyle(SN.red)
+            }
         }
     }
 
@@ -410,7 +416,6 @@ struct TillQueueRow: View {
     let bill: TillBill
     let amount: Int
     let now: Date
-    let selected: Bool
     @ScaledMetric(relativeTo: .headline) private var tileSize: CGFloat = 44
 
     var body: some View {
@@ -434,18 +439,9 @@ struct TillQueueRow: View {
                 .font(.headline)
                 .monospacedDigit()
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, selected ? 10 : 0)
-        .background {
-            if selected {
-                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(SN.panel)
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(SN.teal, lineWidth: 2))
-            }
-        }
-        .contentShape(Rectangle())
+        .padding(.vertical, 4)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
-        .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
         .accessibilityIdentifier("till-row-\(bill.tableNumber.map(String.init) ?? bill.anchorOrderId)")
     }
 
