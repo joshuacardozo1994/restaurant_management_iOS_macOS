@@ -188,6 +188,8 @@ struct Home: View {
             }
         }
         .listStyle(.sidebar)
+        // The selection is a quiet grey, as in Mail and Notes, not a loud accent fill
+        .tint(Color.secondary)
         .navigationTitle("")
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
