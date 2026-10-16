@@ -683,7 +683,7 @@ final class QAPlanUITests: XCTestCase {
         // The confirmation is an action sheet on iPhone, an alert elsewhere
         let inSheet = app.sheets.buttons["Sign Out"], inAlert = app.alerts.buttons["Sign Out"]
         if inSheet.waitForExistence(timeout: 3) { inSheet.tap() } else if inAlert.exists { inAlert.tap() }
-        XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 8), "Not back at the login screen")
+        XCTAssertTrue(app.buttons["loginSubmit"].waitForExistence(timeout: 8), "Not back at the login screen")
     }
 
     // 2.4 + 2.5: a Bill Generator bill with liquor and food prints GST and VAT and uploads
