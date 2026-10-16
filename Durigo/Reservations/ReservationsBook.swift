@@ -303,6 +303,8 @@ struct ReservationsAdminView: View {
                         Text("\(ReportDate.dayOfMonth(d))").font(.caption2.monospaced()).opacity(0.7)
                     }
                     .frame(minWidth: 40)
+                    // The screen's ink would otherwise win over the filled button's own label colour
+                    .foregroundStyle(on ? SN.page : SN.ink)
                     Group {
                         if on {
                             Button { date = d } label: { label }.buttonStyle(.borderedProminent).tint(SN.ink)

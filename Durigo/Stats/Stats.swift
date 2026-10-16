@@ -277,9 +277,9 @@ private struct PopularRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(kicker.uppercased())
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                Text(kicker)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text(title)
                     .font(.system(.body, weight: .medium))
                 Text(subtitle)

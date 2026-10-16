@@ -741,7 +741,7 @@ struct POSStageGroups: View {
             let lines = items.filter { DishStage(itemStatus: $0.status) == stage }
             if !lines.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    PanelLabel(text: stage.title).padding(.bottom, 2)
+                    PanelLabel(text: stage.title, small: true).padding(.bottom, 2)
                     ForEach(lines) { item in
                         POSBillLine(color: stage.color, quantity: item.quantity, name: item.displayName,
                                     variant: item.displayVariant, extras: item.modifiers?.summary,
@@ -948,7 +948,7 @@ struct TableBillPanel: View {
             let notes = table.liveOrders.compactMap(\.notes).filter { !$0.isEmpty }
             if !notes.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    PanelLabel(text: "Notes")
+                    PanelLabel(text: "Notes", small: true)
                     ForEach(Array(notes.enumerated()), id: \.offset) { _, n in
                         Text(n).font(.caption).foregroundStyle(SN.mut)
                     }

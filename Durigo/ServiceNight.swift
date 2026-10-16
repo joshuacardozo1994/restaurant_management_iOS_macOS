@@ -403,13 +403,16 @@ struct Panel<Content: View>: View {
     }
 }
 
+/// A section's heading, as the system sets a list's section header: title
+/// case, `.headline`, secondary. `small` for a heading inside a card or a
+/// table's column headers.
 struct PanelLabel: View {
     let text: String
+    var small = false
     var body: some View {
-        Text(text.uppercased())
-            .font(.caption2.monospaced().weight(.medium))
-            .tracking(1.1)
-            .foregroundStyle(SN.mut)
+        Text(text)
+            .font(small ? .subheadline.weight(.semibold) : .headline)
+            .foregroundStyle(.secondary)
     }
 }
 
@@ -719,7 +722,7 @@ private struct Lane: View {
     let color: Color
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased()).font(.caption2.monospaced().weight(.medium)).tracking(1)
+            Text(label).font(.subheadline.weight(.semibold))
             Text("\(value)").font(.system(.largeTitle, weight: .semibold)).monospacedDigit()
         }
         .foregroundStyle(color)

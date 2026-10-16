@@ -946,7 +946,7 @@ private struct MonthLayout: View {
             // One ForEach with distinct ids: a lazy grid drops cells whose ids repeat
             ForEach(cells(month: m, lead: lead), id: \.self) { cell in
               if cell.hasPrefix("h:") {
-                Text(String(cell.dropFirst(2)).uppercased()).font(.system(size: 9).monospaced()).foregroundStyle(SN.mut)
+                Text(String(cell.dropFirst(2))).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
               } else if cell.hasPrefix("b:") {
                 Color.clear.frame(height: 1)
               } else {

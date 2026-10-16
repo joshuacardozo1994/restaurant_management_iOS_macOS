@@ -404,7 +404,7 @@ struct KitchenRailView: View {
                     LazyVStack(spacing: 10) {
                         ForEach(main) { t in ticket(t, station: mainStation, compact: false, live: live) }
                         if view == .both && !bar.isEmpty {
-                            PanelLabel(text: "Bar · \(bar.count)").frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+                            PanelLabel(text: "Bar · \(bar.count)", small: true).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
                             ForEach(bar) { t in ticket(t, station: "bar", compact: true, live: live) }
                         }
                         if main.isEmpty && (view != .both || bar.isEmpty) { empty }
@@ -478,7 +478,7 @@ struct KitchenRailView: View {
 
     private func barStrip(_ bar: [KitchenBoard.Ticket], live: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) { Text("Bar").font(.subheadline.weight(.semibold)); Text("\(bar.count) ticket\(bar.count == 1 ? "" : "s")").font(.caption.monospaced()).foregroundStyle(SN.mut) }
+            PanelLabel(text: "Bar · \(bar.count) ticket\(bar.count == 1 ? "" : "s")")
             ScrollView([.horizontal, .vertical]) {
                 HStack(alignment: .top, spacing: 10) {
                     ForEach(bar) { t in ticket(t, station: "bar", compact: true, live: live).frame(width: 236) }

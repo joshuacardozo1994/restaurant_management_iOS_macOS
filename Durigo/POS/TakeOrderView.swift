@@ -790,7 +790,7 @@ struct TakeOrderView: View {
                     }
                     if !cart.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
-                            PanelLabel(text: "Not sent").padding(.bottom, 2)
+                            PanelLabel(text: "Not sent", small: true).padding(.bottom, 2)
                             ForEach(cart) { line in
                                 billCartRow(line)
                                 Rectangle().fill(SN.line).frame(height: 1)

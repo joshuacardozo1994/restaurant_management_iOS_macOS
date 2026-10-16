@@ -600,12 +600,12 @@ private enum LedgerColumns {
 private struct LedgerHeaderRow: View {
     var body: some View {
         HStack(spacing: 8) {
-            PanelLabel(text: "Bill").frame(width: LedgerColumns.bill, alignment: .leading)
-            PanelLabel(text: "Time").frame(width: LedgerColumns.time, alignment: .leading)
-            PanelLabel(text: "Where").frame(maxWidth: .infinity, alignment: .leading)
-            PanelLabel(text: "Waiter").frame(width: LedgerColumns.waiter, alignment: .leading)
-            PanelLabel(text: "Paid by").frame(width: LedgerColumns.paid, alignment: .leading)
-            PanelLabel(text: "Amount").frame(width: LedgerColumns.amount, alignment: .trailing)
+            PanelLabel(text: "Bill", small: true).frame(width: LedgerColumns.bill, alignment: .leading)
+            PanelLabel(text: "Time", small: true).frame(width: LedgerColumns.time, alignment: .leading)
+            PanelLabel(text: "Where", small: true).frame(maxWidth: .infinity, alignment: .leading)
+            PanelLabel(text: "Waiter", small: true).frame(width: LedgerColumns.waiter, alignment: .leading)
+            PanelLabel(text: "Paid by", small: true).frame(width: LedgerColumns.paid, alignment: .leading)
+            PanelLabel(text: "Amount", small: true).frame(width: LedgerColumns.amount, alignment: .trailing)
         }
         .listRowBackground(Color.clear)
         .accessibilityHidden(true)
@@ -798,7 +798,7 @@ struct LedgerDetailContent: View {
             PayBillTotals(amounts: bill.amounts, config: config, totalLabel: bill.paid ? "Paid" : "To pay")
             if bill.tenders.count > 1 {
                 VStack(alignment: .leading, spacing: 6) {
-                    PanelLabel(text: "Paid in parts")
+                    PanelLabel(text: "Paid in parts", small: true)
                     ForEach(bill.tenders, id: \.self) { t in
                         HStack {
                             Text(PayMethod.name(t.method))
