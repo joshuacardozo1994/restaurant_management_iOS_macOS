@@ -232,6 +232,10 @@ The pay pad is Form sections in every place it appears (Till on iPhone, iPad and
 
 The till's queue is a plain `List`: on iPad and Mac `List(selection:)` (the system highlight, arrow keys move between bills), on iPhone navigation links; no hand-drawn outline. ✅ iPad Pro 13" (tapping Table 8 moved the highlight and opened its bill), iPhone 17.
 
+### UI tests, 17 Oct
+
+`QAPlanUITests`: 20 of 20 pass on iPhone 17 (run with `TEST_RUNNER_QA_PASS` set). Brought in line with the native controls: stepper buttons by id (`cart-stepper-<dish>-Increment`), the menu editor found by search (pulling the list down shows the search field), long lists and the kitchen rail scrolled to the new item, the pay total as `pay-total` or `bill-to-pay`, the ⋯ menu closed again when an item is disabled, any free table with nothing on it (not a fixed number), the reservations view set to Book and the "Booked" alert dismissed, the API helper sending query strings as query items (a `?` in the path was escaped) and taking an empty DELETE reply. A UI test run can still stall the simulator now and then; shutting it down and booting it again clears it.
+
 ### Order of work
 
 1. Service screens on the real devices during a mock service: Bill Generator, POS, payment, Kitchen with the real printer.

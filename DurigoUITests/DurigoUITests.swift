@@ -527,7 +527,7 @@ final class POSPaymentUITests: XCTestCase {
         XCTAssertTrue(process.waitForExistence(timeout: 5), "No Pay on the table's bill")
         process.tap()
 
-        let total = app.staticTexts["pay-total"]
+        let total = app.staticTexts.matching(NSPredicate(format: "identifier IN {'pay-total', 'bill-to-pay'}")).firstMatch
         XCTAssertTrue(total.waitForExistence(timeout: 5))
         let before = Int(total.label.filter(\.isNumber)) ?? 0
 
@@ -763,9 +763,9 @@ final class QAPlanUITests: XCTestCase {
     // can cancel the whole order before it's served, which frees the table
     func testOrderWithExtrasThenCancelIt() throws {
         try launch(as: "waiter", tab: "pos")
-        selectTable(6)
-        let takeOrder = element("take-order-6")
-        XCTAssertTrue(takeOrder.waitForExistence(timeout: 5), "Table 6 isn't free")
+        // Any free table: a fixed number can be in use or merged by earlier runs
+        let n = try firstFreeTableOnScreen()
+        let takeOrder = element("take-order-\(n)")
         takeOrder.tap()
 
         let search = app.searchFields["Search menu"]
@@ -806,8 +806,8 @@ final class QAPlanUITests: XCTestCase {
         XCTAssertTrue(send.isEnabled, "Send to Kitchen is still disabled")
         send.tap()
 
-        let view = element("view-orders-6")
-        XCTAssertTrue(view.waitForExistence(timeout: 10), "Table 6 didn't become occupied")
+        let view = element("view-orders-\(n)")
+        XCTAssertTrue(view.waitForExistence(timeout: 10), "Table \(n) didn't become occupied")
         for _ in 0..<5 where !view.isHittable { app.swipeUp() }
         view.tap()
         XCTAssertTrue(app.staticTexts["+ Extra cheese"].waitForExistence(timeout: 8), "Extras missing on the order")
@@ -826,7 +826,8 @@ final class QAPlanUITests: XCTestCase {
 
         // The table's last order is gone, so it's free again (and still selected)
         if app.buttons["Close"].waitForExistence(timeout: 3) { app.buttons["Close"].tap() }
-        XCTAssertTrue(element("take-order-6").waitForExistence(timeout: 10), "Table 6 wasn't freed")
+        let freed = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == %@ AND label CONTAINS ', free'", "table-tile-\(n)")).firstMatch
+        XCTAssertTrue(freed.waitForExistence(timeout: 10), "Table \(n) wasn't freed")
     }
 
     // 6.9: the kitchen cancels a whole order from the card's ⋯ menu
@@ -834,7 +835,8 @@ final class QAPlanUITests: XCTestCase {
         let orderId = try placeTakeawayOrder()
         try launch(as: "kitchen", tab: "kitchen")
         let more = element("kitchen-more-\(orderId)")
-        XCTAssertTrue(more.waitForExistence(timeout: 15), "The new order isn't on the kitchen board")
+        // Oldest first: a new ticket can be far down a busy rail
+        XCTAssertTrue(reveal(more, timeout: 30), "The new order isn't on the kitchen board")
         for _ in 0..<6 where !more.isHittable { app.swipeUp() }
         more.tap()
         let cancel = app.buttons["Cancel order…"]
@@ -907,7 +909,9 @@ final class QAPlanUITests: XCTestCase {
         let done = XCTestExpectation()
         URLSession.shared.dataTask(with: req) { data, _, _ in result = data; done.fulfill() }.resume()
         _ = XCTWaiter.wait(for: [done], timeout: 10)
-        return try JSONSerialization.jsonObject(with: try XCTUnwrap(result))
+        // A DELETE can answer with no body
+        guard let result, !result.isEmpty else { return [String: Any]() }
+        return try JSONSerialization.jsonObject(with: result)
     }
 
     /// A session token for a QA account
@@ -1076,6 +1080,9 @@ extension QAPlanUITests {
         try launch(as: "admin", tab: "reservations")
         open("Reservations")
         let stamp = Int(Date().timeIntervalSince1970) % 100000
+        // The view chosen last time is kept: start from the Book
+        let bookView = app.segmentedControls.buttons["Book"].firstMatch
+        if bookView.waitForExistence(timeout: 10) { bookView.tap() }
         // Tomorrow's book: the new booking is for tomorrow, so its time is never past
         let tomorrowChip = element("day-1")
         XCTAssertTrue(tomorrowChip.waitForExistence(timeout: 10), "No day strip")
@@ -1087,13 +1094,15 @@ extension QAPlanUITests {
         XCTAssertTrue(phone.waitForExistence(timeout: 5), "The form doesn't start with the phone")
         phone.tap(); phone.typeText("9800011122")
         let nameField = app.textFields["reservation-form-name"]
-        nameField.tap(); nameField.typeText("QA Book \(stamp)")
+        // A known number fills in the regular's name: replace it, don't append
+        sleep(1)
+        replaceText(in: nameField, with: "QA Book \(stamp)")
         app.navigationBars.buttons["Book"].firstMatch.tap()
         let admin = try apiToken("admin")
         let tomorrow = Self.istDay(offset: 1)
         var booking: [String: Any]?
         for _ in 0..<10 {
-            let next = try call("/api/reservations/day?date=\(tomorrow)", token: admin) as? [String: Any]
+            let next = try call("/api/reservations/day", token: admin, query: [URLQueryItem(name: "date", value: tomorrow)]) as? [String: Any]
             booking = ((next?["bookings"] as? [[String: Any]]) ?? []).first { $0["name"] as? String == "QA Book \(stamp)" }
             if booking != nil { break }
             sleep(1)
@@ -1104,15 +1113,18 @@ extension QAPlanUITests {
 
         // Its row in tomorrow's book opens it, and Confirm saves
         let date = tomorrow
+        // "Booked … OK" first
+        let ok = app.alerts.buttons["OK"].firstMatch
+        if ok.waitForExistence(timeout: 3) { ok.tap() }
         let row = element("booking-\(id)")
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "The booking isn't in the book")
+        XCTAssertTrue(reveal(row), "The booking isn't in the book")
         row.tap()
         let confirm = app.buttons["Confirm"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), "No Confirm on the booking")
         confirm.tap()
         var status: String?
         for _ in 0..<10 {
-            let r = try call("/api/reservations/day?date=\(date)", token: admin) as? [String: Any]
+            let r = try call("/api/reservations/day", token: admin, query: [URLQueryItem(name: "date", value: date)]) as? [String: Any]
             status = ((r?["bookings"] as? [[String: Any]]) ?? []).first { $0["id"] as? String == id }?["status"] as? String
             if status == "CONFIRMED" { break }
             sleep(1)
@@ -1142,7 +1154,7 @@ extension QAPlanUITests {
         try launch(as: "admin", tab: "kitchen")
         open("Kitchen")
         let line = element("kitchen-line-\(itemId)")
-        XCTAssertTrue(line.waitForExistence(timeout: 15), "The new order isn't on the rail")
+        XCTAssertTrue(reveal(line, timeout: 30), "The new order isn't on the rail")
         for _ in 0..<6 where !line.isHittable { app.swipeUp() }
         line.tap()
         let cooking = NSPredicate(format: "label ENDSWITH 'cooking'")
@@ -1208,7 +1220,10 @@ extension QAPlanUITests {
     /// Selects the first free table on the floor (its bill then offers Take
     /// order and Reserve), scrolling to find one
     private func firstFreeTableOnScreen() throws -> Int {
-        let tile = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'table-tile-' AND label CONTAINS ', free'")).firstMatch
+        // The floor first draws placeholder tiles: wait for the real ones
+        _ = element("floor-filter").waitForExistence(timeout: 15)
+        sleep(2)
+        let tile = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'table-tile-' AND label CONTAINS ', free' AND NOT label CONTAINS 'merged' AND NOT label CONTAINS 'served' AND NOT label CONTAINS 'to do'")).firstMatch
         XCTAssertTrue(reveal(tile), "No free table")
         let number = try XCTUnwrap(Int(tile.identifier.replacingOccurrences(of: "table-tile-", with: "")))
         tile.tap()
@@ -1257,13 +1272,13 @@ extension QAPlanUITests {
         soda.tap()
         let stepper = element("cart-stepper-Soda")
         XCTAssertTrue(stepper.waitForExistence(timeout: 5), "No stepper on the cart line")
-        let plus = stepper.buttons["Increment"]
+        let plus = element("cart-stepper-Soda-Increment")
         // The search keyboard can cover the cart
         let returnKey = app.keyboards.buttons.matching(NSPredicate(format: "label IN {'search', 'Search', 'return', 'Return', 'done', 'Done'}")).firstMatch
         if returnKey.exists && returnKey.isHittable { returnKey.tap() }
         reveal(plus)
         plus.tap(); plus.tap()
-        stepper.buttons["Decrement"].tap()
+        element("cart-stepper-Soda-Decrement").tap()
         // ₹20 × 2
         XCTAssertTrue(app.staticTexts["₹40"].waitForExistence(timeout: 5), "Cart line isn't ₹40 for 2 sodas")
 
@@ -1341,11 +1356,12 @@ extension QAPlanUITests {
         let process = element("view-orders-\(number)")
         XCTAssertTrue(process.waitForExistence(timeout: 15), "Table \(number) has no Pay")
         process.tap()
-        let total = app.staticTexts["pay-total"]
+        let total = app.staticTexts.matching(NSPredicate(format: "identifier IN {'pay-total', 'bill-to-pay'}")).firstMatch
         XCTAssertTrue(total.waitForExistence(timeout: 8))
         let before = Int(total.label.filter(\.isNumber)) ?? 0
         let amount = app.textFields["pay-discount-field"]
-        XCTAssertTrue(amount.waitForExistence(timeout: 5), "No ₹ discount field for the cashier")
+        // The pad is lower in the bill's list: scroll to it
+        XCTAssertTrue(reveal(amount), "No ₹ discount field for the cashier")
         amount.tap()
         amount.typeText("10")
         let after = before - 10
@@ -1387,7 +1403,7 @@ extension QAPlanUITests {
         for _ in 0..<6 where !row.isHittable { app.swipeUp() }
         row.tap()
 
-        let total = app.staticTexts["pay-total"]
+        let total = app.staticTexts.matching(NSPredicate(format: "identifier IN {'pay-total', 'bill-to-pay'}")).firstMatch
         XCTAssertTrue(total.waitForExistence(timeout: 8))
         let before = Int(total.label.filter(\.isNumber)) ?? 0
         let discount = app.textFields["pay-discount-field"]
@@ -1430,7 +1446,13 @@ extension QAPlanUITests {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Category'")).firstMatch.tap()
         app.buttons["Beverages"].firstMatch.tap()
         app.buttons["Save"].tap()
-        XCTAssertTrue(app.staticTexts["QA Menu \(stamp)"].waitForExistence(timeout: 10), "New item not in the menu list")
+        // A long menu only builds the rows on screen: search for it
+        let find = app.searchFields.firstMatch
+        // On a phone the search field hides until the list is pulled down
+        if !find.waitForExistence(timeout: 3) { app.swipeDown(velocity: .slow) }
+        if find.waitForExistence(timeout: 5) { find.tap(); find.typeText("QA Menu \(stamp)") }
+        let newRow = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "QA Menu \(stamp)")).firstMatch
+        XCTAssertTrue(newRow.waitForExistence(timeout: 10), "New item not in the menu list")
 
         let admin = try apiToken("admin")
         let menu = try XCTUnwrap(call("/api/admin/menu", token: admin) as? [[String: Any]])
@@ -1576,7 +1598,7 @@ final class ScreenTourUITests: XCTestCase {
         let pos = app.tabBars.buttons["POS"].exists ? app.tabBars.buttons["POS"] : app.buttons["POS"].firstMatch
         pos.tap(); sleep(3)
         shot("04-pos-tables")
-        let free = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'table-tile-' AND label CONTAINS ', free'")).firstMatch
+        let free = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'table-tile-' AND label CONTAINS ', free' AND NOT label CONTAINS 'merged' AND NOT label CONTAINS 'served' AND NOT label CONTAINS 'to do'")).firstMatch
         if free.waitForExistence(timeout: 5) { free.tap(); sleep(1); shot("04b-pos-free-table") }
         let take = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'take-order-'")).firstMatch
         if take.waitForExistence(timeout: 5) {
@@ -1708,7 +1730,11 @@ extension XCUIApplication {
         guard more.waitForExistence(timeout: timeout) else { return false }
         more.tap()
         let button = buttons[item].firstMatch
-        guard button.waitForExistence(timeout: 3), button.isEnabled else { return false }
+        guard button.waitForExistence(timeout: 3), button.isEnabled else {
+            // Close the menu again so the next tap reaches the screen
+            coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
+            return false
+        }
         button.tap()
         return true
     }
