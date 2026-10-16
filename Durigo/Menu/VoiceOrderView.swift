@@ -120,9 +120,9 @@ struct VoiceOrderView: View {
                 )
             }
         }
-        .alert("Microphone Permission Required", isPresented: $showPermissionAlert) {
-            Button("OK", role: .cancel) {}
-            Button("Settings") {
+        .alert("Voice ordering is off", isPresented: $showPermissionAlert) {
+            Button("Not now", role: .cancel) {}
+            Button("Open Settings") {
                 #if os(iOS)
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
@@ -135,7 +135,7 @@ struct VoiceOrderView: View {
                 #endif
             }
         } message: {
-            Text("Please enable microphone access in Settings to use voice ordering.")
+            Text("It needs the microphone and speech recognition. Turn both on for Durigo in Settings, or add dishes from the menu instead.")
         }
         .onAppear {
             requestPermissions()
