@@ -200,7 +200,7 @@ final class DurigoUITests: XCTestCase {
         let textFieldPredicate = NSPredicate(format: "identifier BEGINSWITH 'menu-item-name-TextField'")
         let textField = app.textFields.matching(textFieldPredicate).firstMatch
         textField.tap()
-        app.buttons["clearBill"].tap()
+        XCTAssertTrue(app.tapOverflow("clearBill"))
         
         let alert = app.alerts.firstMatch
         
@@ -595,11 +595,7 @@ final class ManageTablesUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.staticTexts["Floor"].waitForExistence(timeout: 15))
-        // The ⋯ menu in the floor's header
-        let menu = app.descendants(matching: .any).matching(identifier: "pos-new-menu").firstMatch
-        XCTAssertTrue(menu.waitForExistence(timeout: 5))
-        menu.tap()
-        app.buttons["Manage Tables"].tap()
+        XCTAssertTrue(app.tapOverflow("Manage Tables"))
 
         let add = app.buttons["manage-add-table"]
         XCTAssertTrue(add.waitForExistence(timeout: 5))
@@ -693,12 +689,13 @@ final class QAPlanUITests: XCTestCase {
     // 2.4 + 2.5: a Bill Generator bill with liquor and food prints GST and VAT and uploads
     func testBillGeneratorBillShowsGSTAndVATAndUploads() throws {
         try launch(as: "admin", tab: "pos")
-        let generator = app.buttons["Bill Generator"]
-        XCTAssertTrue(generator.waitForExistence(timeout: 10))
-        generator.tap()
+        XCTAssertTrue(app.tapOverflow("Bill Generator"))
 
-        let clear = app.buttons["clearBill"]
-        if clear.waitForExistence(timeout: 3), clear.isEnabled { clear.tap() }
+        // Clear sits in the Bill Generator's overflow
+        if app.tapOverflow("clearBill", timeout: 5) {
+            let confirm = app.alerts.buttons["Clear"]
+            if confirm.waitForExistence(timeout: 3) { confirm.tap() }
+        }
 
         let addItem = app.buttons["addItemButton"]
         XCTAssertTrue(addItem.waitForExistence(timeout: 5))
@@ -771,7 +768,7 @@ final class QAPlanUITests: XCTestCase {
         XCTAssertTrue(takeOrder.waitForExistence(timeout: 5), "Table 6 isn't free")
         takeOrder.tap()
 
-        let search = app.textFields["Search menu"]
+        let search = app.searchFields["Search menu"]
         XCTAssertTrue(search.waitForExistence(timeout: 8))
         search.tap()
         search.typeText("Veg. Soup")
@@ -861,10 +858,9 @@ final class QAPlanUITests: XCTestCase {
     // (the script after the run checks the database for QA_TAKEAWAY_PHONE)
     func testTakeawayWithCustomer() throws {
         try launch(as: "waiter", tab: "pos")
-        let newMenu = element("pos-new-menu")
-        XCTAssertTrue(newMenu.waitForExistence(timeout: 15))
-        newMenu.tap()
-        app.buttons["Takeaway Order"].tap()
+        let takeaway = element("pos-new-takeaway")
+        XCTAssertTrue(takeaway.waitForExistence(timeout: 15))
+        takeaway.tap()
 
         let phone = app.textFields["takeaway-customer-phone"]
         XCTAssertTrue(phone.waitForExistence(timeout: 8), "No customer fields on takeaway")
@@ -875,7 +871,7 @@ final class QAPlanUITests: XCTestCase {
         name.tap()
         name.typeText("QA Takeaway")
 
-        let search = app.textFields["Search menu"]
+        let search = app.searchFields["Search menu"]
         search.tap()
         search.typeText("Veg. Soup")
         let soupRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Veg. Soup,'")).firstMatch
@@ -993,7 +989,7 @@ extension QAPlanUITests {
         let users = try XCTUnwrap(call("/api/admin/users", token: admin) as? [[String: Any]])
         let waiterId = try XCTUnwrap(users.first { $0["username"] as? String == "qa-waiter" }?["id"] as? String)
         try launch(as: "waiter", tab: "pos")
-        XCTAssertTrue(element("pos-new-menu").waitForExistence(timeout: 15), "POS didn't load")
+        XCTAssertTrue(element("pos-new-takeaway").waitForExistence(timeout: 15), "POS didn't load")
         _ = try call("/api/admin/users/\(waiterId)/toggle-active", ["active": false], token: admin, method: "PATCH")
         addTeardownBlock { [self] in
             _ = try? call("/api/admin/users/\(waiterId)/toggle-active", ["active": true], token: admin, method: "PATCH")
@@ -1250,20 +1246,21 @@ extension QAPlanUITests {
         let beverages = element("category-chip-Beverages")
         XCTAssertTrue(beverages.waitForExistence(timeout: 8), "No category chips")
         beverages.tap()
-        let search = app.textFields["Search menu"]
+        let search = app.searchFields["Search menu"]
         search.tap()
         search.typeText("Soda")
         let soda = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Soda,'")).firstMatch
         XCTAssertTrue(soda.waitForExistence(timeout: 5), "Soda isn't under Beverages")
         soda.tap()
-        let plus = element("cart-plus-Soda")
-        XCTAssertTrue(plus.waitForExistence(timeout: 5), "No + on the cart line")
+        let stepper = element("cart-stepper-Soda")
+        XCTAssertTrue(stepper.waitForExistence(timeout: 5), "No stepper on the cart line")
+        let plus = stepper.buttons["Increment"]
         // The search keyboard can cover the cart
         let returnKey = app.keyboards.buttons.matching(NSPredicate(format: "label IN {'search', 'Search', 'return', 'Return', 'done', 'Done'}")).firstMatch
         if returnKey.exists && returnKey.isHittable { returnKey.tap() }
         reveal(plus)
         plus.tap(); plus.tap()
-        element("cart-minus-Soda").tap()
+        stepper.buttons["Decrement"].tap()
         // ₹20 × 2
         XCTAssertTrue(app.staticTexts["₹40"].waitForExistence(timeout: 5), "Cart line isn't ₹40 for 2 sodas")
 
@@ -1444,7 +1441,7 @@ extension QAPlanUITests {
         pos.tap()
         let number = try firstFreeTableOnScreen()
         element("take-order-\(number)").tap()
-        let search = app.textFields["Search menu"]
+        let search = app.searchFields["Search menu"]
         XCTAssertTrue(search.waitForExistence(timeout: 8))
         search.tap(); search.typeText("QA Menu \(stamp)")
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'QA Menu \(stamp)'")).firstMatch
@@ -1458,10 +1455,7 @@ extension QAPlanUITests {
         let first = try freeTableNumber()
         let second = try freeTableNumber(excluding: [first])
         try launch(as: "admin", tab: "pos")
-        let menu = element("pos-new-menu")
-        XCTAssertTrue(menu.waitForExistence(timeout: 15))
-        menu.tap()
-        app.buttons["Merge Tables"].tap()
+        XCTAssertTrue(app.tapOverflow("Merge Tables"))
         for n in [first, second] {
             let row = element("merge-row-\(n)")
             XCTAssertTrue(reveal(row), "Table \(n) isn't offered for merging")
@@ -1481,8 +1475,7 @@ extension QAPlanUITests {
         let merged = try XCTUnwrap(id, "Tables \(first) and \(second) weren't merged on the server")
         screenshot("tables-merged")
 
-        menu.tap()
-        app.buttons["Merge Tables"].tap()
+        XCTAssertTrue(app.tapOverflow("Merge Tables"))
         let unmerge = element("unmerge-\(merged)")
         XCTAssertTrue(unmerge.waitForExistence(timeout: 8), "The new group isn't listed to unmerge")
         unmerge.tap()
@@ -1702,3 +1695,18 @@ final class MacKeyboardUITests: XCTestCase {
     }
 }
 #endif
+
+extension XCUIApplication {
+    /// Opens the navigation bar's ⋯ overflow and taps an item in it (by label
+    /// or identifier). False when the item isn't there or is disabled.
+    @discardableResult
+    func tapOverflow(_ item: String, timeout: TimeInterval = 15) -> Bool {
+        let more = navigationBars.buttons["More"].firstMatch
+        guard more.waitForExistence(timeout: timeout) else { return false }
+        more.tap()
+        let button = buttons[item].firstMatch
+        guard button.waitForExistence(timeout: 3), button.isEnabled else { return false }
+        button.tap()
+        return true
+    }
+}

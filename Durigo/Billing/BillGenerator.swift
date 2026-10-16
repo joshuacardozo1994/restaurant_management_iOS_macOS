@@ -361,29 +361,18 @@ struct BillGenerator: View {
                 }
                 Button("Cancel", role: .cancel) {}
             }
-            #if os(iOS)
-            .toolbar {
-                ToolbarItemGroup(placement: .navigationBarLeading) {
-                    clearButton
-                    addItemButton
-                }
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    menuButton
-                    printButton
-                }
-            }
-            #else
+            // Trailing, so a pushed Bill Generator keeps its back button;
+            // Clear goes in the overflow, away from Print
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
-                    clearButton
-                    addItemButton
-                }
-                ToolbarItemGroup(placement: .secondaryAction) {
                     menuButton
+                    addItemButton
                     printButton
                 }
+                ToolbarItem(placement: .secondaryAction) {
+                    clearButton
+                }
             }
-            #endif
             .task {
                 await menuLoader.loadMenu()
             }
@@ -519,7 +508,7 @@ struct BillGenerator: View {
         #endif
             showingBillClearAlert.toggle()
         }) {
-            Image(systemName: "trash")
+            Label("Clear bill", systemImage: "trash")
         }
         .disabled(menuLoader.billItems.isEmpty)
         .accessibilityIdentifier("clearBill")
@@ -529,7 +518,7 @@ struct BillGenerator: View {
         Button(action: {
             menuLoader.billItems.append(MenuItem(id: UUID(), name: "", quantity: 1, price: 0))
         }) {
-            Image(systemName: "plus.circle")
+            Label("Add item", systemImage: "plus")
         }
         .accessibilityIdentifier("addItemButton")
     }
@@ -538,7 +527,7 @@ struct BillGenerator: View {
         Button(action: {
             isShowingMenuList.toggle()
         }) {
-            Image(systemName: "book.pages")
+            Label("Menu", systemImage: "book.pages")
         }
         .accessibilityIdentifier("showMenuButton")
     }
@@ -555,7 +544,7 @@ struct BillGenerator: View {
                 customerPhone: trimmedOrNil(menuLoader.customerPhone)
             )
         } label: {
-            Image(systemName: "printer")
+            Label("Preview and print", systemImage: "printer")
         }
         .disabled(
             menuLoader.billItems.isEmpty

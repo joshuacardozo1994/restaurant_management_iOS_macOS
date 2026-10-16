@@ -128,14 +128,14 @@ struct TableMergeView: View {
             toggleSelection(table.id)
         } label: {
             LabeledContent {
-                if isSelected { Image(systemName: "checkmark").foregroundStyle(.tint).fontWeight(.semibold) }
+                if isSelected { Image(systemName: "checkmark").foregroundStyle(Color.accentColor).fontWeight(.semibold) }
             } label: {
                 Text("Table \(table.number)")
                 Text("\(table.capacity) seats · \(table.statusEnum.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)")
             }
             .contentShape(Rectangle())
         }
-        .foregroundStyle(.primary)
+        .tint(.primary)
         .accessibilityIdentifier("merge-row-\(table.number)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

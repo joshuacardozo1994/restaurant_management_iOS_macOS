@@ -507,100 +507,88 @@ struct UsersAdminView: View {
 
     @ViewBuilder
     private func content(store: UsersStore) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                if let msg = store.errorMessage { errorBanner(msg) }
-                if !store.hasLoaded && store.items.isEmpty {
-                    // Loading: sample staff in the real sections, as placeholders
-                    VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                        ForEach(["ADMIN", "WAITER", "KITCHEN", "CASHIER"], id: \.self) { role in
-                            roleSection(role: role, users: AdminUserModel.sample.filter { $0.role == role })
-                        }
-                    }
-                    .skeleton(true)
-                    .accessibilityIdentifier("users-loading")
-                } else if store.items.isEmpty {
-                    emptyState
-                } else {
-                    ForEach(store.groupedByRole, id: \.role) { group in
-                        roleSection(role: group.role, users: group.users)
-                    }
+        List {
+            if let msg = store.errorMessage {
+                Section {
+                    Label(msg, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
                 }
             }
-            .padding(DesignTokens.spacingL)
+            if !store.hasLoaded && store.items.isEmpty {
+                // Loading: sample staff in the real sections, as placeholders
+                ForEach(["ADMIN", "WAITER", "KITCHEN", "CASHIER"], id: \.self) { role in
+                    roleSection(role: role, users: AdminUserModel.sample.filter { $0.role == role }, loading: true)
+                }
+            } else {
+                ForEach(store.groupedByRole, id: \.role) { group in
+                    roleSection(role: group.role, users: group.users, loading: false)
+                }
+            }
         }
-        .background(Color(.systemGroupedBackground))
+        #if os(iOS)
+        .listStyle(.insetGrouped)
+        #else
+        .listStyle(.inset)
+        #endif
+        .overlay {
+            if store.hasLoaded && store.items.isEmpty && store.errorMessage == nil {
+                ContentUnavailableView(
+                    "No users yet",
+                    systemImage: "person.crop.circle.badge.plus",
+                    description: Text("Tap + to add an admin, waiter, kitchen, or cashier account.")
+                )
+            }
+        }
     }
 
-    private func roleSection(role: String, users: [AdminUserModel]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+    private func roleSection(role: String, users: [AdminUserModel], loading: Bool) -> some View {
+        Section {
+            ForEach(users) { user in
+                userRow(user, deletable: !loading)
+            }
+            .loadingPlaceholder(loading, id: "users-loading")
+        } header: {
             HStack {
                 Text(roleTitle(role))
-                    .font(.system(.headline, weight: .semibold))
                 Spacer()
-                Text("\(users.count)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, DesignTokens.spacingL)
-            .padding(.top, DesignTokens.spacingL)
-            .padding(.bottom, DesignTokens.spacingS)
-
-            ForEach(Array(users.enumerated()), id: \.element.id) { idx, user in
-                userRow(user)
-                if idx < users.count - 1 {
-                    Divider()
-                        .background(Color.primary.opacity(DesignTokens.borderOpacity))
-                        .padding(.leading, DesignTokens.spacingL)
-                }
+                if !loading { Text("\(users.count)") }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .webCardBackground()
     }
 
-    private func userRow(_ user: AdminUserModel) -> some View {
+    private func userRow(_ user: AdminUserModel, deletable: Bool) -> some View {
         Button {
             editing = user
         } label: {
             HStack(spacing: DesignTokens.spacingM) {
-                ZStack {
-                    Circle()
-                        .fill(Color.primary.opacity(0.08))
-                        .frame(width: 36, height: 36)
-                    Text(initials(user.name))
-                        .font(.system(.subheadline, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
+                Text(initials(user.name))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.primary.opacity(0.08)))
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(user.name)
-                            .font(.system(.body, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        if !user.active {
-                            Text("Inactive")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.primary.opacity(0.08)))
-                        }
-                    }
+                    Text(user.name)
+                        .font(.headline)
                     Text("@\(user.username) · \(user.email)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 Spacer()
+                if !user.active {
+                    Text("Inactive")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(.horizontal, DesignTokens.spacingL)
-            .padding(.vertical, DesignTokens.spacingM)
-            .contentShape(Rectangle())
+            .adminRowLabel()
         }
-        .buttonStyle(.plain)
+        .adminRowButton()
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) { deleteCandidate = user } label: {
-                Label("Delete", systemImage: "trash")
+            if deletable {
+                Button(role: .destructive) { deleteCandidate = user } label: {
+                    Label("Delete", systemImage: "trash")
+                }
             }
         }
     }
@@ -619,31 +607,39 @@ struct UsersAdminView: View {
         let parts = name.split(separator: " ").compactMap { $0.first.map(String.init) }
         return parts.prefix(2).joined().uppercased()
     }
+}
 
-    private var emptyState: some View {
-        VStack(spacing: DesignTokens.spacingM) {
-            Image(systemName: "person.crop.circle.badge.plus")
-                .font(.system(size: 36, weight: .light))
-                .foregroundStyle(.secondary)
-            Text("No users yet").font(.headline)
-            Text("Tap + to add an admin, waiter, kitchen, or cashier account.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(DesignTokens.spacing2XL)
+/// Rows of the admin Lists (Users, Discounts, Modifiers, Inventory): a whole-row
+/// tap that opens the editor. On iOS the List's own button row (full-width
+/// highlight); on macOS a default Button in a List draws as a push button, so a
+/// plain one whose hit area is the whole row.
+private extension View {
+    func adminRowButton() -> some View {
+        #if os(macOS)
+        buttonStyle(.plain)
+        #else
+        // A List button paints its label in the accent colour; these are rows, not links
+        tint(.primary)
+        #endif
     }
 
-    private func errorBanner(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: DesignTokens.spacingS) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
-            Text(message).font(.subheadline)
-            Spacer()
+    /// Sample rows shown while the first load runs: shimmering placeholders
+    /// carrying the screen's loading identifier.
+    @ViewBuilder
+    func loadingPlaceholder(_ active: Bool, id: String) -> some View {
+        if active {
+            skeleton(true).accessibilityIdentifier(id)
+        } else {
+            self
         }
-        .padding(DesignTokens.spacingM)
-        .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous).fill(Color.red.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous).stroke(Color.red.opacity(0.25), lineWidth: 1))
+    }
+
+    func adminRowLabel() -> some View {
+        #if os(macOS)
+        foregroundStyle(.primary).contentShape(Rectangle())
+        #else
+        foregroundStyle(.primary)
+        #endif
     }
 }
 
@@ -885,85 +881,82 @@ struct DiscountsAdminView: View {
 
     @ViewBuilder
     private func content(store: DiscountsStore) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                if let msg = store.errorMessage {
-                    HStack { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red); Text(msg).font(.subheadline); Spacer() }
-                        .padding(DesignTokens.spacingM)
-                        .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous).fill(Color.red.opacity(0.08)))
-                }
-                if !store.hasLoaded && store.items.isEmpty {
-                    // Loading: sample discounts in the real card, as placeholders
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(AdminDiscount.sample) { d in
-                            discountRow(d)
-                            Divider().background(Color.primary.opacity(DesignTokens.borderOpacity)).padding(.leading, DesignTokens.spacingL)
-                        }
-                    }
-                    .webCardBackground()
-                    .skeleton(true)
-                    .accessibilityIdentifier("discounts-loading")
-                } else if store.items.isEmpty {
-                    VStack(spacing: DesignTokens.spacingM) {
-                        Image(systemName: "ticket").font(.system(size: 36, weight: .light)).foregroundStyle(.secondary)
-                        Text("No discounts yet").font(.headline)
-                        Text("Promo codes like WELCOME10 go here.")
-                            .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity).padding(DesignTokens.spacing2XL)
-                } else {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(store.items.enumerated()), id: \.element.id) { idx, d in
-                            discountRow(d)
-                            if idx < store.items.count - 1 {
-                                Divider().background(Color.primary.opacity(DesignTokens.borderOpacity)).padding(.leading, DesignTokens.spacingL)
-                            }
-                        }
-                    }
-                    .webCardBackground()
+        List {
+            if let msg = store.errorMessage {
+                Section {
+                    Label(msg, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
                 }
             }
-            .padding(DesignTokens.spacingL)
+            if !store.hasLoaded && store.items.isEmpty {
+                // Loading: sample discounts in the real section, as placeholders
+                Section {
+                    ForEach(AdminDiscount.sample) { d in discountRow(d, deletable: false) }
+                        .loadingPlaceholder(true, id: "discounts-loading")
+                } header: {
+                    Text("Codes")
+                }
+            } else if !store.items.isEmpty {
+                Section {
+                    ForEach(store.items) { d in discountRow(d, deletable: true) }
+                } header: {
+                    HStack {
+                        Text("Codes")
+                        Spacer()
+                        Text("\(store.items.count)")
+                    }
+                }
+            }
         }
-        .background(Color(.systemGroupedBackground))
+        #if os(iOS)
+        .listStyle(.insetGrouped)
+        #else
+        .listStyle(.inset)
+        #endif
+        .overlay {
+            if store.hasLoaded && store.items.isEmpty && store.errorMessage == nil {
+                ContentUnavailableView(
+                    "No discounts yet",
+                    systemImage: "ticket",
+                    description: Text("Promo codes like WELCOME10 go here.")
+                )
+            }
+        }
     }
 
-    private func discountRow(_ d: AdminDiscount) -> some View {
+    private func discountRow(_ d: AdminDiscount, deletable: Bool) -> some View {
         Button {
             editing = d
         } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(d.code).font(.system(.body, design: .monospaced, weight: .bold))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: DesignTokens.spacingS) {
+                    Text(d.code).font(.headline.monospaced())
                     if !d.active {
-                        Text("Inactive").font(.caption2).foregroundStyle(.secondary)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Capsule().fill(Color.primary.opacity(0.08)))
+                        Text("Inactive").font(.subheadline).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Text(formatValue(d)).font(.system(.body, weight: .semibold)).foregroundStyle(.green)
+                    Text(formatValue(d)).font(.headline).foregroundStyle(.green)
                 }
-                Text(d.name).font(.subheadline).foregroundStyle(.primary)
+                Text(d.name).font(.subheadline)
                 if let desc = d.description, !desc.isEmpty {
                     Text(desc).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }
-                HStack(spacing: 8) {
-                    if let limit = d.usageLimit {
-                        Text("\(d.usageCount)/\(limit) used").font(.caption2).foregroundStyle(.secondary)
-                    } else {
-                        Text("\(d.usageCount) used").font(.caption2).foregroundStyle(.secondary)
-                    }
-                    if let until = d.validUntil { Text("· valid until \(formatDate(until))").font(.caption2).foregroundStyle(.secondary) }
-                }
+                Text(usageText(d)).font(.caption).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, DesignTokens.spacingL).padding(.vertical, DesignTokens.spacingM)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+            .adminRowLabel()
         }
-        .buttonStyle(.plain)
+        .adminRowButton()
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) { deleteCandidate = d } label: { Label("Delete", systemImage: "trash") }
+            if deletable {
+                Button(role: .destructive) { deleteCandidate = d } label: { Label("Delete", systemImage: "trash") }
+            }
         }
+    }
+
+    private func usageText(_ d: AdminDiscount) -> String {
+        let used = d.usageLimit.map { "\(d.usageCount)/\($0) used" } ?? "\(d.usageCount) used"
+        guard let until = d.validUntil else { return used }
+        return "\(used) · valid until \(formatDate(until))"
     }
 
     private func formatValue(_ d: AdminDiscount) -> String {
@@ -1275,96 +1268,89 @@ struct ModifiersAdminView: View {
 
     @ViewBuilder
     private func content(store: ModifiersStore) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                if let msg = store.errorMessage {
-                    HStack { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red); Text(msg).font(.subheadline); Spacer() }
-                        .padding(DesignTokens.spacingM)
-                        .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous).fill(Color.red.opacity(0.08)))
-                }
-                if !store.hasLoaded && store.items.isEmpty {
-                    // Loading: sample modifiers in the real sections, as placeholders
-                    VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                        ForEach(["ADD", "REMOVE", "SPECIAL"], id: \.self) { type in
-                            modSection(type: type, mods: AdminModifier.sample.filter { $0.type == type })
-                        }
-                    }
-                    .skeleton(true)
-                    .accessibilityIdentifier("modifiers-loading")
-                } else if store.items.isEmpty {
-                    VStack(spacing: DesignTokens.spacingM) {
-                        Image(systemName: "tag").font(.system(size: 36, weight: .light)).foregroundStyle(.secondary)
-                        Text("No modifiers yet").font(.headline)
-                        Text("Add-ons (extra cheese), removals (no onion), and substitutions live here.")
-                            .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity).padding(DesignTokens.spacing2XL)
-                } else {
-                    ForEach(store.groupedByType, id: \.type) { group in
-                        modSection(type: group.type, mods: group.mods)
-                    }
+        List {
+            if let msg = store.errorMessage {
+                Section {
+                    Label(msg, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
                 }
             }
-            .padding(DesignTokens.spacingL)
+            if !store.hasLoaded && store.items.isEmpty {
+                // Loading: sample modifiers in the real sections, as placeholders
+                ForEach(["ADD", "REMOVE", "SPECIAL"], id: \.self) { type in
+                    modSection(type: type, mods: AdminModifier.sample.filter { $0.type == type }, loading: true)
+                }
+            } else {
+                ForEach(store.groupedByType, id: \.type) { group in
+                    modSection(type: group.type, mods: group.mods, loading: false)
+                }
+            }
         }
-        .background(Color(.systemGroupedBackground))
+        #if os(iOS)
+        .listStyle(.insetGrouped)
+        #else
+        .listStyle(.inset)
+        #endif
+        .overlay {
+            if store.hasLoaded && store.items.isEmpty && store.errorMessage == nil {
+                ContentUnavailableView(
+                    "No modifiers yet",
+                    systemImage: "tag",
+                    description: Text("Add-ons (extra cheese), removals (no onion), and substitutions live here.")
+                )
+            }
+        }
     }
 
-    private func modSection(type: String, mods: [AdminModifier]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+    private func modSection(type: String, mods: [AdminModifier], loading: Bool) -> some View {
+        Section {
+            ForEach(mods) { m in modRow(m, deletable: !loading) }
+                .loadingPlaceholder(loading, id: "modifiers-loading")
+        } header: {
             HStack {
-                Text(typeTitle(type)).font(.system(.headline, weight: .semibold))
+                Text(typeTitle(type))
                 Spacer()
-                Text("\(mods.count)").font(.caption).foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, DesignTokens.spacingL).padding(.top, DesignTokens.spacingL).padding(.bottom, DesignTokens.spacingS)
-
-            ForEach(Array(mods.enumerated()), id: \.element.id) { idx, m in
-                modRow(m)
-                if idx < mods.count - 1 {
-                    Divider().background(Color.primary.opacity(DesignTokens.borderOpacity)).padding(.leading, DesignTokens.spacingL)
-                }
+                if !loading { Text("\(mods.count)") }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .webCardBackground()
     }
 
-    private func modRow(_ m: AdminModifier) -> some View {
+    private func modRow(_ m: AdminModifier, deletable: Bool) -> some View {
         Button {
             editing = m
         } label: {
             HStack(spacing: DesignTokens.spacingM) {
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(m.name).font(.system(.body, weight: .semibold)).foregroundStyle(.primary)
+                    HStack(spacing: DesignTokens.spacingS) {
+                        Text(m.name).font(.headline)
                         if !m.active {
-                            Text("Inactive").font(.caption2).foregroundStyle(.secondary)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Capsule().fill(Color.primary.opacity(0.08)))
+                            Text("Inactive").font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
-                    HStack(spacing: 6) {
-                        if let cat = m.category { Text(cat.name).font(.caption2).foregroundStyle(.secondary) }
-                        else { Text("All categories").font(.caption2).foregroundStyle(.secondary) }
-                        if let desc = m.description, !desc.isEmpty {
-                            Text("·").font(.caption2).foregroundStyle(.secondary)
-                            Text(desc).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }
+                    Text(modSubtitle(m))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 Spacer()
                 Text(m.price > 0 ? "+\((m.price).rupees)" : (m.price == 0 ? "Free" : "−\((-m.price).rupees)"))
-                    .font(.system(.body, design: .rounded, weight: .semibold))
+                    .font(.headline.monospacedDigit())
                     .foregroundStyle(m.price > 0 ? .primary : .secondary)
             }
-            .padding(.horizontal, DesignTokens.spacingL).padding(.vertical, DesignTokens.spacingM)
-            .contentShape(Rectangle())
+            .adminRowLabel()
         }
-        .buttonStyle(.plain)
+        .adminRowButton()
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) { deleteCandidate = m } label: { Label("Delete", systemImage: "trash") }
+            if deletable {
+                Button(role: .destructive) { deleteCandidate = m } label: { Label("Delete", systemImage: "trash") }
+            }
         }
+    }
+
+    private func modSubtitle(_ m: AdminModifier) -> String {
+        let scope = m.category?.name ?? "All categories"
+        guard let desc = m.description, !desc.isEmpty else { return scope }
+        return "\(scope) · \(desc)"
     }
 
     private func typeTitle(_ t: String) -> String {
@@ -1871,65 +1857,76 @@ struct InventoryAdminView: View {
 
     @ViewBuilder
     private func content(store: InventoryStore) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                if let msg = store.errorMessage {
-                    HStack { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red); Text(msg).font(.subheadline); Spacer() }
-                        .padding(DesignTokens.spacingM)
-                        .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall).fill(Color.red.opacity(0.08)))
-                }
-                if !store.hasLoaded && store.items.isEmpty {
-                    // Loading: sample ingredients in the real cards, as placeholders
-                    VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                        ForEach(AdminIngredient.sample) { ing in ingredientCard(ing) }
-                    }
-                    .skeleton(true)
-                    .accessibilityIdentifier("inventory-loading")
-                } else if store.items.isEmpty {
-                    VStack(spacing: DesignTokens.spacingM) {
-                        Image(systemName: "shippingbox").font(.system(size: 36, weight: .light)).foregroundStyle(.secondary)
-                        Text("No ingredients yet").font(.headline)
-                        Text("Tap + to add an ingredient to track.").font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity).padding(DesignTokens.spacing2XL)
-                } else {
-                    ForEach(store.items) { ing in ingredientCard(ing) }
+        List {
+            if let msg = store.errorMessage {
+                Section {
+                    Label(msg, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
                 }
             }
-            .padding(DesignTokens.spacingL)
+            if !store.hasLoaded && store.items.isEmpty {
+                // Loading: sample ingredients in the real section, as placeholders
+                Section {
+                    ForEach(AdminIngredient.sample) { ing in ingredientRow(ing, deletable: false) }
+                        .loadingPlaceholder(true, id: "inventory-loading")
+                } header: {
+                    Text("Ingredients")
+                }
+            } else if !store.items.isEmpty {
+                Section {
+                    ForEach(store.items) { ing in ingredientRow(ing, deletable: true) }
+                } header: {
+                    HStack {
+                        Text("Ingredients")
+                        Spacer()
+                        Text("\(store.items.count)")
+                    }
+                }
+            }
         }
-        .background(Color(.systemGroupedBackground))
+        #if os(iOS)
+        .listStyle(.insetGrouped)
+        #else
+        .listStyle(.inset)
+        #endif
+        .overlay {
+            if store.hasLoaded && store.items.isEmpty && store.errorMessage == nil {
+                ContentUnavailableView(
+                    "No ingredients yet",
+                    systemImage: "shippingbox",
+                    description: Text("Tap + to add an ingredient to track.")
+                )
+            }
+        }
     }
 
-    private func ingredientCard(_ ing: AdminIngredient) -> some View {
-        Button {
+    private func ingredientRow(_ ing: AdminIngredient, deletable: Bool) -> some View {
+        let low = ing.currentStock <= ing.minimumStock
+        return Button {
             editing = ing
         } label: {
             VStack(alignment: .leading, spacing: DesignTokens.spacingS) {
-                HStack {
-                    Text(ing.name).font(.system(.body, weight: .semibold))
-                    if ing.currentStock <= ing.minimumStock {
-                        Text("Low").font(.caption2).foregroundStyle(.red)
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Capsule().fill(Color.red.opacity(0.15)))
+                HStack(spacing: DesignTokens.spacingS) {
+                    Text(ing.name).font(.headline)
+                    if low {
+                        Text("Low").font(.subheadline).foregroundStyle(.red)
                     }
                     Spacer()
-                    Text(stockText(ing)).font(.system(.body, design: .rounded, weight: .semibold))
-                        .foregroundStyle(ing.currentStock <= ing.minimumStock ? .red : .primary)
+                    Text(stockText(ing)).font(.headline.monospacedDigit())
+                        .foregroundStyle(low ? .red : .primary)
                 }
                 stockBar(ing)
                 if let supplier = ing.supplier, !supplier.isEmpty {
-                    Text("Supplier: \(supplier)").font(.caption2).foregroundStyle(.secondary)
+                    Text("Supplier: \(supplier)").font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .padding(DesignTokens.spacingL)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+            .adminRowLabel()
         }
-        .buttonStyle(.plain)
-        .webCardBackground()
+        .adminRowButton()
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) { deleteCandidate = ing } label: { Label("Delete", systemImage: "trash") }
+            if deletable {
+                Button(role: .destructive) { deleteCandidate = ing } label: { Label("Delete", systemImage: "trash") }
+            }
         }
     }
 
