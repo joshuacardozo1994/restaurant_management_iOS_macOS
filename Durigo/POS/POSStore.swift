@@ -379,6 +379,30 @@ final class POSStore {
         return value
     }
 
+    /// A regular, found by phone number: their name, notes, and the dishes of
+    /// their last order still on the menu. Nil for a number we haven't seen.
+    struct Regular: Decodable, Equatable {
+        struct Item: Decodable, Equatable {
+            let menuItemId: String
+            let variantTemplateId: String?
+            let quantity: Double
+            let name: String
+        }
+        struct LastOrder: Decodable, Equatable { let items: [Item] }
+        let name: String?
+        let notes: String?
+        let address: String?
+        let visits: Int
+        let lastOrder: LastOrder?
+    }
+
+    func lookupRegular(phone: String, delivery: Bool) async -> Regular? {
+        var query = [URLQueryItem(name: "phone", value: phone)]
+        if delivery { query.append(URLQueryItem(name: "for", value: "delivery")) }
+        guard let data = try? await api.get("/api/customers/lookup", query: query) else { return nil }
+        return try? JSONDecoder().decode(Regular.self, from: data)
+    }
+
     struct DiscountCodeError: LocalizedError {
         let message: String
         var errorDescription: String? { message }

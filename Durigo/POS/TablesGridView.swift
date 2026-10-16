@@ -12,6 +12,9 @@
 import SwiftUI
 
 /// What the order screen is for: a table, or a takeaway / delivery
+/// What the floor pushes besides an order screen
+enum FloorRoute: Hashable { case counter, orders }
+
 struct OrderTarget: Identifiable, Hashable {
     var tableId: String?
     var type: OrderType
@@ -41,6 +44,8 @@ struct TablesGridView: View {
     @State private var filter: FloorFilter = .all
     /// The order screen: inline on a wide screen, a sheet on a narrow one
     @State private var ordering: OrderTarget?
+    /// The counter or the orders ledger, pushed over the floor
+    @State private var route: FloorRoute?
     @State private var isWide = false
     /// Table whose order detail (with payment / bill request) is open.
     @State private var detailTableId: String?
@@ -99,8 +104,22 @@ struct TablesGridView: View {
                               onPay: { id in
                                   finishOrdering(selecting: id)
                                   detailTableId = id
-                              })
+                              },
+                              onSent: sentToKitchen)
             }
+            .navigationDestination(item: $route) { r in
+                switch r {
+                case .counter: CounterView(onNew: { ordering = OrderTarget(tableId: nil, type: $0) })
+                case .orders: OrdersLedgerView()
+                }
+            }
+            #if DEBUG
+            // `--pos-route=counter|orders` (screenshots)
+            .onAppear {
+                if CommandLine.arguments.contains("--pos-route=counter") { route = .counter }
+                if CommandLine.arguments.contains("--pos-route=orders") { route = .orders }
+            }
+            #endif
             .navigationTitle("Floor")
             .navigationSubtitleIfAvailable(floorSubtitle)
             #if os(iOS)
@@ -136,7 +155,8 @@ struct TablesGridView: View {
             get: { isWide ? nil : ordering },
             set: { ordering = $0 }
         ), onDismiss: reopenBill) { target in
-            TakeOrderView(store: store, target: target, onClose: { finishOrdering(selecting: $0) })
+            TakeOrderView(store: store, target: target, onClose: { finishOrdering(selecting: $0) },
+                          onSent: sentToKitchen)
         }
         .sheet(item: Binding(
             get: { detailTableId.map { DetailContext(tableId: $0) } },
@@ -160,6 +180,11 @@ struct TablesGridView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+    }
+
+    /// A takeaway or delivery goes on the counter: show it there, as the web does
+    private func sentToKitchen(_ type: OrderType) {
+        if type != .dineIn { route = .counter }
     }
 
     private func finishOrdering(selecting tableId: String?) {
@@ -228,10 +253,16 @@ struct TablesGridView: View {
     private var floorToolbar: some ToolbarContent {
         LiveBadgeItem(isLive: store.sseConnected)
         ToolbarItemGroup(placement: .primaryAction) {
+            Button("Counter", systemImage: "takeoutbag.and.cup.and.straw") { route = .counter }
+                .accessibilityIdentifier("pos-counter")
             Button("Takeaway", systemImage: "bag") { ordering = OrderTarget(tableId: nil, type: .takeaway) }
                 .accessibilityIdentifier("pos-new-takeaway")
             Button("Delivery", systemImage: "bicycle") { ordering = OrderTarget(tableId: nil, type: .delivery) }
                 .accessibilityIdentifier("pos-new-delivery")
+        }
+        ToolbarItem(placement: .secondaryAction) {
+            Button("All Orders", systemImage: "list.bullet.rectangle") { route = .orders }
+                .accessibilityIdentifier("pos-orders")
         }
         ToolbarItem(placement: .secondaryAction) {
             Button("Merge Tables", systemImage: "rectangle.3.group") { showMergeSheet = true }

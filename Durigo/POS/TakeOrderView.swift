@@ -23,6 +23,8 @@ struct TakeOrderView: View {
     var onClose: ((String?) -> Void)? = nil
     /// Wide layout: open the table's payment
     var onPay: ((String) -> Void)? = nil
+    /// An order went to the kitchen (before the screen closes)
+    var onSent: ((OrderType) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var menuLoader: MenuLoader
@@ -36,6 +38,8 @@ struct TakeOrderView: View {
     @State private var customerName: String = ""
     @State private var customerPhone: String = ""
     @State private var deliveryAddress: String = ""
+    /// The customer behind the phone number, when they've ordered before
+    @State private var regular: POSStore.Regular?
     /// The cart line whose kitchen note is being edited
     @State private var noteLineId: UUID?
     @State private var noteDraft = ""
@@ -53,11 +57,13 @@ struct TakeOrderView: View {
     static let wideWidth: CGFloat = 820
 
     init(store: POSStore, target: OrderTarget, inline: Bool = false,
-         onClose: ((String?) -> Void)? = nil, onPay: ((String) -> Void)? = nil) {
+         onClose: ((String?) -> Void)? = nil, onPay: ((String) -> Void)? = nil,
+         onSent: ((OrderType) -> Void)? = nil) {
         self.store = store
         self.inline = inline
         self.onClose = onClose
         self.onPay = onPay
+        self.onSent = onSent
         _target = State(initialValue: target)
     }
 
@@ -257,7 +263,7 @@ struct TakeOrderView: View {
             // Required for delivery; optional for takeaway, where a phone
             // number links the order to the customer for the customer report
             Text(orderType == .delivery ? "Customer" : "Customer (optional)")
-                .font(.system(.subheadline, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, DesignTokens.spacingL)
                 .padding(.top, DesignTokens.spacingM)
             if orderType == .delivery {
@@ -285,6 +291,64 @@ struct TakeOrderView: View {
                 .padding(.horizontal, DesignTokens.spacingL)
                 .padding(.bottom, DesignTokens.spacingS)
             }
+            if let regular { regularBlock(regular) }
+        }
+        // A known number fills in the name (and the address for a delivery)
+        .task(id: customerPhone.filter(\.isNumber)) { await lookUpRegular() }
+    }
+
+    private var lastOrderLines: [(item: AdminMenuItem, variant: AdminVariantTemplate?, quantity: Int)] {
+        (regular?.lastOrder?.items ?? []).compactMap { i in
+            guard let item = store.menu.first(where: { $0.id == i.menuItemId }) else { return nil }
+            let variant = i.variantTemplateId.flatMap { v in item.variantTemplates.first { $0.id == v } }
+            return (item, variant, max(1, Int(i.quantity.rounded())))
+        }
+    }
+
+    @ViewBuilder
+    private func regularBlock(_ r: POSStore.Regular) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(r.visits == 1 ? "Been here once" : "Regular · \(r.visits) visits", systemImage: "person.crop.circle.badge.checkmark")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(SN.teal)
+            if let notes = r.notes, !notes.isEmpty {
+                Text(notes).font(.subheadline).foregroundStyle(.secondary)
+            }
+            let lines = lastOrderLines
+            if !lines.isEmpty {
+                Button {
+                    for line in lines {
+                        for _ in 0..<line.quantity { addToCart(line.item, variant: line.variant) }
+                    }
+                } label: {
+                    Text("Same as last time: \(lines.map { "\($0.quantity) \($0.item.name)" }.joined(separator: ", "))")
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                .buttonStyle(.bordered)
+                .tint(SN.teal)
+                .accessibilityIdentifier("customer-same-as-last")
+            }
+        }
+        .padding(.horizontal, DesignTokens.spacingL)
+        .padding(.bottom, DesignTokens.spacingS)
+    }
+
+    private func lookUpRegular() async {
+        // A mobile number as the server reads it: 10 digits, after +91 or 0
+        var digits = customerPhone.filter(\.isNumber)
+        if digits.count == 12 && digits.hasPrefix("91") { digits.removeFirst(2) }
+        else if digits.count == 11 && digits.hasPrefix("0") { digits.removeFirst() }
+        guard digits.count == 10 else { regular = nil; return }
+        // Wait for the last digit before asking
+        try? await Task.sleep(for: .milliseconds(400))
+        guard !Task.isCancelled else { return }
+        let found = await store.lookupRegular(phone: digits, delivery: orderType == .delivery)
+        guard !Task.isCancelled else { return }
+        regular = found
+        if let found {
+            if customerName.trimmingCharacters(in: .whitespaces).isEmpty, let name = found.name { customerName = name }
+            if orderType == .delivery, deliveryAddress.trimmingCharacters(in: .whitespaces).isEmpty, let a = found.address { deliveryAddress = a }
         }
     }
 
@@ -879,6 +943,7 @@ struct TakeOrderView: View {
             // Refresh tables so we pick up the new status from the server.
             await store.loadTables()
             cart = []
+            onSent?(orderType)
             close(selecting: tableId)
         } catch {
             errorMessage = error.localizedDescription

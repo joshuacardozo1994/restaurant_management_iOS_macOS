@@ -52,6 +52,7 @@ final class PayDraftBook {
 struct BillingView: View {
     @Environment(Session.self) private var session
     @EnvironmentObject private var menuLoader: MenuLoader
+    @EnvironmentObject private var navigation: Navigation
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var store: TillStore?
@@ -129,6 +130,15 @@ struct BillingView: View {
             if phase == .active { store?.startLive() } else if phase == .background { store?.stopLive() }
         }
         .onChange(of: mode) { _, m in store?.watchingLedger = m == .bills && session.seesLedger }
+        // Pay from the counter: open that order's bill once the till has loaded
+        .task(id: navigation.payOrderId) {
+            guard let orderId = navigation.payOrderId else { return }
+            for _ in 0..<50 where !(store?.tillLoaded ?? false) {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            navigation.payOrderId = nil
+            if let bill = store?.till.first(where: { $0.orderIds.contains(orderId) }) { openTill(bill.key) }
+        }
         .lockWithBiometric()
     }
 

@@ -160,4 +160,6 @@ func startingItem(for role: String?, requested: NavigationItem) -> NavigationIte
     /// Set when a past bill is regenerated: POS opens on the Bill Generator
     /// (where that bill now is) instead of the table grid
     var showBillGenerator = false
+    /// Set by the counter's Pay: Billing opens on this order's bill
+    var payOrderId: String?
 }
