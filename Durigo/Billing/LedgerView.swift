@@ -259,12 +259,6 @@ struct LedgerView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            BillingModePicker(mode: $mode)
-                .padding(.horizontal, DesignTokens.spacingL)
-                .padding(.vertical, DesignTokens.spacingS)
-                .background(SN.page)
-        }
         .refreshable {
             await store.loadLedger()
             await refreshDeviceCopies()
@@ -989,12 +983,6 @@ struct AppBillsList: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            BillingModePicker(mode: $mode)
-                .padding(.horizontal, DesignTokens.spacingL)
-                .padding(.vertical, DesignTokens.spacingS)
-                .background(SN.page)
-        }
         #if os(iOS)
         .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Table, waiter, customer, dish")
         #else

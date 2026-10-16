@@ -405,24 +405,26 @@ struct PayButton: View {
     }
 }
 
-/// A choice on the pad (a method or a cash amount): selected is teal
-struct PayChoiceStyle: ButtonStyle {
+/// A choice on the pad (a method or a cash amount): selected is filled teal
+struct PayChoiceStyle: PrimitiveButtonStyle {
     var selected: Bool
     var mono = false
 
     func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        configuration.label
-            .font(mono ? .subheadline.monospacedDigit().weight(.semibold) : .body.weight(.semibold))
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .foregroundStyle(selected ? SN.teal : SN.ink)
-            .background(shape.fill(selected ? SN.teal.opacity(0.12) : SN.panel))
-            .overlay(shape.stroke(selected ? SN.teal : SN.line, lineWidth: selected ? 2 : 1))
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .contentShape(shape)
+        let button = Button(role: configuration.role, action: configuration.trigger) {
+            configuration.label
+                .font(mono ? .subheadline.monospacedDigit().weight(.semibold) : .body.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity)
+        }
+        .controlSize(.large)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        if selected {
+            button.buttonStyle(.borderedProminent).tint(SN.teal)
+        } else {
+            button.buttonStyle(.bordered).tint(SN.ink)
+        }
     }
 }
 

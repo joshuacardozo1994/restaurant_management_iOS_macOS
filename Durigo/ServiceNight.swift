@@ -264,6 +264,7 @@ struct ServiceNightDashboard: View {
             .background(SN.page)
             .foregroundStyle(SN.ink)
             .navigationTitle("Today")
+            .navigationSubtitleIfAvailable(store?.data.map { Fmt.weekday($0.generatedAt, style: .dateTime.weekday(.wide).day().month(.abbreviated)) } ?? "")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -288,9 +289,12 @@ struct ServiceNightDashboard: View {
                         .font(.footnote)
                         .foregroundStyle(SN.red)
                 }
-                Text(Fmt.weekday(d.generatedAt, style: .dateTime.weekday(.wide).day().month(.abbreviated)))
-                    .font(.subheadline)
-                    .foregroundStyle(SN.mut)
+                // Older systems have no navigation subtitle: keep the date in the content
+                if #unavailable(iOS 26, macOS 26) {
+                    Text(Fmt.weekday(d.generatedAt, style: .dateTime.weekday(.wide).day().month(.abbreviated)))
+                        .font(.subheadline)
+                        .foregroundStyle(SN.mut)
+                }
                 // The ticking times (seated for, oldest ticket) redraw every 30s
                 TimelineView(.periodic(from: .now, by: 30)) { tl in
                     layout(d, now: tl.date, width: width - DesignTokens.spacingL * 2)
@@ -425,7 +429,7 @@ private struct TakingsPanel: View {
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
             Facts {
-                Fact(value: "\(t.bills)", label: "bills")
+                Fact(value: "\(t.bills)", label: t.bills == 1 ? "bill" : "bills")
                 Fact(label: "avg", value: t.average.rupees)
                 if let change {
                     Text("\(change >= 0 ? "▲" : "▼") \(abs(change))% vs last \(Fmt.weekday(d.generatedAt, style: .dateTime.weekday(.abbreviated)))")

@@ -772,60 +772,39 @@ struct POSBillTotals: View {
     }
 }
 
-/// Buttons on the floor and the bill: prominent (filled), tinted, or quiet
-struct POSActionStyle: ButtonStyle {
+/// Buttons on the floor and the bill: the system's bordered buttons, large
+/// for a busy hand. Prominent is filled teal, bill is tinted amber.
+struct POSActionStyle: PrimitiveButtonStyle {
     enum Kind { case prominent, bill, plain }
     var kind: Kind = .plain
     var fullWidth = true
-    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        configuration.label
-            .font(.body.weight(.semibold))
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: 44)
-            .foregroundStyle(kind == .prominent ? SN.page : SN.ink)
-            .background(shape.fill(fill))
-            .overlay(shape.stroke(stroke, lineWidth: kind == .prominent ? 0 : 1))
-            .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.45)
-            .contentShape(shape)
-    }
-
-    private var fill: Color {
-        switch kind {
-        case .prominent: SN.teal
-        case .bill: SN.amber.opacity(0.16)
-        case .plain: SN.panel
+        let button = Button(role: configuration.role, action: configuration.trigger) {
+            configuration.label
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: fullWidth ? .infinity : nil)
         }
-    }
-
-    private var stroke: Color {
+        .fontWeight(.semibold)
+        .controlSize(.large)
         switch kind {
-        case .prominent: .clear
-        case .bill: SN.amber.opacity(0.7)
-        case .plain: SN.line
+        case .prominent: button.buttonStyle(.borderedProminent).tint(SN.teal)
+        case .bill:      button.buttonStyle(.bordered).tint(SN.amber)
+        case .plain:     button.buttonStyle(.bordered).tint(SN.ink)
         }
     }
 }
 
-/// A small bordered button for the header (Takeaway, Delivery, Unmerge)
-struct QuietButtonStyle: ButtonStyle {
+/// A small bordered button in a header or a row (Unmerge, Reprint)
+struct QuietButtonStyle: PrimitiveButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
-        configuration.label
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(SN.ink)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 12)
-            .frame(minHeight: 34)
-            .background(shape.fill(SN.panel))
-            .overlay(shape.stroke(SN.line, lineWidth: 1))
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .contentShape(shape)
+        Button(role: configuration.role, action: configuration.trigger) {
+            configuration.label.lineLimit(1).fixedSize(horizontal: true, vertical: false)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .tint(SN.ink)
     }
 }
 

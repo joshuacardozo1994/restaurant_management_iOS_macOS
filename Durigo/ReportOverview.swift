@@ -91,7 +91,7 @@ enum ReportRange: String, CaseIterable, Identifiable {
         case .week: "7 days"
         case .month: "Month"
         case .quarter: "Quarter"
-        case .pick: "Pick…"
+        case .pick: "Dates"
         }
     }
 }
@@ -360,9 +360,27 @@ struct Reports: View {
     @State private var presetPick = false
     @State private var selectedDay: String?
     @State private var path = NavigationPath()
+    @Environment(\.inNavigationStack) private var inStack
 
     var body: some View {
-        NavigationStack(path: $path) {
+        Group {
+            // Opened from More: push onto its stack rather than nesting another
+            if inStack {
+                screen
+            } else {
+                NavigationStack(path: $path) { screen }
+                    .environment(\.inNavigationStack, true)
+            }
+        }
+        .lockWithBiometric()
+    }
+
+    private var subtitle: String {
+        guard let p = store?.data?.period else { return "" }
+        return "\(p.label) · vs \(p.prevLabel)"
+    }
+
+    private var screen: some View {
             GeometryReader { geo in
                 ScrollView {
                     content(width: geo.size.width - DesignTokens.spacingL * 2)
@@ -374,10 +392,15 @@ struct Reports: View {
             .background(SN.page)
             .foregroundStyle(SN.ink)
             .navigationTitle("Reports")
+            .navigationSubtitleIfAvailable(subtitle)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
+                ToolbarItem(placement: .secondaryAction) {
+                    Button { picking = true } label: { Label("Pick dates…", systemImage: "calendar") }
+                        .accessibilityIdentifier("report-pick-dates")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     if let url = store?.reportCSV {
                         ShareLink(item: url) { Label("Export", systemImage: "square.and.arrow.up") }
@@ -391,7 +414,7 @@ struct Reports: View {
                 await load()
             }
             .onChange(of: range) { _, new in
-                if new == .pick && !presetPick { picking = true } else { Task { await load() } }
+                if new == .pick && !presetPick { picking = true } else { presetPick = false; Task { await load() } }
             }
             .onChange(of: month) { _, _ in Task { await load() } }
             .sheet(isPresented: $picking) { pickSheet }
@@ -402,8 +425,6 @@ struct Reports: View {
                 case .ca:        CAReportView()
                 }
             }
-        }
-        .lockWithBiometric()
     }
 
     private func load() async {
@@ -441,7 +462,11 @@ struct Reports: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Show") { picking = false; Task { await load() } }
+                    Button("Show") {
+                        picking = false
+                        // From the toolbar: switching to Dates loads through onChange
+                        if range != .pick { presetPick = true; range = .pick } else { Task { await load() } }
+                    }
                 }
             }
         }
@@ -455,8 +480,12 @@ struct Reports: View {
     private func content(width: CGFloat) -> some View {
         let loading = store?.data == nil && (store?.isLoading ?? true)
         VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-            RangeBar(range: $range, onPick: { picking = true })
-                .frame(maxWidth: 520)
+            Picker("Period", selection: $range) {
+                ForEach(ReportRange.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 520)
+            .accessibilityIdentifier("report-range")
 
             if let msg = store?.error {
                 Label(store?.data == nil ? "Couldn't load the report: \(msg)" : "Showing the last figures: \(msg)", systemImage: "wifi.exclamationmark")
@@ -465,8 +494,11 @@ struct Reports: View {
 
             if let r = store?.data ?? (loading ? ReportOverview.sample(range: range) : nil) {
                 Group {
-                    Text("\(r.period.label) · vs \(r.period.prevLabel)")
-                        .font(.subheadline).foregroundStyle(SN.mut)
+                    // Older systems have no navigation subtitle: keep the period in the content
+                    if #unavailable(iOS 26, macOS 26) {
+                        Text("\(r.period.label) · vs \(r.period.prevLabel)")
+                            .font(.subheadline).foregroundStyle(SN.mut)
+                    }
                     if r.period.range == "month" {
                         MonthLayout(r: r, width: width, selected: $selectedDay, month: $month, caCSV: store?.caCSV, caPDF: store?.caPDF)
                     } else {
@@ -1010,40 +1042,6 @@ private struct MonthLayout: View {
 /// Today / 7 days / Month / Quarter / Pick…, as on the web. Segments share
 /// the width by their labels (a system segmented control makes each one as
 /// wide as "Quarter", which is wider than an iPhone)
-private struct RangeBar: View {
-    @Binding var range: ReportRange
-    /// Pick… again when it is already chosen: ask for the days again
-    let onPick: () -> Void
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(ReportRange.allCases) { r in
-                let on = r == range
-                Button {
-                    if r == .pick && on { onPick() } else { range = r }
-                } label: {
-                    Text(r.label)
-                        .font(.subheadline.weight(on ? .semibold : .regular))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 7)
-                        .frame(maxWidth: .infinity)
-                        .foregroundStyle(on ? SN.panel : SN.ink)
-                        .background(Capsule().fill(on ? SN.ink : Color.clear))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-        }
-        .padding(3)
-        .background(Capsule().fill(SN.panel))
-        .overlay(Capsule().stroke(SN.line, lineWidth: 1))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Period")
-    }
-}
-
 private struct TrailingIcon: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 4) { configuration.title; configuration.icon }

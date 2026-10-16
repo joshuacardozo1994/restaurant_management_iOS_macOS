@@ -103,54 +103,38 @@ struct StatusChip: View {
     }
 }
 
-// MARK: - Primary button style (solid)
+// MARK: - Primary and secondary buttons: the system's bordered styles
 
-struct WebPrimaryButtonStyle: ButtonStyle {
+struct WebPrimaryButtonStyle: PrimitiveButtonStyle {
     var fullWidth: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(.body, weight: .semibold))
-            .padding(.horizontal, DesignTokens.spacingL)
-            .padding(.vertical, DesignTokens.spacingM)
-            .frame(maxWidth: fullWidth ? .infinity : nil)
-            .background(
-                RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous)
-                    .fill(Color.primary.opacity(configuration.isPressed ? 0.8 : 1.0))
-            )
-            .foregroundStyle(Color(.systemBackground))
+        Button(role: configuration.role, action: configuration.trigger) {
+            configuration.label.frame(maxWidth: fullWidth ? .infinity : nil)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
     }
 }
 
-// MARK: - Secondary button style (outline)
-
-struct WebSecondaryButtonStyle: ButtonStyle {
+struct WebSecondaryButtonStyle: PrimitiveButtonStyle {
     var fullWidth: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(.body, weight: .medium))
-            .padding(.horizontal, DesignTokens.spacingL)
-            .padding(.vertical, DesignTokens.spacingM)
-            .frame(maxWidth: fullWidth ? .infinity : nil)
-            .background(
-                RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous)
-                    .fill(configuration.isPressed ? Color.primary.opacity(0.05) : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall, style: .continuous)
-                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-            )
-            .foregroundStyle(.primary)
+        Button(role: configuration.role, action: configuration.trigger) {
+            configuration.label.frame(maxWidth: fullWidth ? .infinity : nil)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
     }
 }
 
-extension ButtonStyle where Self == WebPrimaryButtonStyle {
+extension PrimitiveButtonStyle where Self == WebPrimaryButtonStyle {
     static var webPrimary: WebPrimaryButtonStyle { .init() }
     static func webPrimary(fullWidth: Bool) -> WebPrimaryButtonStyle { .init(fullWidth: fullWidth) }
 }
 
-extension ButtonStyle where Self == WebSecondaryButtonStyle {
+extension PrimitiveButtonStyle where Self == WebSecondaryButtonStyle {
     static var webSecondary: WebSecondaryButtonStyle { .init() }
     static func webSecondary(fullWidth: Bool) -> WebSecondaryButtonStyle { .init(fullWidth: fullWidth) }
 }

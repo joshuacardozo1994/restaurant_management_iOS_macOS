@@ -98,6 +98,10 @@ struct BillingView: View {
             .navigationTitle(mode == .waiting ? "Till" : mode == .bills ? "Bills" : "Bill Generator")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // Waiting / Bills in the bar, where iOS puts a screen's own views
+                ToolbarItem(placement: .principal) {
+                    BillingModePicker(mode: $mode).fixedSize()
+                }
                 LiveBadgeItem(isLive: store?.isLive ?? false)
             }
             .navigationDestination(for: BillingRoute.self) { route in
@@ -295,12 +299,6 @@ struct BillingView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                BillingModePicker(mode: $mode)
-                    .padding(.horizontal, DesignTokens.spacingL)
-                    .padding(.vertical, DesignTokens.spacingS)
-                    .background(SN.page)
-            }
             .refreshable { await store.loadTill() }
         }
     }
