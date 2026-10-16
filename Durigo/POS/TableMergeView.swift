@@ -41,7 +41,7 @@ struct TableMergeView: View {
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(group.displayName)
-                                        .font(.system(.subheadline, weight: .semibold))
+                                        .font(.subheadline.weight(.semibold))
                                     Text("\(group.totalCapacity) seats • \(group.members.count) tables")
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
@@ -70,9 +70,8 @@ struct TableMergeView: View {
 
                 Section {
                     if availableTables.isEmpty {
-                        Text("No eligible tables — all tables are already in a group or in maintenance.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        ContentUnavailableView("No tables to merge", systemImage: "square.split.2x2",
+                                               description: Text("Every table is already in a group or in maintenance."))
                     } else {
                         ForEach(availableTables) { table in
                             tableRow(table)
@@ -87,6 +86,15 @@ struct TableMergeView: View {
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
+                    }
+                }
+
+                if selectedTables.count >= 2 {
+                    Section {
+                        Picker("Primary table", selection: $primaryTableId) {
+                            ForEach(selectedTables) { Text("Table \($0.number)").tag(Optional($0.id)) }
+                        }
+                        .accessibilityIdentifier("merge-primary")
                     }
                 }
             }
@@ -116,42 +124,25 @@ struct TableMergeView: View {
 
     private func tableRow(_ table: POSTable) -> some View {
         let isSelected = selectedIds.contains(table.id)
-        let isPrimary = primaryTableId == table.id
         return Button {
             toggleSelection(table.id)
         } label: {
-            HStack {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("Table \(table.number)").font(.system(.body, weight: .medium))
-                        if isPrimary {
-                            Text("PRIMARY")
-                                .font(.system(size: 9, weight: .bold))
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Capsule().fill(Color.accentColor.opacity(0.18)))
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                    Text("\(table.capacity) seats • \(table.statusEnum.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)")
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if isSelected && !isPrimary {
-                    Button("Make primary") {
-                        primaryTableId = table.id
-                    }
-                    .font(.caption)
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
-                }
+            LabeledContent {
+                if isSelected { Image(systemName: "checkmark").foregroundStyle(.tint).fontWeight(.semibold) }
+            } label: {
+                Text("Table \(table.number)")
+                Text("\(table.capacity) seats · \(table.statusEnum.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)")
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
         .accessibilityIdentifier("merge-row-\(table.number)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// The selected tables, for the primary picker
+    private var selectedTables: [POSTable] {
+        availableTables.filter { selectedIds.contains($0.id) }
     }
 
     private var totalSelectedCapacity: Int {

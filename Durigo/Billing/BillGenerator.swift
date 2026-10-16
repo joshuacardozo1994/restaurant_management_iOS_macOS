@@ -300,22 +300,8 @@ struct BillItem: View {
 
 private struct EmptyBillState: View {
     var body: some View {
-        VStack(spacing: DesignTokens.spacingM) {
-            Image(systemName: "list.bullet.clipboard")
-                .font(.system(size: 36, weight: .light))
-                .foregroundStyle(.secondary)
-            VStack(spacing: 4) {
-                Text("No items yet")
-                    .font(.system(.headline, weight: .semibold))
-                Text("Tap the menu button or add a custom item to start the bill.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, DesignTokens.spacingL)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DesignTokens.spacing2XL)
+        ContentUnavailableView("No items yet", systemImage: "list.bullet.clipboard",
+                               description: Text("Tap the menu button or add a custom item to start the bill."))
     }
 }
 

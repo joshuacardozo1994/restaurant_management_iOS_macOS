@@ -283,7 +283,7 @@ struct ReservationsAdminView: View {
                 if view != .week { dayStrip }
                 switch view {
                 case .book: BookList(day: day, now: now, wide: wide, live: live, onOpen: { editing = $0 }, onAction: act)
-                case .timeline: TimelineView(day: day, now: now, onOpen: { editing = $0 }, onNew: { newTable = $0; creating = true })
+                case .timeline: BookingTimeline(day: day, now: now, onOpen: { editing = $0 }, onNew: { newTable = $0; creating = true })
                 case .week: WeekView(week: store?.week, start: $weekStart, wide: wide, onDay: { date = $0; viewRaw = BookView.book.rawValue })
                 }
             }
@@ -508,7 +508,7 @@ private struct BookList: View {
 
 // MARK: - Timeline
 
-private struct TimelineView: View {
+private struct BookingTimeline: View {
     let day: ReservationDayData
     let now: Date
     let onOpen: (Booking) -> Void

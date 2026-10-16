@@ -420,20 +420,14 @@ struct MenuEditor: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: DesignTokens.spacingM) {
-            Image(systemName: "fork.knife")
-                .font(.system(size: 36, weight: .light))
-                .foregroundStyle(.secondary)
-            Text(searchText.isEmpty ? "No menu items yet" : "No matches for \"\(searchText)\"")
-                .font(.system(.headline, weight: .semibold))
+        Group {
             if searchText.isEmpty {
-                Text("Tap + to add your first item.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                ContentUnavailableView("No menu items yet", systemImage: "fork.knife",
+                                       description: Text("Tap + to add your first item."))
+            } else {
+                ContentUnavailableView.search(text: searchText)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, DesignTokens.spacing2XL)
     }
 
     private func categorySection(

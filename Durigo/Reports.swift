@@ -212,14 +212,8 @@ struct CustomersReportView: View {
 
     private func emptyState(message: String) -> some View {
         SectionCard {
-            VStack(spacing: 8) {
-                Image(systemName: "person.crop.circle.badge.questionmark")
-                    .font(.system(size: 32, weight: .light)).foregroundStyle(.secondary)
-                Text(message).font(.caption).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DesignTokens.spacingM)
+            ContentUnavailableView("Nothing yet", systemImage: "person.crop.circle.badge.questionmark",
+                                   description: Text(message))
         }
     }
 
@@ -543,15 +537,8 @@ struct CAReportView: View {
 
     private func emptyMonth(label: String) -> some View {
         SectionCard(title: label) {
-            VStack(spacing: 8) {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.system(size: 32, weight: .light))
-                    .foregroundStyle(.secondary)
-                Text("No completed bills in this month.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DesignTokens.spacingM)
+            ContentUnavailableView("No bills", systemImage: "doc.text.magnifyingglass",
+                                   description: Text("No completed bills in this month."))
         }
     }
 

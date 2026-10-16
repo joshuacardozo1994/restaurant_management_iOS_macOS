@@ -78,117 +78,91 @@ struct OrderDetailView: View {
 
     @ViewBuilder
     private func content(table: POSTable) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-                statusBanner(table: table)
+        if table.liveOrders.isEmpty {
+            ContentUnavailableView("No active orders", systemImage: "tray",
+                                   description: Text("This table has been cleared."))
+        } else {
+            List {
+                Section {
+                    LabeledContent("Status") { statusLabel(table: table) }
+                    LabeledContent("Seats", value: "\(table.capacity)")
+                }
                 ForEach(table.liveOrders) { order in
-                    orderCard(order)
+                    orderSection(order)
                 }
-                if !table.liveOrders.isEmpty {
-                    totalCard(table: table)
-                    actionZone(table: table)
-                } else {
-                    emptyState
+                Section {
+                    PayBillTotals(amounts: bill(for: table), config: menuLoader.billingConfig,
+                                  discountLabel: draft.discountLabel)
+                } footer: {
+                    Text("\(table.liveOrders.count) order\(table.liveOrders.count == 1 ? "" : "s")")
                 }
+                Section { actionZone(table: table) }
             }
-            .padding(DesignTokens.spacingL)
+            #if os(iOS)
+            .listStyle(.insetGrouped)
+            #endif
         }
-        .background(Color(.systemGroupedBackground))
     }
 
-    private func statusBanner(table: POSTable) -> some View {
+    private func statusLabel(table: POSTable) -> some View {
         let s = table.effectiveStatus
         let label: String
         let color: Color
         switch s {
-        case .billRequested: label = "Bill Requested — awaiting payment"; color = .purple
+        case .billRequested: label = "Bill requested"; color = .purple
         case .occupied:      label = "Occupied"; color = .red
-        case .reserved:      label = "Reserved"; color = .yellow
+        case .reserved:      label = "Reserved"; color = .orange
         case .available:     label = "Available"; color = .green
         case .maintenance:   label = "Maintenance"; color = .gray
         }
-        return HStack {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(label).font(.system(.subheadline, weight: .semibold)).foregroundStyle(color)
-            Spacer()
-            Text("\(table.capacity) seats").font(.caption).foregroundStyle(.secondary)
-        }
-        .padding(DesignTokens.spacingM)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusSmall).fill(color.opacity(0.08)))
+        return Text(label).fontWeight(.semibold).foregroundStyle(color)
     }
 
-    private func orderCard(_ order: POSOrder) -> some View {
-        VStack(alignment: .leading, spacing: DesignTokens.spacingS) {
-            HStack {
-                Text("#\(order.orderNumber?.suffix(4).map(String.init).joined() ?? String(order.id.suffix(4)))")
-                    .font(.system(.subheadline, design: .monospaced, weight: .bold))
-                statusChip(order.status)
-                Spacer()
-                Text(orderTotalString(order))
-                    .font(.system(.subheadline, weight: .semibold))
-                    .monospacedDigit()
-            }
-            if let waiter = order.waiter?.name, !waiter.isEmpty {
-                HStack(spacing: 4) {
-                    Image(systemName: "person.crop.circle")
-                        .font(.caption2)
-                    Text(waiter).font(.caption)
-                }
-                .foregroundStyle(.secondary)
-            }
-            // Order-level notes (shown to the kitchen on every card and
-            // here for the cashier/waiter to verify against the receipt).
+    private func orderSection(_ order: POSOrder) -> some View {
+        Section {
             if let n = order.notes, !n.isEmpty {
-                HStack(alignment: .top, spacing: 4) {
-                    Image(systemName: "note.text")
-                        .font(.caption2)
-                    Text(n)
-                        .font(.caption)
-                }
-                .padding(8)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.blue.opacity(0.08)))
-                .foregroundStyle(.blue)
+                // Order notes, as the kitchen sees them
+                Label(n, systemImage: "note.text")
+                    .font(.subheadline)
+                    .foregroundStyle(.blue)
             }
             ForEach(order.items?.filter { $0.status != "CANCELLED" } ?? []) { item in
-                HStack(alignment: .top) {
+                HStack(alignment: .firstTextBaseline) {
                     Text("\(item.quantity)×")
-                        .font(.caption.monospaced())
-                        .frame(width: 28, alignment: .leading)
+                        .font(.subheadline.monospacedDigit())
                         .foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.displayName)
-                            .font(.subheadline)
                         if let v = item.displayVariant, !v.isEmpty {
-                            Text(v).font(.caption2).foregroundStyle(.secondary)
+                            Text(v).font(.caption).foregroundStyle(.secondary)
                         }
                         if let extras = item.modifiers?.summary {
-                            Text(extras).font(.caption2).foregroundStyle(.secondary)
+                            Text(extras).font(.caption).foregroundStyle(.secondary)
                         }
+                        statusText(item.status)
                     }
                     Spacer()
                     Text("\((item.unitPrice * Double(item.quantity)).rupees)")
-                        .font(.subheadline)
                         .monospacedDigit()
-                    statusChip(item.status, small: true)
                 }
             }
             if canCancel(order) {
-                Button(role: .destructive) {
+                Button("Cancel order", systemImage: "xmark.circle", role: .destructive) {
                     cancelReason = ""
                     cancelling = order
-                } label: {
-                    Label("Cancel order", systemImage: "xmark.circle")
-                        .font(.caption.weight(.semibold))
                 }
-                .buttonStyle(.borderless)
                 .disabled(submitting)
                 .accessibilityIdentifier("order-cancel-\(order.id)")
             }
+        } header: {
+            HStack {
+                Text("#\(order.orderNumber?.suffix(4).map(String.init).joined() ?? String(order.id.suffix(4)))")
+                    .monospacedDigit()
+                if let waiter = order.waiter?.name, !waiter.isEmpty { Text("· \(waiter)") }
+                Spacer()
+                Text(orderTotalString(order)).monospacedDigit()
+            }
         }
-        .padding(DesignTokens.spacingM)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .webCardBackground()
     }
 
     // MARK: Cancel
@@ -228,17 +202,6 @@ struct OrderDetailView: View {
                              discountAllowed: canDiscount && table.effectiveStatus == .billRequested)
     }
 
-    private func totalCard(table: POSTable) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            PayBillTotals(amounts: bill(for: table), config: menuLoader.billingConfig,
-                          discountLabel: draft.discountLabel)
-            Text("\(table.liveOrders.count) order\(table.liveOrders.count == 1 ? "" : "s")")
-                .font(.caption).foregroundStyle(.secondary)
-        }
-        .padding(DesignTokens.spacingL)
-        .webCardBackground()
-    }
-
     @ViewBuilder
     private func actionZone(table: POSTable) -> some View {
         switch table.effectiveStatus {
@@ -276,17 +239,7 @@ struct OrderDetailView: View {
                 Task { await doPayment(table: table) }
             }
         }
-        .padding(DesignTokens.spacingL)
-        .background(RoundedRectangle(cornerRadius: DesignTokens.cornerRadiusMedium, style: .continuous).fill(SN.page))
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: DesignTokens.spacingS) {
-            Image(systemName: "tray").font(.system(size: 32, weight: .light)).foregroundStyle(.secondary)
-            Text("No active orders").font(.headline)
-            Text("This table has been cleared.").font(.subheadline).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity).padding(DesignTokens.spacing2XL)
+        .padding(.vertical, DesignTokens.spacingS)
     }
 
     // MARK: Helpers
@@ -298,23 +251,20 @@ struct OrderDetailView: View {
         return "\((total).rupees)"
     }
 
-    private func statusChip(_ status: String, small: Bool = false) -> some View {
+    /// An item's kitchen status, in words and colour
+    private func statusText(_ status: String) -> some View {
         let color: Color
         switch status {
         case "PENDING":   color = .orange
         case "CONFIRMED": color = .blue
-        case "PREPARING": color = .yellow
-        case "READY":     color = .mint
+        case "PREPARING": color = .orange
+        case "READY":     color = .teal
         case "SERVED":    color = .green
-        case "COMPLETED": color = .gray
         case "CANCELLED": color = .red
-        default:          color = .gray
+        default:          color = .secondary
         }
-        return Text(status)
-            .font(.system(size: small ? 9 : 10, weight: .semibold))
-            .padding(.horizontal, small ? 5 : 6)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(color.opacity(0.18)))
+        return Text(status.capitalized)
+            .font(.caption.weight(.semibold))
             .foregroundStyle(color)
     }
 
