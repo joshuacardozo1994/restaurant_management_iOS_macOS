@@ -96,7 +96,7 @@ struct OrderDetailView: View {
                 } footer: {
                     Text("\(table.liveOrders.count) order\(table.liveOrders.count == 1 ? "" : "s")")
                 }
-                Section { actionZone(table: table) }
+                actionZone(table: table)
             }
             #if os(iOS)
             .listStyle(.insetGrouped)
@@ -208,38 +208,45 @@ struct OrderDetailView: View {
         case .billRequested:
             paymentPicker(table: table)
         case .occupied, .reserved:
-            // Allow Request Bill once everything has at least been served.
-            // Web allows it any time; we mirror.
-            Button {
-                Task { await doRequestBill() }
-            } label: {
-                if submitting {
-                    ProgressView().frame(maxWidth: .infinity)
-                } else {
-                    Label("Request Bill", systemImage: "doc.text")
-                        .frame(maxWidth: .infinity)
+            Section {
+                // Allow Request Bill once everything has at least been served.
+                // Web allows it any time; we mirror.
+                Button {
+                    Task { await doRequestBill() }
+                } label: {
+                    if submitting {
+                        ProgressView().frame(maxWidth: .infinity)
+                    } else {
+                        Label("Request Bill", systemImage: "doc.text")
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(.purple)
+                .disabled(submitting)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.purple)
-            .disabled(submitting)
         default:
             EmptyView()
         }
     }
 
-    /// The same pay pad as the Till
+    /// The same pay pad as the Till, as sections of this list
+    @ViewBuilder
     private func paymentPicker(table: POSTable) -> some View {
         let amounts = bill(for: table)
-        return VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-            PayPadControls(draft: draft, amounts: amounts, canDiscount: canDiscount) { code in
-                Task { await applyCode(code, table: table) }
-            }
+        PayPadControls(draft: draft, amounts: amounts, canDiscount: canDiscount, showsTotal: false) { code in
+            Task { await applyCode(code, table: table) }
+        }
+        Section {
             PayButton(draft: draft, total: amounts.total, submitting: submitting) {
                 Task { await doPayment(table: table) }
             }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
         }
-        .padding(.vertical, DesignTokens.spacingS)
     }
 
     // MARK: Helpers

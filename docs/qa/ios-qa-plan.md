@@ -226,6 +226,10 @@ test's name is given.
 
 Hand-made controls replaced with the system's: segmented Pickers (kitchen, reservations, reports, floor, till), titles and status lines in the navigation bar with a subtitle (iOS/macOS 26; in the content on older systems), actions in the toolbar and its ⋯ overflow, `.searchable`, `Stepper` on cart lines, grouped `List`s for Users, Discounts, Modifiers, Inventory and the order detail (swipe to delete now works), `ContentUnavailableView` for empty states, and floor/pay buttons drawn by the system's bordered styles. One navigation stack per screen (`NavigationRoot`). UI tests follow: `pos-new-takeaway` / `pos-new-delivery` replace `pos-new-menu`, the floor's overflow is opened with `app.tapOverflow(_:)`, cart lines are `cart-stepper-<name>` (Increment / Decrement), and the menu search is `app.searchFields["Search menu"]`. ✅ iPhone 17 (reports, dashboard, till, floor, counter, orders) and iPad Pro 13" (users, inventory). UI tests compile; not run (the simulator can't launch the test runner).
 
+### Payment screen, native (16 Oct)
+
+The pay pad is Form sections in every place it appears (Till on iPhone, iPad and Mac; Pay on the POS order screen): "Pay with" is a segmented Cash / UPI / Card / Split (Split opens the split sheet, and an "Edit split" row stays while splitting), Wallet under a menu Picker "Other ways to pay", the discount field with a segmented ₹ / %, "Cash given" a segmented Exact / next ₹100 / ₹500 / ₹2,000 with Change as a labelled row. On iPhone the bill's details are the navigation subtitle ("Bill 7419 · QA Waiter · seated 1d · 1 order"), its lines a section with Tax details as a DisclosureGroup, and Pay stays pinned at the bottom. ✅ iPhone 17 (Cash then ₹500 showed Change ₹260; Pay read "Pay ₹240 by Cash"), iPad Pro 13" portrait. UI tests use `app.segmentedControls["pay-method"].buttons["Split" / "UPI"]`.
+
 ### Order of work
 
 1. Service screens on the real devices during a mock service: Bill Generator, POS, payment, Kitchen with the real printer.

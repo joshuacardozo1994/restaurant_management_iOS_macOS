@@ -183,12 +183,8 @@ struct BillingView: View {
                     .frame(maxWidth: .infinity)
                     .skeleton(loading)
                     Rectangle().fill(SN.line).frame(width: 1)
-                    ScrollView {
-                        padStack(bill)
-                            .padding(DesignTokens.spacingXL)
-                    }
+                    Form { padSections(bill) }
                     .frame(width: min(400, width * 0.33))
-                    .background(SN.panel, ignoresSafeAreaEdges: [])
                     .skeleton(loading)
                     .id(bill.key)
                 } else {
@@ -201,15 +197,14 @@ struct BillingView: View {
                     .frame(width: min(320, width * 0.42))
                 Rectangle().fill(SN.line).frame(width: 1)
                 if let bill = selectedBill(store) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: DesignTokens.spacingXL) {
+                    Form {
+                        Section {
                             TillBillColumn(bill: bill, amounts: amounts(bill), config: config,
                                            discountLabel: drafts.draft(for: bill.key).discountLabel,
                                            printBill: { printBill(bill, amounts: amounts(bill)) })
-                            Rectangle().fill(SN.line).frame(height: 1)
-                            padStack(bill)
                         }
-                        .padding(DesignTokens.spacingL)
+                        .listRowBackground(Color.clear)
+                        padSections(bill)
                     }
                     .frame(maxWidth: .infinity)
                     .skeleton(loading)
@@ -223,15 +218,19 @@ struct BillingView: View {
         }
     }
 
-    private func padStack(_ bill: TillBill) -> some View {
+    /// The pad's sections and the Pay button, in the host's Form
+    @ViewBuilder
+    private func padSections(_ bill: TillBill) -> some View {
         let draft = drafts.draft(for: bill.key)
         let a = amounts(bill)
-        return VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
-            PayPadControls(draft: draft, amounts: a, canDiscount: canDiscount) { applyCode($0, bill: bill) }
+        // The bill column beside it already ends on To pay
+        PayPadControls(draft: draft, amounts: a, canDiscount: canDiscount, showsTotal: false) { applyCode($0, bill: bill) }
+        Section {
             PayButton(draft: draft, total: a.total, submitting: payingKey == bill.key) { pay(bill, amounts: a) }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+        } footer: {
             Text("The receipt opens next, ready to print or share")
-                .font(.footnote)
-                .foregroundStyle(SN.mut)
                 .frame(maxWidth: .infinity)
                 .multilineTextAlignment(.center)
         }
@@ -507,7 +506,10 @@ struct TillBillHeading: View {
         }
     }
 
-    private var headline: String {
+    private var headline: String { Self.headline(bill, now: now) }
+
+    /// "Bill 7431 · Pedro · seated 52m · 2 orders"
+    static func headline(_ bill: TillBill, now: Date) -> String {
         var parts: [String] = []
         if let n = bill.billNumber { parts.append("Bill \(n)") }
         if let waiter = bill.waiter { parts.append(waiter) }
@@ -549,23 +551,27 @@ struct TillPhoneBillScreen: View {
     let pay: (BillAmounts) -> Void
     let printBill: (BillAmounts) -> Void
 
-    @State private var expanded = false
-    private static let shownLines = 3
-
     var body: some View {
         let g = bill.gross
         let amounts = draft.amounts(gst: g.gst, vat: g.vat, config: config, discountAllowed: canDiscount)
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.spacingXL) {
-                TimelineView(.periodic(from: .now, by: 30)) { tl in
-                    TillBillHeading(bill: bill, now: tl.date)
+        TimelineView(.periodic(from: .now, by: 30)) { tl in
+            Form {
+                Section {
+                    ForEach(bill.lines) { line in
+                        POSBillLine(color: DishStage(itemStatus: line.status).color, quantity: Int(line.quantity.rounded()),
+                                    name: line.name, note: line.notes, amount: line.unitPrice * line.quantity)
+                    }
+                    DisclosureGroup("Tax details") {
+                        PayBillTotals(amounts: amounts, config: config, discountLabel: draft.discountLabel, totalLabel: "Total")
+                    }
+                    .accessibilityIdentifier("till-expand")
+                } header: {
+                    Text("\(bill.lines.count) line\(bill.lines.count == 1 ? "" : "s")")
                 }
-                summary(amounts)
                 PayPadControls(draft: draft, amounts: amounts, canDiscount: canDiscount, applyCode: applyCode)
             }
-            .padding(DesignTokens.spacingL)
+            .navigationSubtitleIfAvailable(TillBillHeading.headline(bill, now: tl.date))
         }
-        .background(SN.page)
         .safeAreaInset(edge: .bottom) {
             PayButton(draft: draft, total: amounts.total, submitting: paying) { pay(amounts) }
                 .padding(.horizontal, DesignTokens.spacingL)
@@ -573,42 +579,13 @@ struct TillPhoneBillScreen: View {
                 .background(.bar)
         }
         .navigationTitle(bill.title)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { printBill(amounts) } label: { Label("Print bill", systemImage: "printer") }
                     .accessibilityIdentifier("till-print-bill")
-            }
-        }
-    }
-
-    /// The first lines and "+N more"; tap for every line and the tax
-    @ViewBuilder
-    private func summary(_ amounts: BillAmounts) -> some View {
-        let hidden = bill.lines.count - Self.shownLines
-        VStack(alignment: .leading, spacing: DesignTokens.spacingM) {
-            if expanded || hidden <= 0 {
-                TillLines(lines: bill.lines)
-            } else {
-                TillLines(lines: Array(bill.lines.prefix(Self.shownLines)))
-            }
-            Button {
-                withAnimation { expanded.toggle() }
-            } label: {
-                HStack {
-                    Text(expanded ? "Fewer details"
-                         : hidden > 0 ? "+\(hidden) more · CGST, SGST, VAT included" : "Tax details")
-                    Spacer()
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                }
-                .font(.subheadline)
-                .foregroundStyle(SN.mut)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("till-expand")
-            if expanded {
-                PayBillTotals(amounts: amounts, config: config, discountLabel: draft.discountLabel, totalLabel: "Total")
             }
         }
     }

@@ -543,7 +543,7 @@ final class POSPaymentUITests: XCTestCase {
 
         // Split in two (the split editor is a sheet): the parts must add up
         // before Done and Pay are enabled
-        let split = app.buttons["pay-method-SPLIT"]
+        let split = app.segmentedControls["pay-method"].buttons["Split"]
         XCTAssertTrue(split.waitForExistence(timeout: 5))
         if !split.isHittable { app.swipeUp() }
         split.tap()
@@ -1395,7 +1395,7 @@ extension QAPlanUITests {
         while Date() < deadline, Int(total.label.filter(\.isNumber)) != before - 20 { RunLoop.current.run(until: Date().addingTimeInterval(0.25)) }
         XCTAssertEqual(Int(total.label.filter(\.isNumber)), before - 20, "₹20 off didn't come off the total")
 
-        app.buttons["pay-method-UPI"].tap()
+        app.segmentedControls["pay-method"].buttons["UPI"].tap()
         let pay = app.buttons["pay-button"]
         XCTAssertTrue(pay.isEnabled)
         XCTAssertTrue(pay.label.contains("by UPI"), pay.label)

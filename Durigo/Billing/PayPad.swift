@@ -187,6 +187,8 @@ struct PayBillTotals: View {
 
 // MARK: - The pad
 
+/// The pad as Form sections (the host is a Form or a List): the total, how
+/// they pay, a discount and the cash handed over
 struct PayPadControls: View {
     @Bindable var draft: PayDraft
     let amounts: BillAmounts
@@ -199,19 +201,19 @@ struct PayPadControls: View {
     @FocusState private var discountFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        Group {
             if showsTotal {
-                HStack(alignment: .firstTextBaseline) {
-                    PanelLabel(text: "To pay")
-                    Spacer()
-                    Text(amounts.total.rupees)
-                        .font(.largeTitle.weight(.bold))
-                        .monospacedDigit()
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                        .accessibilityIdentifier("pay-total")
+                Section {
+                    LabeledContent("To pay") {
+                        Text(amounts.total.rupees)
+                            .font(.largeTitle.weight(.bold))
+                            .monospacedDigit()
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                            .foregroundStyle(SN.ink)
+                            .accessibilityIdentifier("pay-total")
+                    }
                 }
-                .accessibilityElement(children: .contain)
             }
             methods
             if canDiscount { discount }
@@ -224,84 +226,75 @@ struct PayPadControls: View {
 
     // MARK: Pay with
 
-    private var methods: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PanelLabel(text: "Pay with").accessibilityAddTraits(.isHeader)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { methodButtons }
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                    methodButtons
-                }
-            }
-            moreMethods
-        }
-    }
-
-    @ViewBuilder
-    private var methodButtons: some View {
-        ForEach(PayMethod.main, id: \.self) { m in
-            Button(PayMethod.name(m)) { discountFocused = false; draft.chooseMethod(m) }
-                .buttonStyle(PayChoiceStyle(selected: !draft.splitting && draft.method == m))
-                .accessibilityIdentifier("pay-method-\(m)")
-                .accessibilityAddTraits(!draft.splitting && draft.method == m ? .isSelected : [])
-        }
-        Button(draft.splitting ? "Split · \(draft.splits.count)" : "Split") {
-            if draft.splits.isEmpty { draft.splitEqually(total: amounts.total, ways: 2) }
-            draft.splitting = true
-            draft.cashGiven = nil
-            editingSplit = true
-        }
-        .buttonStyle(PayChoiceStyle(selected: draft.splitting))
-        .accessibilityIdentifier("pay-method-SPLIT")
-        .accessibilityAddTraits(draft.splitting ? .isSelected : [])
-    }
-
-    /// Wallet and any other rarely used way to pay
-    private var moreMethods: some View {
-        let other = draft.method.flatMap { PayMethod.more.contains($0) && !draft.splitting ? $0 : nil }
-        return Menu {
-            ForEach(PayMethod.more, id: \.self) { m in
-                Button { draft.chooseMethod(m) } label: {
-                    if other == m { Label(PayMethod.name(m), systemImage: "checkmark") }
-                    else { Label(PayMethod.name(m), systemImage: PayMethod.icon(m)) }
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                if let other {
-                    Image(systemName: "checkmark.circle.fill")
-                    Text("Paying by \(PayMethod.name(other))")
+    /// Cash, UPI, Card or Split; nothing chosen until the cashier picks
+    private var methodChoice: Binding<String> {
+        Binding(
+            get: { draft.splitting ? "SPLIT" : (draft.method.flatMap { PayMethod.main.contains($0) ? $0 : nil } ?? "") },
+            set: { m in
+                discountFocused = false
+                if m == "SPLIT" {
+                    if draft.splits.isEmpty { draft.splitEqually(total: amounts.total, ways: 2) }
+                    draft.splitting = true
+                    draft.cashGiven = nil
+                    editingSplit = true
                 } else {
-                    Text("Other ways to pay")
+                    draft.chooseMethod(m)
                 }
-                Image(systemName: "chevron.down").font(.caption)
+            })
+    }
+
+    private var methods: some View {
+        Section {
+            Picker("Pay with", selection: methodChoice) {
+                ForEach(PayMethod.main, id: \.self) { Text(PayMethod.name($0)).tag($0) }
+                Text("Split").tag("SPLIT")
             }
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(other == nil ? SN.mut : SN.teal)
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.large)
+            .accessibilityIdentifier("pay-method")
+            if draft.splitting {
+                Button {
+                    editingSplit = true
+                } label: {
+                    LabeledContent("Split \(draft.splits.count) ways",
+                                   value: draft.splits.map { ($0.amount ?? 0).rupees + " " + PayMethod.name($0.method) }.joined(separator: " · "))
+                }
+                .accessibilityIdentifier("pay-split-edit")
+            }
+            Picker("Other ways to pay", selection: Binding(
+                get: { draft.splitting ? "" : (draft.method.flatMap { PayMethod.more.contains($0) ? $0 : nil } ?? "") },
+                set: { if !$0.isEmpty { draft.chooseMethod($0) } }
+            )) {
+                Text("None").tag("")
+                ForEach(PayMethod.more, id: \.self) { m in
+                    Label(PayMethod.name(m), systemImage: PayMethod.icon(m)).tag(m)
+                }
+            }
+            .pickerStyle(.menu)
+            .accessibilityIdentifier("pay-method-more")
+        } header: {
+            Text("Pay with")
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .accessibilityIdentifier("pay-method-more")
     }
 
     // MARK: Discount
 
     private var discount: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PanelLabel(text: "Discount").accessibilityAddTraits(.isHeader)
+        Section {
             if let code = draft.appliedCode {
-                HStack {
-                    Label("\(code.code): −\(code.amount.rupees)", systemImage: "ticket.fill")
-                        .foregroundStyle(SN.teal)
-                    Spacer()
+                LabeledContent {
                     Button("Remove", role: .destructive) { draft.appliedCode = nil }
+                } label: {
+                    Label("\(code.code): −\(code.amount.rupees)", systemImage: "ticket")
+                        .foregroundStyle(SN.teal)
                 }
-                .font(.subheadline)
             } else {
-                HStack(spacing: 8) {
+                HStack(spacing: DesignTokens.spacingS) {
                     TextField("Code, or ₹ / % off", text: $draft.discountText)
-                        .textFieldStyle(.roundedBorder)
+                        #if os(iOS)
                         .textInputAutocapitalization(.characters)
+                        #endif
                         .autocorrectionDisabled()
                         .submitLabel(.done)
                         .onSubmit { if draft.discountIsCode { applyCode(draft.discountText) } }
@@ -318,15 +311,17 @@ struct PayPadControls: View {
                             Text("%").tag(PayDraft.DiscountMode.percent)
                         }
                         .pickerStyle(.segmented)
+                        .labelsHidden()
                         .fixedSize()
                         .accessibilityIdentifier("pay-discount-mode")
                     }
                 }
-                if amounts.discount > 0 {
-                    Text("−\(amounts.discount.rupees) off the bill")
-                        .font(.footnote)
-                        .foregroundStyle(SN.teal)
-                }
+            }
+        } header: {
+            Text("Discount")
+        } footer: {
+            if draft.appliedCode == nil && amounts.discount > 0 {
+                Text("−\(amounts.discount.rupees) off the bill").foregroundStyle(SN.teal)
             }
         }
     }
@@ -335,50 +330,41 @@ struct PayPadControls: View {
 
     private var cashGiven: some View {
         let total = amounts.total
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                PanelLabel(text: "Cash given").accessibilityAddTraits(.isHeader)
-                Text("(cash only)").font(.caption2).foregroundStyle(SN.mut)
-            }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { cashButtons(total: total) }
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                    cashButtons(total: total)
+        let suggestions = PayDraft.cashSuggestions(total: total)
+        return Section {
+            Picker("Cash given", selection: Binding<Int>(
+                get: { draft.method == "CASH" ? (draft.cashGiven ?? 0) : 0 },
+                set: { amount in
+                    discountFocused = false
+                    draft.chooseMethod("CASH")
+                    draft.cashGiven = amount
+                })) {
+                ForEach(suggestions, id: \.self) { amount in
+                    Text(amount == total ? "Exact" : amount.rupees)
+                        .monospacedDigit()
+                        .tag(amount)
+                        .accessibilityLabel(amount == total ? "Exact cash, \(amount.rupees)" : "\(amount.rupees) cash given")
                 }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.large)
+            .accessibilityIdentifier("pay-cash")
             if let given = draft.cashGiven, draft.method == "CASH" {
-                HStack {
-                    Text(given == total ? "No change" : "Change")
-                    Spacer()
+                LabeledContent(given > total ? "Change" : "No change") {
                     if given > total {
                         Text((given - total).rupees)
                             .font(.title3.weight(.bold))
                             .monospacedDigit()
+                            .foregroundStyle(SN.teal)
                             .accessibilityIdentifier("pay-change")
                     }
                 }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(SN.ink)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(SN.teal.opacity(0.12)))
-                .accessibilityElement(children: .combine)
             }
-        }
-    }
-
-    @ViewBuilder
-    private func cashButtons(total: Int) -> some View {
-        ForEach(PayDraft.cashSuggestions(total: total), id: \.self) { amount in
-            let selected = draft.method == "CASH" && draft.cashGiven == amount
-            Button(amount == total ? "Exact" : amount.rupees) {
-                discountFocused = false
-                draft.chooseMethod("CASH")
-                draft.cashGiven = amount
-            }
-            .buttonStyle(PayChoiceStyle(selected: selected, mono: true))
-            .accessibilityLabel(amount == total ? "Exact cash, \(amount.rupees)" : "\(amount.rupees) cash given")
-            .accessibilityIdentifier("pay-cash-\(amount)")
+        } header: {
+            Text("Cash given")
+        } footer: {
+            Text("For cash: picking an amount chooses Cash and works out the change.")
         }
     }
 }
@@ -402,29 +388,6 @@ struct PayButton: View {
         .controlSize(.large)
         .disabled(!draft.canPay(total: total) || submitting)
         .accessibilityIdentifier("pay-button")
-    }
-}
-
-/// A choice on the pad (a method or a cash amount): selected is filled teal
-struct PayChoiceStyle: PrimitiveButtonStyle {
-    var selected: Bool
-    var mono = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        let button = Button(role: configuration.role, action: configuration.trigger) {
-            configuration.label
-                .font(mono ? .subheadline.monospacedDigit().weight(.semibold) : .body.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(maxWidth: .infinity)
-        }
-        .controlSize(.large)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        if selected {
-            button.buttonStyle(.borderedProminent).tint(SN.teal)
-        } else {
-            button.buttonStyle(.bordered).tint(SN.ink)
-        }
     }
 }
 
