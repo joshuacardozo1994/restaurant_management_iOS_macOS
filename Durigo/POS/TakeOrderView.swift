@@ -82,18 +82,28 @@ struct TakeOrderView: View {
     var body: some View {
         Group {
             if inline {
+                // Pushed onto the floor's stack (iPad, Mac): the floor's back
+                // button asks first when dishes haven't been sent
                 GeometryReader { geo in
-                    if geo.size.width >= Self.wideWidth {
-                        wideLayout
-                    } else {
-                        VStack(spacing: 0) {
-                            inlineTopBar
-                            Divider()
-                            compactLayout
-                        }
-                    }
+                    if geo.size.width >= Self.wideWidth { wideLayout } else { compactLayout }
                 }
                 .background(SN.page)
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationBarBackButtonHidden(true)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Floor", systemImage: "chevron.left") { close(selecting: tableId) }
+                            .accessibilityIdentifier("order-back-to-floor")
+                    }
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        Button("Takeaway", systemImage: "bag") { switchTo(OrderTarget(tableId: nil, type: .takeaway)) }
+                            .accessibilityAddTraits(orderType == .takeaway ? .isSelected : [])
+                        Button("Delivery", systemImage: "bicycle") { switchTo(OrderTarget(tableId: nil, type: .delivery)) }
+                            .accessibilityAddTraits(orderType == .delivery ? .isSelected : [])
+                    }
+                }
+                .searchable(text: $query, prompt: "Search menu")
             } else {
                 NavigationStack {
                     compactLayout
@@ -104,6 +114,7 @@ struct TakeOrderView: View {
                                 Button("Cancel") { close(selecting: nil) }
                             }
                         }
+                        .searchable(text: $query, prompt: "Search menu")
                 }
             }
         }
@@ -201,25 +212,6 @@ struct TakeOrderView: View {
         }
     }
 
-    /// Inline but narrow (iPad in split view): a way back to the floor
-    private var inlineTopBar: some View {
-        HStack {
-            Button {
-                close(selecting: tableId)
-            } label: {
-                Label("Floor", systemImage: "chevron.left")
-                    .font(.subheadline.weight(.medium))
-            }
-            .buttonStyle(.borderless)
-            .accessibilityIdentifier("order-back-to-floor")
-            Spacer()
-            Text(title).font(.headline)
-            Spacer()
-        }
-        .padding(.horizontal, DesignTokens.spacingL)
-        .padding(.vertical, DesignTokens.spacingS)
-    }
-
     // MARK: Sections
 
     /// Waiter selector — required for dine-in/delivery so the kitchen knows
@@ -296,27 +288,8 @@ struct TakeOrderView: View {
         }
     }
 
-    private var searchField: some View {
-        HStack {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Search menu", text: $query)
-            if !query.isEmpty {
-                Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(SN.panel))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(SN.line, lineWidth: 1))
-    }
-
     private var searchAndCategoryBar: some View {
         VStack(spacing: 6) {
-            searchField
-                .padding(.horizontal, DesignTokens.spacingL)
-                .padding(.top, DesignTokens.spacingS)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -333,22 +306,13 @@ struct TakeOrderView: View {
 
     private func categoryChip(id: String?, name: String) -> some View {
         let isSelected = selectedCategoryId == id
-        return Button {
-            selectedCategoryId = id
-        } label: {
-            HStack(spacing: 5) {
-                Text(name)
-                Text("\(itemCount(in: id))")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(isSelected ? SN.page.opacity(0.8) : SN.mut)
-            }
-            .font(.system(.footnote, weight: .medium))
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(Capsule().fill(isSelected ? SN.ink : SN.panel))
-            .overlay(Capsule().stroke(isSelected ? SN.ink : SN.line, lineWidth: 1))
-            .foregroundStyle(isSelected ? SN.page : SN.ink)
+        let button = Button { selectedCategoryId = id } label: {
+            Text("\(name) \(Text("\(itemCount(in: id))").foregroundStyle(.secondary))")
         }
-        .buttonStyle(.plain)
+        return Group {
+            if isSelected { button.buttonStyle(.borderedProminent).tint(SN.ink) } else { button.buttonStyle(.bordered) }
+        }
+        .buttonBorderShape(.capsule)
         .accessibilityIdentifier("category-chip-\(name)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
@@ -405,10 +369,7 @@ struct TakeOrderView: View {
                         Text("\((item.price).rupees)")
                             .font(.system(.body, weight: .semibold))
                             .monospacedDigit()
-                        let inCart = quantityInCart(item)
-                        if inCart > 0 {
-                            QuantityBadge(count: inCart)
-                        } else {
+                        if quantityInCart(item) == 0 {
                             Image(systemName: "plus.circle.fill")
                                 .foregroundStyle(SN.teal)
                         }
@@ -416,6 +377,7 @@ struct TakeOrderView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .badge(quantityInCart(item))
             }
             if filteredItems.isEmpty {
                 Text("No items match")
@@ -523,36 +485,16 @@ struct TakeOrderView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(line.notes == nil ? "Add a note for \(line.menuItem.name)" : "Edit note for \(line.menuItem.name)")
-        HStack(spacing: 0) {
-            Button {
-                decrement(line)
-            } label: {
-                Image(systemName: "minus.circle.fill").foregroundStyle(SN.mut)
-                    .font(.title3)
-                    // 36pt, not the 17pt glyph: hit in a hurry at a table
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("One fewer \(line.menuItem.name)")
-            .accessibilityIdentifier("cart-minus-\(line.menuItem.name)")
-            Text("\(line.quantity)")
-                .font(.system(.body, weight: .semibold))
-                .frame(minWidth: 28)
-                .monospacedDigit()
-            Button {
-                increment(line)
-            } label: {
-                Image(systemName: "plus.circle.fill").foregroundStyle(SN.teal)
-                    .font(.title3)
-                    // 36pt, not the 17pt glyph: hit in a hurry at a table
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("One more \(line.menuItem.name)")
-            .accessibilityIdentifier("cart-plus-\(line.menuItem.name)")
+        Stepper {
+            Text("\(line.quantity)").monospacedDigit().font(.body.weight(.semibold))
+        } onIncrement: {
+            increment(line)
+        } onDecrement: {
+            decrement(line)
         }
+        .fixedSize()
+        .accessibilityLabel("\(line.menuItem.name), \(line.quantity)")
+        .accessibilityIdentifier("cart-stepper-\(line.menuItem.name)")
     }
 
     private func sendButton(fullWidth: Bool) -> some View {
@@ -580,11 +522,8 @@ struct TakeOrderView: View {
                 categoryColumn
                     .frame(width: 200)
                 Rectangle().fill(SN.line).frame(width: 1)
-                VStack(spacing: 0) {
-                    searchField
-                        .padding(DesignTokens.spacingL)
-                    menuGrid
-                }
+                menuGrid
+                    .padding(.top, DesignTokens.spacingL)
                 Rectangle().fill(SN.line).frame(width: 1)
                 liveBill
                     .frame(width: 360)
@@ -597,14 +536,6 @@ struct TakeOrderView: View {
     /// Every table, to switch the order to another one
     private var tableStrip: some View {
         HStack(spacing: 10) {
-            Button {
-                close(selecting: tableId)
-            } label: {
-                Label("Floor", systemImage: "chevron.left")
-                    .font(.subheadline.weight(.medium))
-            }
-            .buttonStyle(QuietButtonStyle())
-            .accessibilityIdentifier("order-back-to-floor")
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -617,12 +548,6 @@ struct TakeOrderView: View {
                 }
                 .onAppear { if let tableId { proxy.scrollTo(tableId, anchor: .center) } }
             }
-            Button("Takeaway") { switchTo(OrderTarget(tableId: nil, type: .takeaway)) }
-                .buttonStyle(QuietButtonStyle())
-                .accessibilityAddTraits(orderType == .takeaway ? .isSelected : [])
-            Button("Delivery") { switchTo(OrderTarget(tableId: nil, type: .delivery)) }
-                .buttonStyle(QuietButtonStyle())
-                .accessibilityAddTraits(orderType == .delivery ? .isSelected : [])
         }
         .padding(.horizontal, DesignTokens.spacingL)
         .padding(.vertical, 10)
@@ -675,40 +600,23 @@ struct TakeOrderView: View {
         notes = ""
     }
 
+    /// Categories as a sidebar list, with their dish counts
     private var categoryColumn: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 2) {
-                categoryRow(id: nil, name: "All")
-                ForEach(store.categories) { c in
-                    if itemCount(in: c.id) > 0 { categoryRow(id: c.id, name: c.name) }
+        List(selection: Binding(
+            get: { selectedCategoryId ?? "" },
+            set: { selectedCategoryId = ($0?.isEmpty ?? true) ? nil : $0 }
+        )) {
+            Text("All").badge(itemCount(in: nil)).tag("")
+                .accessibilityIdentifier("category-chip-All")
+            ForEach(store.categories) { c in
+                if itemCount(in: c.id) > 0 {
+                    Text(c.name).badge(itemCount(in: c.id)).tag(c.id)
+                        .accessibilityIdentifier("category-chip-\(c.name)")
                 }
             }
-            .padding(10)
         }
-    }
-
-    private func categoryRow(id: String?, name: String) -> some View {
-        let isSelected = selectedCategoryId == id
-        return Button {
-            selectedCategoryId = id
-        } label: {
-            HStack {
-                Text(name)
-                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                    .multilineTextAlignment(.leading)
-                Spacer(minLength: 4)
-                Text("\(itemCount(in: id))")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(SN.mut)
-            }
-            .padding(.horizontal, 12)
-            .frame(minHeight: 40)
-            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(isSelected ? SN.panel2 : .clear))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("category-chip-\(name)")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
     }
 
     private var selectedCategoryName: String {
@@ -768,18 +676,11 @@ struct TakeOrderView: View {
                     ForEach(item.variantTemplates) { v in
                         let price = v.price(forBase: Double(item.price))
                         let picked = cart.contains { $0.menuItem.id == item.id && $0.variant?.id == v.id }
-                        Button {
-                            addToCart(item, variant: v)
-                        } label: {
-                            Text("\(v.name) \(Int(price.rounded()))")
-                                .font(.caption2.monospaced())
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 4)
-                                .foregroundStyle(picked ? SN.teal : SN.mut)
-                                .overlay(RoundedRectangle(cornerRadius: 5).stroke(picked ? SN.teal : SN.line, lineWidth: 1))
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                        Button("\(v.name) \(Int(price.rounded()))") { addToCart(item, variant: v) }
+                            .font(.caption2.monospaced())
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                            .tint(picked ? SN.teal : nil)
                         .accessibilityLabel("\(item.name), \(v.name), \(price.rupees)")
                     }
                 }
@@ -1097,7 +998,6 @@ private struct VariantPickerSheet: View {
 /// five) at body size, so it's easy to tap and read on a phone
 struct KitchenNotesField: View {
     @Binding var text: String
-    @FocusState private var focused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1105,19 +1005,8 @@ struct KitchenNotesField: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(SN.mut)
             TextField("Allergies, less spicy, no onion…", text: $text, axis: .vertical)
-                .font(.body)
                 .lineLimit(2...5)
-                .focused($focused)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .frame(minHeight: 64, alignment: .topLeading)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(SN.panel2))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(focused ? SN.teal : SN.line, lineWidth: focused ? 2 : 1)
-                )
-                .contentShape(Rectangle())
-                .onTapGesture { focused = true }
+                .textFieldStyle(.roundedBorder)
                 .accessibilityIdentifier("order-kitchen-notes")
         }
     }

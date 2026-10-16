@@ -3,7 +3,7 @@
 //  Durigo
 //
 //  Top-level POS view: the floor (tables and the selected table's bill),
-//  with the Bill Generator one quiet button away in the floor's header.
+//  with the Bill Generator in the floor's toolbar, pushed over it.
 //
 //  This view is what `Home.swift` routes `.pos` to.
 //
@@ -21,33 +21,19 @@ struct POSContainerView: View {
     private var placeholder: POSStore { POSStore.placeholder(api: APIClient(session: session)) }
 
     var body: some View {
-        Group {
-            if showingGenerator {
-                VStack(spacing: 0) {
-                    HStack {
-                        Button {
-                            showingGenerator = false
-                        } label: {
-                            Label("Floor", systemImage: "chevron.left")
-                                .font(.subheadline.weight(.medium))
-                        }
-                        .buttonStyle(.borderless)
-                        .accessibilityIdentifier("pos-back-to-floor")
-                        Spacer()
-                    }
-                    .padding(.horizontal, DesignTokens.spacingL)
-                    .padding(.vertical, DesignTokens.spacingS)
-                    Divider().opacity(0.4)
-                    BillGenerator()
+        NavigationRoot {
+            Group {
+                if let store, store.tablesLoaded {
+                    TablesGridView(store: store, onOpenBillGenerator: { showingGenerator = true })
+                } else {
+                    // Loading: the floor with sample tables, as placeholders
+                    TablesGridView(store: placeholder, onOpenBillGenerator: {})
+                        .skeleton(true)
+                        .accessibilityIdentifier("floor-loading")
                 }
-            } else if let store, store.tablesLoaded {
-                TablesGridView(store: store, onOpenBillGenerator: { showingGenerator = true })
-            } else {
-                // Loading: the floor with sample tables, as placeholders
-                TablesGridView(store: placeholder, onOpenBillGenerator: {})
-                    .skeleton(true)
-                    .accessibilityIdentifier("floor-loading")
             }
+            // The Bill Generator pushed over the floor: the system back button returns
+            .navigationDestination(isPresented: $showingGenerator) { BillGenerator() }
         }
         .onAppear { openBillGeneratorIfAsked() }
         .onChange(of: navigation.showBillGenerator) { openBillGeneratorIfAsked() }

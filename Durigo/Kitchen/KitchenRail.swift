@@ -299,7 +299,7 @@ struct KitchenRailView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             Group {
                 if let board = store?.board {
                     content(board, live: true)

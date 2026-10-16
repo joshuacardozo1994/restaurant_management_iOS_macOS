@@ -333,3 +333,48 @@ extension View {
     func navigationBarTitleDisplayMode(_ mode: NavigationBarTitleDisplayModeShim) -> some View { self }
 }
 #endif
+
+
+// MARK: - One navigation stack per screen
+
+private struct InNavigationStackKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// Already inside a navigation stack (a screen pushed from More, or onto
+    /// another screen): don't start a second one
+    var inNavigationStack: Bool {
+        get { self[InNavigationStackKey.self] }
+        set { self[InNavigationStackKey.self] = newValue }
+    }
+}
+
+/// A screen's navigation stack: its own when it is the root of a tab or the
+/// sidebar's detail, the existing one when it was pushed. Nested stacks give
+/// doubled bars and broken back buttons.
+struct NavigationRoot<Content: View>: View {
+    @Environment(\.inNavigationStack) private var inStack
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if inStack {
+            content()
+        } else {
+            NavigationStack {
+                content()
+            }
+            .environment(\.inNavigationStack, true)
+        }
+    }
+}
+
+extension View {
+    /// The navigation bar's subtitle (iOS 26 and macOS 26); nothing on older systems
+    @ViewBuilder
+    func navigationSubtitleIfAvailable(_ text: String) -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            self.navigationSubtitle(text)
+        } else {
+            self
+        }
+    }
+}

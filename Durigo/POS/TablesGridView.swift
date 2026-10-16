@@ -12,7 +12,7 @@
 import SwiftUI
 
 /// What the order screen is for: a table, or a takeaway / delivery
-struct OrderTarget: Identifiable, Equatable {
+struct OrderTarget: Identifiable, Hashable {
     var tableId: String?
     var type: OrderType
     var id: String { (tableId ?? "counter") + "-" + type.rawValue }
@@ -62,17 +62,15 @@ struct TablesGridView: View {
     static let panelWidth: CGFloat = 380
 
     var body: some View {
+        sheets(navigation(layout))
+    }
+
+    /// The floor, with the bill beside it when there's room
+    private var layout: some View {
         GeometryReader { geo in
             let wide = geo.size.width >= Self.wideWidth
             Group {
-                if wide, let target = ordering {
-                    TakeOrderView(store: store, target: target, inline: true,
-                                  onClose: { finishOrdering(selecting: $0) },
-                                  onPay: { id in
-                                      finishOrdering(selecting: id)
-                                      detailTableId = id
-                                  })
-                } else if wide {
+                if wide {
                     HStack(spacing: 0) {
                         floor(compact: false, fourAcross: false)
                         Rectangle().fill(SN.line).frame(width: 1)
@@ -87,6 +85,32 @@ struct TablesGridView: View {
         }
         .background(SN.page)
         .foregroundStyle(SN.ink)
+    }
+
+    /// The navigation bar, and the order screen pushed over the floor on a wide screen
+    private func navigation(_ content: some View) -> some View {
+        content
+            .navigationDestination(item: Binding(
+                get: { isWide ? ordering : nil },
+                set: { ordering = $0 }
+            )) { target in
+                TakeOrderView(store: store, target: target, inline: true,
+                              onClose: { finishOrdering(selecting: $0) },
+                              onPay: { id in
+                                  finishOrdering(selecting: id)
+                                  detailTableId = id
+                              })
+            }
+            .navigationTitle("Floor")
+            .navigationSubtitleIfAvailable(floorSubtitle)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar { floorToolbar }
+    }
+
+    private func sheets(_ content: some View) -> some View {
+        content
         // Phones and narrow iPads: the table's bill in the system sheet, half
         // height with the floor still usable behind it, pulled up for the rest
         .sheet(item: Binding(
@@ -159,8 +183,7 @@ struct TablesGridView: View {
     private func floor(compact: Bool, fourAcross: Bool) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                header(compact: compact)
-                filterChips
+                filterPicker
                 TimelineView(.periodic(from: .now, by: 30)) { tl in
                     VStack(alignment: .leading, spacing: 16) {
                         let sections = floorSections
@@ -199,106 +222,42 @@ struct TablesGridView: View {
     private var seatedCount: Int { store.tables.filter(\.isSeated).count }
     private var openTotal: Double { store.tables.filter(\.isSeated).reduce(0) { $0 + $1.unpaidTotal } }
 
-    private func header(compact: Bool) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Floor")
-                    .font(.title2.weight(.bold))
-                    .accessibilityAddTraits(.isHeader)
-                PanelLabel(text: "\(seatedCount) of \(store.tables.count) seated · \(openTotal.rupees) open")
-            }
-            Spacer(minLength: 8)
-            HStack(spacing: compact ? 10 : 8) {
-                LiveBadge(isLive: store.sseConnected)
-                    .fixedSize()
-                if !compact {
-                    Button("Takeaway") { ordering = OrderTarget(tableId: nil, type: .takeaway) }
-                        .buttonStyle(QuietButtonStyle())
-                        .lineLimit(1)
-                        .fixedSize()
-                    Button("Delivery") { ordering = OrderTarget(tableId: nil, type: .delivery) }
-                        .buttonStyle(QuietButtonStyle())
-                        .lineLimit(1)
-                        .fixedSize()
-                }
-                Menu {
-                    Button {
-                        ordering = OrderTarget(tableId: nil, type: .takeaway)
-                    } label: {
-                        Label("Takeaway Order", systemImage: "bag")
-                    }
-                    Button {
-                        ordering = OrderTarget(tableId: nil, type: .delivery)
-                    } label: {
-                        Label("Delivery Order", systemImage: "bicycle")
-                    }
-                    Divider()
-                    Button {
-                        showMergeSheet = true
-                    } label: {
-                        Label("Merge Tables", systemImage: "rectangle.3.group")
-                    }
-                    Button {
-                        showManageSheet = true
-                    } label: {
-                        Label("Manage Tables", systemImage: "slider.horizontal.3")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.title3)
-                        .foregroundStyle(SN.ink)
-                        .frame(minWidth: 32, minHeight: 32)
-                }
-                .menuStyle(.button)
-                .buttonStyle(.borderless)
-                .accessibilityLabel("New order and tables")
-                .accessibilityIdentifier("pos-new-menu")
-                Button(action: onOpenBillGenerator) {
-                    Image(systemName: "doc.text")
-                        .font(.title3)
-                        .foregroundStyle(SN.mut)
-                        .frame(minWidth: 32, minHeight: 32)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
-                .help("Bill Generator")
-                .accessibilityLabel("Bill Generator")
+    /// The floor's navigation bar: title, how full it is, live status, new
+    /// takeaway or delivery, and the rest in the overflow menu
+    @ToolbarContentBuilder
+    private var floorToolbar: some ToolbarContent {
+        LiveBadgeItem(isLive: store.sseConnected)
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button("Takeaway", systemImage: "bag") { ordering = OrderTarget(tableId: nil, type: .takeaway) }
+                .accessibilityIdentifier("pos-new-takeaway")
+            Button("Delivery", systemImage: "bicycle") { ordering = OrderTarget(tableId: nil, type: .delivery) }
+                .accessibilityIdentifier("pos-new-delivery")
+        }
+        ToolbarItem(placement: .secondaryAction) {
+            Button("Merge Tables", systemImage: "rectangle.3.group") { showMergeSheet = true }
+        }
+        ToolbarItem(placement: .secondaryAction) {
+            Button("Manage Tables", systemImage: "slider.horizontal.3") { showManageSheet = true }
+        }
+        ToolbarItem(placement: .secondaryAction) {
+            Button("Bill Generator", systemImage: "doc.text", action: onOpenBillGenerator)
                 .accessibilityIdentifier("pos-bill-generator")
-            }
         }
     }
 
-    private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(FloorFilter.allCases) { f in
-                    let count = f == .all ? nil : store.tables.filter(f.includes).count
-                    let on = filter == f
-                    Button {
-                        filter = f
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(f.rawValue)
-                            if let count {
-                                Text("\(count)")
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(on ? SN.page.opacity(0.8) : SN.mut)
-                            }
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 36)
-                        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(on ? SN.ink : SN.panel))
-                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(on ? SN.ink : SN.line, lineWidth: 1))
-                        .foregroundStyle(on ? SN.page : SN.ink)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("floor-filter-\(f.rawValue)")
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                }
+    private var floorSubtitle: String { "\(seatedCount) of \(store.tables.count) seated · \(openTotal.rupees) open" }
+
+    /// All / Seated / Bill asked / Free, with counts
+    private var filterPicker: some View {
+        Picker("Show", selection: $filter) {
+            ForEach(FloorFilter.allCases) { f in
+                let count = store.tables.filter(f.includes).count
+                Text(f == .all ? "All" : "\(f == .billAsked ? "Bill" : f.rawValue) \(count)").tag(f)
             }
-            .padding(.vertical, 1)
         }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityIdentifier("floor-filter")
     }
 
     // MARK: Sections and tiles
@@ -429,15 +388,9 @@ struct TablesGridView: View {
         if let tapped = selectedTable {
             billPanel(for: tapped, style: .side)
         } else {
-            VStack(spacing: 10) {
-                Image(systemName: "hand.tap")
-                    .font(.title2)
-                Text("Tap a table to see its bill")
-                    .font(.subheadline)
-            }
-            .foregroundStyle(SN.mut)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(SN.panel)
+            ContentUnavailableView("Tap a table", systemImage: "hand.tap", description: Text("Its bill opens here."))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(SN.panel)
         }
     }
 

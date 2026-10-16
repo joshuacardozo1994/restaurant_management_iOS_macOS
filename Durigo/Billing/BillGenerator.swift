@@ -348,7 +348,7 @@ struct BillGenerator: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             ScrollView {
                 VStack(alignment: .leading, spacing: DesignTokens.spacingL) {
                     headerCard

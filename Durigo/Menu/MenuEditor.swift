@@ -235,7 +235,7 @@ struct MenuEditor: View {
     @State private var deleteCandidate: AdminMenuItem?
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             Group {
                 if let store {
                     content(store: store)

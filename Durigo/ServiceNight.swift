@@ -252,7 +252,7 @@ struct ServiceNightDashboard: View {
     @State private var store: ServiceNightStore?
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             GeometryReader { geo in
                 ScrollView {
                     content(width: geo.size.width)

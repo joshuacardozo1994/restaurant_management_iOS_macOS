@@ -113,6 +113,8 @@ struct Home: View {
             #endif
             .navigationTitle("More")
         }
+        // Screens opened from here push onto More's stack instead of nesting their own
+        .environment(\.inNavigationStack, true)
     }
 
     /// iPad/Mac: hide the sidebar on the kitchen board; bring it back after
@@ -156,26 +158,9 @@ struct Home: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
         } detail: {
-            NavigationStack {
-                destination(for: navigation.selection)
-                    .toolbar {
-                        // One sidebar button, never two: the system shows its
-                        // own on the Mac, and on iPad once the sidebar is
-                        // folded away; this one covers iPad with it open
-                        #if os(iOS)
-                        if columnVisibility != .detailOnly {
-                            ToolbarItem(placement: .navigation) {
-                                Button {
-                                    withAnimation { columnVisibility = .detailOnly }
-                                } label: {
-                                    Image(systemName: "sidebar.left")
-                                }
-                                .accessibilityLabel("Hide sidebar")
-                            }
-                        }
-                        #endif
-                    }
-            }
+            // Each screen brings its own navigation stack (NavigationRoot);
+            // the system's sidebar button shows and hides the sidebar
+            destination(for: navigation.selection)
         }
         .navigationSplitViewStyle(.balanced)
     }
@@ -210,22 +195,8 @@ struct Home: View {
     }
 
     private func sidebarRow(_ item: NavigationItem) -> some View {
-        Label {
-            HStack {
-                Text(item.title)
-                if item == .billing && pendingCount > 0 {
-                    Spacer()
-                    Text("\(pendingCount)")
-                        .font(.caption)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.red))
-                }
-            }
-        } icon: {
-            Image(systemName: item.icon)
-        }
+        Label(item.title, systemImage: item.icon)
+            .badge(item == .billing ? pendingCount : 0)
     }
 
     private var brandHeader: some View {
@@ -334,7 +305,7 @@ struct SettingsView: View {
     @State private var loggingOut = false
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             Form {
                 if let user = session.user {
                     Section("Account") {
@@ -487,7 +458,7 @@ struct UsersAdminView: View {
     @State private var deleteCandidate: AdminUserModel?
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             Group {
                 if let store {
                     content(store: store)
@@ -875,7 +846,7 @@ struct DiscountsAdminView: View {
     @State private var deleteCandidate: AdminDiscount?
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             Group {
                 if let store { content(store: store) }
                 else { Color(.systemGroupedBackground) }
@@ -1265,7 +1236,7 @@ struct ModifiersAdminView: View {
     @State private var deleteCandidate: AdminModifier?
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             Group {
                 if let store { content(store: store) }
                 else { Color(.systemGroupedBackground) }
@@ -1616,7 +1587,7 @@ struct AppSettingsForm: View {
     @State private var saveSuccess = false
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             Form {
                 if let draft = Binding($draft) {
                     sections(draft)
@@ -1861,7 +1832,7 @@ struct InventoryAdminView: View {
     @State private var deleteCandidate: AdminIngredient?
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             Group {
                 if let store { content(store: store) }
                 else { Color(.systemGroupedBackground) }

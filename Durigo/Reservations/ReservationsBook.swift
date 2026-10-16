@@ -215,7 +215,7 @@ struct ReservationsAdminView: View {
     private var view: BookView { BookView(rawValue: viewRaw) ?? .book }
 
     var body: some View {
-        NavigationStack {
+        NavigationRoot {
             Group {
                 if let day = store?.day {
                     content(day, live: true)
