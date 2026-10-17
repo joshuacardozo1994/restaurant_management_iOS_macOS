@@ -236,6 +236,10 @@ The till's queue is a plain `List`: on iPad and Mac `List(selection:)` (the syst
 
 `QAPlanUITests`: 20 of 20 pass on iPhone 17 (run with `TEST_RUNNER_QA_PASS` set). Brought in line with the native controls: stepper buttons by id (`cart-stepper-<dish>-Increment`), the menu editor found by search (pulling the list down shows the search field), long lists and the kitchen rail scrolled to the new item, the pay total as `pay-total` or `bill-to-pay`, the ⋯ menu closed again when an item is disabled, any free table with nothing on it (not a fixed number), the reservations view set to Book and the "Booked" alert dismissed, the API helper sending query strings as query items (a `?` in the path was escaped) and taking an empty DELETE reply. A UI test run can still stall the simulator now and then; shutting it down and booting it again clears it.
 
+### Mac, 17 Oct (unlocked)
+
+Window screenshots of the Mac app: Dashboard, Billing (till with the pay pad), Kitchen rail, Menu editor (switches draw as Mac checkboxes, the platform's own style), Reports. Found: the floor took about 20s to appear on first open because it waited for the whole menu and the waiter list first; now they load alongside it and the floor is drawn within a few seconds (✅ iPad Pro 13", 4s after launch). The Mac app sometimes opens with no window when relaunched from the shell; opening it from Finder or Xcode is unaffected.
+
 ### Order of work
 
 1. Service screens on the real devices during a mock service: Bill Generator, POS, payment, Kitchen with the real printer.
