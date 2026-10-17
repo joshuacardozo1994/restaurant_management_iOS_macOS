@@ -240,6 +240,8 @@ The till's queue is a plain `List`: on iPad and Mac `List(selection:)` (the syst
 
 Window screenshots of the Mac app: Dashboard, Billing (till with the pay pad), Kitchen rail, Menu editor (switches draw as Mac checkboxes, the platform's own style), Reports. Found: the floor took about 20s to appear on first open because it waited for the whole menu and the waiter list first; now they load alongside it and the floor is drawn within a few seconds (✅ iPad Pro 13", 4s after launch). The Mac app sometimes opens with no window when relaunched from the shell; opening it from Finder or Xcode is unaffected.
 
+Full Mac pass, 17 Oct midday: every sidebar screen in light (Dashboard, Floor, Kitchen, Billing, Reservations, Menu, Modifiers, Discounts, Inventory, Users, Reports, Settings) and in dark (`--appearance=dark`: Floor, Dashboard, Billing, Reservations, Menu, Reports, Settings). The floor is drawn 5s after launch (was ~20s). The sidebar selects in the system accent when the window is key, as Finder does. Nothing new to fix.
+
 ### Order of work
 
 1. Service screens on the real devices during a mock service: Bill Generator, POS, payment, Kitchen with the real printer.
