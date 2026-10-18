@@ -1,8 +1,4 @@
 {
-  "features": [
-    "refractivity",
-    "specular-location"
-  ],
   "fill": {
     "linear-gradient": [
       "extended-srgb:0.20392,0.27451,0.30588,1.00000",
@@ -21,12 +17,13 @@
   },
   "groups": [
     {
+      "blur-material": 0.7,
       "layers": [
         {
           "fill": {
             "linear-gradient": [
-              "extended-srgb:0.95686,0.96471,0.97255,1.00000",
-              "extended-srgb:0.66275,0.69412,0.72157,1.00000"
+              "extended-srgb:0.95686,0.96471,0.97255,0.55000",
+              "extended-srgb:0.66275,0.69412,0.72157,0.55000"
             ],
             "orientation": {
               "start": {
@@ -45,29 +42,24 @@
         }
       ],
       "name": "Spoon",
-      "refractivity": {
-        "depth": 1.0,
-        "enabled": true,
-        "strength": 1.0
-      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.6
+        "opacity": 0.5
       },
       "specular": true,
-      "specular-highlight-placement": "outside",
       "translucency": {
         "enabled": true,
-        "value": 0.7999999999999999
+        "value": 0.44999999999999996
       }
     },
     {
+      "blur-material": 0.7,
       "layers": [
         {
           "fill": {
             "linear-gradient": [
-              "extended-srgb:0.95686,0.96471,0.97255,1.00000",
-              "extended-srgb:0.66275,0.69412,0.72157,1.00000"
+              "extended-srgb:0.95686,0.96471,0.97255,0.85000",
+              "extended-srgb:0.66275,0.69412,0.72157,0.85000"
             ],
             "orientation": {
               "start": {
@@ -86,29 +78,24 @@
         }
       ],
       "name": "Fork",
-      "refractivity": {
-        "depth": 1.0,
-        "enabled": true,
-        "strength": 1.0
-      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.6
+        "opacity": 0.5
       },
       "specular": true,
-      "specular-highlight-placement": "outside",
       "translucency": {
         "enabled": true,
-        "value": 0.7
+        "value": 0.35
       }
     },
     {
+      "blur-material": 0.7,
       "layers": [
         {
           "fill": {
             "linear-gradient": [
-              "extended-srgb:0.60392,0.63529,0.66275,1.00000",
-              "extended-srgb:0.33725,0.36863,0.39608,1.00000"
+              "extended-srgb:0.60392,0.63529,0.66275,0.85000",
+              "extended-srgb:0.33725,0.36863,0.39608,0.85000"
             ],
             "orientation": {
               "start": {
@@ -127,27 +114,22 @@
         }
       ],
       "name": "Gear",
-      "refractivity": {
-        "depth": 1.0,
-        "enabled": true,
-        "strength": 1.0
-      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.6
+        "opacity": 0.5
       },
       "specular": true,
-      "specular-highlight-placement": "outside",
       "translucency": {
         "enabled": true,
-        "value": 0.7
+        "value": 0.35
       }
     },
     {
+      "blur-material": 0.7,
       "layers": [
         {
           "fill": {
-            "solid": "extended-srgb:1.00000,1.00000,1.00000,1.00000"
+            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.85000"
           },
           "glass": true,
           "image-name": "hat.svg",
@@ -155,20 +137,14 @@
         }
       ],
       "name": "Hat",
-      "refractivity": {
-        "depth": 1.0,
-        "enabled": true,
-        "strength": 1.0
-      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.6
+        "opacity": 0.5
       },
       "specular": true,
-      "specular-highlight-placement": "outside",
       "translucency": {
         "enabled": true,
-        "value": 0.7
+        "value": 0.35
       }
     }
   ],
