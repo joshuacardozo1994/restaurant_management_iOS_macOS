@@ -52,8 +52,8 @@
         {
           "fill": {
             "linear-gradient": [
-              "extended-srgb:1.00000,1.00000,1.00000,0.60000",
-              "extended-srgb:0.76078,0.78824,0.81176,0.60000"
+              "extended-srgb:0.43137,0.46667,0.49412,0.85000",
+              "extended-srgb:0.21176,0.23922,0.25882,0.85000"
             ],
             "orientation": {
               "start": {
@@ -95,8 +95,8 @@
         {
           "fill": {
             "linear-gradient": [
-              "extended-srgb:1.00000,1.00000,1.00000,0.90000",
-              "extended-srgb:0.76078,0.78824,0.81176,0.90000"
+              "extended-srgb:0.43137,0.46667,0.49412,1.00000",
+              "extended-srgb:0.21176,0.23922,0.25882,1.00000"
             ],
             "orientation": {
               "start": {
