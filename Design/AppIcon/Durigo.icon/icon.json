@@ -11,20 +11,7 @@
       "layers": [
         {
           "fill": {
-            "linear-gradient": [
-              "extended-srgb:0.43137,0.46667,0.49412,0.85000",
-              "extended-srgb:0.21176,0.23922,0.25882,0.85000"
-            ],
-            "orientation": {
-              "start": {
-                "x": 0.2,
-                "y": 0
-              },
-              "stop": {
-                "x": 0.8,
-                "y": 1
-              }
-            }
+            "solid": "extended-srgb:0.18431,0.74902,0.54118,0.90000"
           },
           "glass": true,
           "image-name": "spoon.svg",
@@ -46,7 +33,7 @@
       "specular": true,
       "translucency": {
         "enabled": true,
-        "value": 0.44999999999999996
+        "value": 0.2
       }
     },
     {
@@ -54,20 +41,7 @@
       "layers": [
         {
           "fill": {
-            "linear-gradient": [
-              "extended-srgb:0.43137,0.46667,0.49412,1.00000",
-              "extended-srgb:0.21176,0.23922,0.25882,1.00000"
-            ],
-            "orientation": {
-              "start": {
-                "x": 0.2,
-                "y": 0
-              },
-              "stop": {
-                "x": 0.8,
-                "y": 1
-              }
-            }
+            "solid": "extended-srgb:0.35686,0.54118,0.83922,1.00000"
           },
           "glass": true,
           "image-name": "fork.svg",
@@ -89,14 +63,14 @@
       "specular": true,
       "translucency": {
         "enabled": true,
-        "value": 0.35
+        "value": 0.1
       }
     },
     {
       "layers": [
         {
           "fill": {
-            "solid": "extended-srgb:0.14510,0.19608,0.21961,0.85000"
+            "solid": "extended-srgb:0.23137,0.50980,0.96471,0.95000"
           },
           "glass": false,
           "image-name": "hat.svg",
