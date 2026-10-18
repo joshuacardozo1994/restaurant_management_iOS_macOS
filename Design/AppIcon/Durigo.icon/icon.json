@@ -1,6 +1,23 @@
 {
+  "features": [
+    "refractivity",
+    "specular-location"
+  ],
   "fill": {
-    "solid": "extended-srgb:0.14510,0.19608,0.21961,1.00000"
+    "linear-gradient": [
+      "extended-srgb:0.20392,0.27451,0.30588,1.00000",
+      "extended-srgb:0.10588,0.14510,0.16471,1.00000"
+    ],
+    "orientation": {
+      "start": {
+        "x": 0.5,
+        "y": 0
+      },
+      "stop": {
+        "x": 0.5,
+        "y": 1
+      }
+    }
   },
   "groups": [
     {
@@ -25,7 +42,27 @@
           "glass": true,
           "image-name": "spoon.svg",
           "name": "Spoon"
-        },
+        }
+      ],
+      "name": "Spoon",
+      "refractivity": {
+        "depth": 1.0,
+        "enabled": true,
+        "strength": 1.0
+      },
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.6
+      },
+      "specular": true,
+      "specular-highlight-placement": "outside",
+      "translucency": {
+        "enabled": true,
+        "value": 0.7999999999999999
+      }
+    },
+    {
+      "layers": [
         {
           "fill": {
             "linear-gradient": [
@@ -48,16 +85,21 @@
           "name": "Fork"
         }
       ],
-      "lighting": "combined",
-      "name": "Utensils",
+      "name": "Fork",
+      "refractivity": {
+        "depth": 1.0,
+        "enabled": true,
+        "strength": 1.0
+      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
+        "opacity": 0.6
       },
       "specular": true,
+      "specular-highlight-placement": "outside",
       "translucency": {
-        "enabled": false,
-        "value": 0.4
+        "enabled": true,
+        "value": 0.7
       }
     },
     {
@@ -85,14 +127,20 @@
         }
       ],
       "name": "Gear",
+      "refractivity": {
+        "depth": 1.0,
+        "enabled": true,
+        "strength": 1.0
+      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
+        "opacity": 0.6
       },
       "specular": true,
+      "specular-highlight-placement": "outside",
       "translucency": {
-        "enabled": false,
-        "value": 0.4
+        "enabled": true,
+        "value": 0.7
       }
     },
     {
@@ -107,14 +155,20 @@
         }
       ],
       "name": "Hat",
+      "refractivity": {
+        "depth": 1.0,
+        "enabled": true,
+        "strength": 1.0
+      },
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
+        "opacity": 0.6
       },
       "specular": true,
+      "specular-highlight-placement": "outside",
       "translucency": {
         "enabled": true,
-        "value": 0.4
+        "value": 0.7
       }
     }
   ],
