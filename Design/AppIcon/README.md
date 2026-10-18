@@ -2,7 +2,7 @@
 
 `Durigo.icon` is the app icon: open it in Icon Composer to adjust it, then copy it over `Durigo/Durigo.icon`, which is the copy the app builds from.
 
-Front to back: the spoon and the fork as frosted glass panes, then an order ticket of plain translucent white paper (no glass) with a torn edge. Printed on the ticket in slate ink: the chef hat at the top, like a restaurant's logo on a bill, and two lines of writing (an item and its price) near the bottom. The spoon is lighter than the fork so the fork shows through where they cross. Background is a slate gradient. No refraction: it smears the background at icon size.
+Front to back: the spoon and the fork as frosted glass panes, then an order ticket of plain translucent white paper (no glass) with a torn edge. Printed on the ticket in slate ink: the chef hat at the top, like a restaurant's logo on a bill, and two lines of writing (an item and its price) near the bottom. The spoon is lighter than the fork so the fork shows through where they cross. Background is a laterite gradient (#D2693F to #93361F), the red stone Goa is built from. No refraction: it smears the background at icon size.
 
 The pieces were traced from the reference (chef hat, crossed fork and spoon, gear), 1024 x 1024, white artwork on a transparent canvas:
 
