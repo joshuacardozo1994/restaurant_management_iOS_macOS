@@ -3,49 +3,9 @@
     "linear-gradient": [
       "extended-srgb:0.20392,0.27451,0.30588,1.00000",
       "extended-srgb:0.10588,0.14510,0.16471,1.00000"
-    ],
-    "orientation": {
-      "start": {
-        "x": 0.5,
-        "y": 0
-      },
-      "stop": {
-        "x": 0.5,
-        "y": 1
-      }
-    }
+    ]
   },
   "groups": [
-    {
-      "blur-material": 0.7,
-      "layers": [
-        {
-          "fill": {
-            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.85000"
-          },
-          "glass": true,
-          "image-name": "hat.svg",
-          "name": "Hat"
-        }
-      ],
-      "name": "Hat",
-      "position": {
-        "scale": 1,
-        "translation-in-points": [
-          0,
-          -66
-        ]
-      },
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.5
-      },
-      "specular": true,
-      "translucency": {
-        "enabled": true,
-        "value": 0.35
-      }
-    },
     {
       "blur-material": 0.7,
       "layers": [
@@ -73,10 +33,10 @@
       ],
       "name": "Spoon",
       "position": {
-        "scale": 0.8,
+        "scale": 0.85,
         "translation-in-points": [
           -10,
-          -26
+          -27
         ]
       },
       "shadow": {
@@ -116,10 +76,10 @@
       ],
       "name": "Fork",
       "position": {
-        "scale": 0.8,
+        "scale": 0.85,
         "translation-in-points": [
           -10,
-          -26
+          -27
         ]
       },
       "shadow": {
@@ -136,6 +96,21 @@
       "layers": [
         {
           "fill": {
+            "solid": "extended-srgb:0.14510,0.19608,0.21961,0.85000"
+          },
+          "glass": false,
+          "image-name": "hat.svg",
+          "name": "Hat",
+          "position": {
+            "scale": 0.6,
+            "translation-in-points": [
+              -5,
+              -102
+            ]
+          }
+        },
+        {
+          "fill": {
             "solid": "extended-srgb:0.14510,0.19608,0.21961,0.65000"
           },
           "glass": false,
@@ -144,7 +119,7 @@
         },
         {
           "fill": {
-            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.45000"
+            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.80000"
           },
           "glass": false,
           "image-name": "ticket.svg",
@@ -156,7 +131,11 @@
         "kind": "none",
         "opacity": 0
       },
-      "specular": false
+      "specular": false,
+      "translucency": {
+        "enabled": true,
+        "value": 0.3
+      }
     }
   ],
   "supported-platforms": {
