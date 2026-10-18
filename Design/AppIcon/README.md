@@ -2,7 +2,7 @@
 
 `Durigo.icon` is the app icon: open it in Icon Composer to adjust it, then copy it over `Durigo/Durigo.icon`, which is the copy the app builds from.
 
-It is four frosted glass panes, front to back: the chef hat, the spoon, the fork, and an order ticket with a torn edge and two lines of writing (an item and its price). The hat overlaps the top of the ticket; the spoon is lighter than the fork so the fork shows through where they cross. Background is a slate gradient. No refraction: it smears the background at icon size.
+Front to back: the chef hat, the spoon and the fork as frosted glass panes, then an order ticket of plain translucent white paper (no glass) with a torn edge and two lines of slate writing (an item and its price). The hat overlaps the top of the ticket; the spoon is lighter than the fork so the fork shows through where they cross. Background is a slate gradient. No refraction: it smears the background at icon size.
 
 The pieces were traced from the reference (chef hat, crossed fork and spoon, gear), 1024 x 1024, white artwork on a transparent canvas:
 

@@ -133,11 +133,10 @@
       }
     },
     {
-      "blur-material": 0.7,
       "layers": [
         {
           "fill": {
-            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.70000"
+            "solid": "extended-srgb:0.14510,0.19608,0.21961,0.65000"
           },
           "glass": false,
           "image-name": "lines.svg",
@@ -145,23 +144,19 @@
         },
         {
           "fill": {
-            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.22000"
+            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.45000"
           },
-          "glass": true,
+          "glass": false,
           "image-name": "ticket.svg",
           "name": "Ticket"
         }
       ],
       "name": "Ticket",
       "shadow": {
-        "kind": "neutral",
-        "opacity": 0.5
+        "kind": "none",
+        "opacity": 0
       },
-      "specular": true,
-      "translucency": {
-        "enabled": true,
-        "value": 0.35
-      }
+      "specular": false
     }
   ],
   "supported-platforms": {
