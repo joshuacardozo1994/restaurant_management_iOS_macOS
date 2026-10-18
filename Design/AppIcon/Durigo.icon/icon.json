@@ -21,9 +21,39 @@
       "layers": [
         {
           "fill": {
+            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.85000"
+          },
+          "glass": true,
+          "image-name": "hat.svg",
+          "name": "Hat"
+        }
+      ],
+      "name": "Hat",
+      "position": {
+        "scale": 1,
+        "translation-in-points": [
+          0,
+          -66
+        ]
+      },
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.35
+      }
+    },
+    {
+      "blur-material": 0.7,
+      "layers": [
+        {
+          "fill": {
             "linear-gradient": [
-              "extended-srgb:0.95686,0.96471,0.97255,0.55000",
-              "extended-srgb:0.66275,0.69412,0.72157,0.55000"
+              "extended-srgb:1.00000,1.00000,1.00000,0.60000",
+              "extended-srgb:0.76078,0.78824,0.81176,0.60000"
             ],
             "orientation": {
               "start": {
@@ -42,6 +72,13 @@
         }
       ],
       "name": "Spoon",
+      "position": {
+        "scale": 0.8,
+        "translation-in-points": [
+          -10,
+          -26
+        ]
+      },
       "shadow": {
         "kind": "neutral",
         "opacity": 0.5
@@ -58,8 +95,8 @@
         {
           "fill": {
             "linear-gradient": [
-              "extended-srgb:0.95686,0.96471,0.97255,0.85000",
-              "extended-srgb:0.66275,0.69412,0.72157,0.85000"
+              "extended-srgb:1.00000,1.00000,1.00000,0.90000",
+              "extended-srgb:0.76078,0.78824,0.81176,0.90000"
             ],
             "orientation": {
               "start": {
@@ -78,6 +115,13 @@
         }
       ],
       "name": "Fork",
+      "position": {
+        "scale": 0.8,
+        "translation-in-points": [
+          -10,
+          -26
+        ]
+      },
       "shadow": {
         "kind": "neutral",
         "opacity": 0.5
@@ -93,50 +137,22 @@
       "layers": [
         {
           "fill": {
-            "linear-gradient": [
-              "extended-srgb:0.60392,0.63529,0.66275,0.85000",
-              "extended-srgb:0.33725,0.36863,0.39608,0.85000"
-            ],
-            "orientation": {
-              "start": {
-                "x": 0.2,
-                "y": 0
-              },
-              "stop": {
-                "x": 0.8,
-                "y": 1
-              }
-            }
+            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.70000"
           },
-          "glass": true,
-          "image-name": "gear.svg",
-          "name": "Gear"
-        }
-      ],
-      "name": "Gear",
-      "shadow": {
-        "kind": "neutral",
-        "opacity": 0.5
-      },
-      "specular": true,
-      "translucency": {
-        "enabled": true,
-        "value": 0.35
-      }
-    },
-    {
-      "blur-material": 0.7,
-      "layers": [
+          "glass": false,
+          "image-name": "lines.svg",
+          "name": "Writing"
+        },
         {
           "fill": {
-            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.85000"
+            "solid": "extended-srgb:1.00000,1.00000,1.00000,0.22000"
           },
           "glass": true,
-          "image-name": "hat.svg",
-          "name": "Hat"
+          "image-name": "ticket.svg",
+          "name": "Ticket"
         }
       ],
-      "name": "Hat",
+      "name": "Ticket",
       "shadow": {
         "kind": "neutral",
         "opacity": 0.5
