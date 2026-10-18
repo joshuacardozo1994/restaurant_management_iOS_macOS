@@ -1,0 +1,85 @@
+{
+  "fill": {
+    "solid": "extended-srgb:0.14510,0.19608,0.21961,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "fill": {
+            "solid": "extended-srgb:1.00000,1.00000,1.00000,1.00000"
+          },
+          "glass": true,
+          "image-name": "spoon.svg",
+          "name": "Spoon"
+        },
+        {
+          "fill": {
+            "solid": "extended-srgb:1.00000,1.00000,1.00000,1.00000"
+          },
+          "glass": true,
+          "image-name": "fork.svg",
+          "name": "Fork"
+        }
+      ],
+      "lighting": "combined",
+      "name": "Utensils",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.4
+      }
+    },
+    {
+      "layers": [
+        {
+          "fill": {
+            "solid": "extended-srgb:1.00000,1.00000,1.00000,1.00000"
+          },
+          "glass": true,
+          "image-name": "gear.svg",
+          "name": "Gear"
+        }
+      ],
+      "name": "Gear",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.4
+      }
+    },
+    {
+      "layers": [
+        {
+          "fill": {
+            "solid": "extended-srgb:1.00000,1.00000,1.00000,1.00000"
+          },
+          "glass": true,
+          "image-name": "hat.svg",
+          "name": "Hat"
+        }
+      ],
+      "name": "Hat",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.4
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}
